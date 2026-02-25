@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #050505;
+  --fg: #ffffff;
+  --accent-orange: #ff7e4b;
+  --accent-blue: #0070f3;
+  --accent-lemon: #ccff00;
+  --glass: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: 'Outfit', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+@layer components {
+  .pwa-mesh {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: #050505;
+    overflow: hidden;
+  }
+
+  .mesh-orb-1 {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, var(--accent-orange) 0%, transparent 70%);
+    filter: blur(80px);
+    top: -200px;
+    left: -100px;
+    opacity: 0.4;
+    animation: floating 20s infinite alternate;
+  }
+
+  .mesh-orb-2 {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, var(--accent-blue) 0%, transparent 70%);
+    filter: blur(100px);
+    bottom: -100px;
+    right: -100px;
+    opacity: 0.3;
+    animation: floating 25s infinite alternate-reverse;
+  }
+
+  @keyframes floating {
+    from {
+      transform: translate(0, 0) scale(1);
+    }
+
+    to {
+      transform: translate(100px, 50px) scale(1.1);
+    }
+  }
+
+  .pwa-card {
+    @apply bg-white/[0.03] backdrop-blur-[40px] border border-white/[0.08] rounded-[32px] overflow-hidden transition-all duration-500;
+  }
+
+  .pwa-card:hover {
+    @apply border-white/20 bg-white/[0.06] -translate-y-1;
+  }
+
+  .pwa-btn {
+    @apply bg-white/[0.05] text-white font-black uppercase tracking-widest text-[10px] px-8 py-4 rounded-full transition-all duration-300 hover:scale-105 active:scale-95 flex items-center justify-center gap-2 border border-white/10;
+  }
+
+  .pwa-btn:hover {
+    @apply shadow-[0_0_20px_rgba(204, 255, 0, 0.5)] border-[#ccff00]/50 text-[#ccff00];
+  }
+
+  .pwa-title {
+    @apply font-black italic uppercase tracking-tighter leading-none;
+    font-size: clamp(2.5rem, 8vw, 5rem);
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
