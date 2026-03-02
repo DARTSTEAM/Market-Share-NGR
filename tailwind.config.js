@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+    darkMode: 'class',
     content: [
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
@@ -8,11 +9,11 @@ export default {
         extend: {
             colors: {
                 accent: {
-                    orange: "#ff7e4b",
-                    blue: "#0070f3",
-                    lemon: "#ccff00",
+                    orange: "var(--accent-orange)",
+                    blue: "var(--accent-blue)",
+                    lemon: "var(--accent-lemon)",
                 },
-                bg: "#050505",
+                bg: "var(--bg)",
             },
             animation: {
                 'floating': 'floating 20s infinite alternate',

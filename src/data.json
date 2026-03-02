@@ -1,0 +1,3432 @@
+{
+  "metrics": {
+    "totalTickets": 2181,
+    "localesAnalizados": 396,
+    "cajasSinRegistro": 840,
+    "cajasAnalizadas": 1341,
+    "totalVentas": 21666
+  },
+  "shareData": [
+    {
+      "name": "KFC",
+      "value": 832,
+      "color": "#ef4444"
+    },
+    {
+      "name": "Pizza Hut",
+      "value": 482,
+      "color": "#ff7e4b"
+    },
+    {
+      "name": "McDonald's",
+      "value": 366,
+      "color": "#eab308"
+    },
+    {
+      "name": "BURGER KING",
+      "value": 206,
+      "color": "#e4a861"
+    },
+    {
+      "name": "Little Caesars",
+      "value": 134,
+      "color": "#ea580c"
+    },
+    {
+      "name": "Domino's",
+      "value": 87,
+      "color": "#3b82f6"
+    },
+    {
+      "name": "Desconocido",
+      "value": 74,
+      "color": "#b7a646"
+    }
+  ],
+  "trendData": [
+    {
+      "name": "01-26",
+      "tickets": 4
+    },
+    {
+      "name": "01-27",
+      "tickets": 1
+    },
+    {
+      "name": "01-28",
+      "tickets": 24
+    },
+    {
+      "name": "01-29",
+      "tickets": 105
+    },
+    {
+      "name": "01-30",
+      "tickets": 91
+    },
+    {
+      "name": "01-31",
+      "tickets": 63
+    },
+    {
+      "name": "02-01",
+      "tickets": 40
+    },
+    {
+      "name": "02-02",
+      "tickets": 10
+    },
+    {
+      "name": "02-03",
+      "tickets": 9
+    },
+    {
+      "name": "02-05",
+      "tickets": 2
+    },
+    {
+      "name": "07-02",
+      "tickets": 1
+    },
+    {
+      "name": "07-29",
+      "tickets": 1
+    },
+    {
+      "name": "11-29",
+      "tickets": 2
+    },
+    {
+      "name": "11-30",
+      "tickets": 2
+    },
+    {
+      "name": "12-29",
+      "tickets": 1
+    }
+  ],
+  "tableData": [
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 15 – OVALO LARCO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 1623
+    },
+    {
+      "competidor": "Desconocido",
+      "local": "No detectado",
+      "cajasTotal": 3,
+      "ticketsReg": 12,
+      "ticketsNoReg": 62,
+      "ventas": 657
+    },
+    {
+      "competidor": "Domino's",
+      "local": "610 – BENAVIDES 3899",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 591
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 01 – PEDRO VENTURO",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 521
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 23 PRÓCERES – SJL",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 504
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "No detectado",
+      "cajasTotal": 5,
+      "ticketsReg": 24,
+      "ticketsNoReg": 9,
+      "ventas": 468
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "60 – REAL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 244
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 08 - FAUCETT",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 240
+    },
+    {
+      "competidor": "KFC",
+      "local": "160 – GRIFO KYO",
+      "cajasTotal": 5,
+      "ticketsReg": 7,
+      "ticketsNoReg": 2,
+      "ventas": 220
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "57 – AVIACION 24",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 219
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "03 – SAENZ PEÑA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 199
+    },
+    {
+      "competidor": "KFC",
+      "local": "106 – AV AREQUIPA",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 190
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 08 SÁNCHEZ CARRION – MAGDALENA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 3,
+      "ventas": 189
+    },
+    {
+      "competidor": "KFC",
+      "local": "177 – REAL PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 179
+    },
+    {
+      "competidor": "KFC",
+      "local": "108 – RP CUZCO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 176
+    },
+    {
+      "competidor": "KFC",
+      "local": "202 – METRO HUANCAYO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 175
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 31 – SAN MARTIN DE",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 163
+    },
+    {
+      "competidor": "KFC",
+      "local": "67 – PLAZA CUZCO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 160
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "83 – REAL PLAZA CUZCO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 142
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "51 – MALL SANTA ANITA",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 141
+    },
+    {
+      "competidor": "KFC",
+      "local": "118 – OPEN PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 138
+    },
+    {
+      "competidor": "KFC",
+      "local": "05 – BENAVIDES",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 4,
+      "ventas": 132
+    },
+    {
+      "competidor": "KFC",
+      "local": "50 – ATOCONGO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 130
+    },
+    {
+      "competidor": "KFC",
+      "local": "21 - ARMENDARIZ",
+      "cajasTotal": 6,
+      "ticketsReg": 7,
+      "ticketsNoReg": 2,
+      "ventas": 129
+    },
+    {
+      "competidor": "KFC",
+      "local": "42 – TELLO",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 128
+    },
+    {
+      "competidor": "KFC",
+      "local": "92 – REAL PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 1,
+      "ventas": 121
+    },
+    {
+      "competidor": "KFC",
+      "local": "143 - BARRANCO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 120
+    },
+    {
+      "competidor": "KFC",
+      "local": "94 – CASA WELCH",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 119
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "41 – REAL PLAZA CIVICO",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 3,
+      "ventas": 117
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 20 BELLAVISTA – CALLAO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 115
+    },
+    {
+      "competidor": "KFC",
+      "local": "188 – METRO",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 112
+    },
+    {
+      "competidor": "KFC",
+      "local": "30 – MEGA PLAZA R-02",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 112
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "64 – REAL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 111
+    },
+    {
+      "competidor": "KFC",
+      "local": "132 – PVEA VES",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 109
+    },
+    {
+      "competidor": "KFC",
+      "local": "88 – LA RAMBLA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 109
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 07 ÓVALO GUTIÉRREZ – SURCO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 4,
+      "ventas": 108
+    },
+    {
+      "competidor": "KFC",
+      "local": "173 – MALL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 107
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "07 – PEZET",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 106
+    },
+    {
+      "competidor": "KFC",
+      "local": "56 – CENTRO CIVICO",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 105
+    },
+    {
+      "competidor": "KFC",
+      "local": "85 - TOMASAL",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 105
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "26 – ROYAL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 105
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "49 - CAVENECIA",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 103
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "37 – AVIACION 45",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 102
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 30 – REAL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 100
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 26 JOCKEY PLAZA – SURCO",
+      "cajasTotal": 8,
+      "ticketsReg": 8,
+      "ticketsNoReg": 4,
+      "ventas": 100
+    },
+    {
+      "competidor": "KFC",
+      "local": "147 – VILLARAN",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 98
+    },
+    {
+      "competidor": "KFC",
+      "local": "141 – PLAZA SAN MIGUEL",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 98
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "48– OPEN PLAZA PIURA",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 0,
+      "ventas": 98
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 20 – ANTUNEZ DE",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 97
+    },
+    {
+      "competidor": "KFC",
+      "local": "206 – PUNTA HERMOSA",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 92
+    },
+    {
+      "competidor": "KFC",
+      "local": "101 – BODEGONES",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 92
+    },
+    {
+      "competidor": "KFC",
+      "local": "126 – RP VMT",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 91
+    },
+    {
+      "competidor": "KFC",
+      "local": "74 – CAJAMARCA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 89
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 02 - CRUCETAS",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 88
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 26 JOCKEY PLAZA – SURCO",
+      "cajasTotal": 8,
+      "ticketsReg": 8,
+      "ticketsNoReg": 4,
+      "ventas": 88
+    },
+    {
+      "competidor": "KFC",
+      "local": "116 - VENTANILLA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 87
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 26 – VARGAS MACHUCA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 87
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "76 – PURUCHUCO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 85
+    },
+    {
+      "competidor": "KFC",
+      "local": "207 – METRO FAUCETT",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 85
+    },
+    {
+      "competidor": "KFC",
+      "local": "138 – LIMA NORTE",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 84
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 31 – LA MOLINA",
+      "cajasTotal": 6,
+      "ticketsReg": 6,
+      "ticketsNoReg": 2,
+      "ventas": 81
+    },
+    {
+      "competidor": "KFC",
+      "local": "28 – ROYAL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 80
+    },
+    {
+      "competidor": "KFC",
+      "local": "55 – REAL PLAZA",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 80
+    },
+    {
+      "competidor": "KFC",
+      "local": "57 – SOLDE ICA",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 5,
+      "ventas": 80
+    },
+    {
+      "competidor": "KFC",
+      "local": "No detectado",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 1,
+      "ventas": 79
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "64 – REAL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 78
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "87 – CANTA CALLAO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 76
+    },
+    {
+      "competidor": "KFC",
+      "local": "194 – PROCERES DE",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 76
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 14 IZAGUIRRE – INDEPENDENCIA",
+      "cajasTotal": 5,
+      "ticketsReg": 7,
+      "ticketsNoReg": 6,
+      "ventas": 76
+    },
+    {
+      "competidor": "KFC",
+      "local": "154 – MEGA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 75
+    },
+    {
+      "competidor": "KFC",
+      "local": "205 – AREQUIPA CENTER",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 75
+    },
+    {
+      "competidor": "KFC",
+      "local": "91 – BRASIL",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 75
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "71 – REAL PLAZA PRO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 74
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "15 – IZAGUIRRE 124",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 74
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "90 – MALL SAN JUAN DE",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 74
+    },
+    {
+      "competidor": "KFC",
+      "local": "114 – RP SALAVERRY",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 74
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "49 – PLAZA EL AGUSTINO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 73
+    },
+    {
+      "competidor": "KFC",
+      "local": "25 - LARCOMAR",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 3,
+      "ventas": 73
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "12 – BEGONIAS",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 72
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 147 MALL PLAZA – SJL",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 72
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "53 – MALL SANTA ANITA",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 71
+    },
+    {
+      "competidor": "KFC",
+      "local": "68 – LINCE",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 71
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "19 – PARQUE KENNEDY",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 68
+    },
+    {
+      "competidor": "KFC",
+      "local": "95 – TOTTUS GUIPOR",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 67
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 07 ÓVALO GUTIÉRREZ – SURCO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 4,
+      "ventas": 66
+    },
+    {
+      "competidor": "KFC",
+      "local": "81 – MEGA PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 3,
+      "ventas": 65
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "81 – PLAZA SAN MIGUEL",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 65
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 27 - TOMAS VALLE",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 63
+    },
+    {
+      "competidor": "KFC",
+      "local": "133 – GUILLERMO DE LA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 62
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "66 – LA RAMBLA BRASIL",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 62
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "50 – CAJAMARCA",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 61
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "54 – LA RAMBLA SAN",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 61
+    },
+    {
+      "competidor": "KFC",
+      "local": "97 – RP HUANUCO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 60
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "59 – BREA Y PARIÑAS",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 60
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "15 – LARCO MAR",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 59
+    },
+    {
+      "competidor": "KFC",
+      "local": "117 – WONG SUR",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 59
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "57 – PRECURSORES",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 58
+    },
+    {
+      "competidor": "KFC",
+      "local": "66 – REPUBLICA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 58
+    },
+    {
+      "competidor": "KFC",
+      "local": "110 – RP CAJAMARCA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 58
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 16 CHORRILLOS – CHORRILLOS",
+      "cajasTotal": 7,
+      "ticketsReg": 7,
+      "ticketsNoReg": 0,
+      "ventas": 57
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "72 – PARQUE INDUSTRIAL",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 56
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "05–BARRANCO",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 55
+    },
+    {
+      "competidor": "KFC",
+      "local": "203 – LAP",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 1,
+      "ventas": 55
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "39 - CAMACHO",
+      "cajasTotal": 3,
+      "ticketsReg": 7,
+      "ticketsNoReg": 1,
+      "ventas": 55
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "67 – OPEN HUANCAYO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 55
+    },
+    {
+      "competidor": "Domino's",
+      "local": "602 – CESAR",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 2,
+      "ventas": 55
+    },
+    {
+      "competidor": "KFC",
+      "local": "122 – MEGA 3",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 54
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "13 – SAN CARLOS",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 53
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 96 MALL DEL SUR – SJM",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 52
+    },
+    {
+      "competidor": "KFC",
+      "local": "38 – SAN LUIS",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 51
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "73 – REAL PLAZA VMT",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 51
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 01 GUARDIA CIVIL – SAN ISIDRO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 6,
+      "ventas": 51
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "24 – REAL PLAZA CIVICO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 50
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "66 – MALL DEL SUR",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 4,
+      "ventas": 50
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "37 – OPEN ATOCONGO",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 49
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "60 – CUZCO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 49
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "26 – OPEN MARSANO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 49
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "59 – REAL PLAZA PIURA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 2,
+      "ventas": 49
+    },
+    {
+      "competidor": "KFC",
+      "local": "109 – RP SANTA CLARA",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 49
+    },
+    {
+      "competidor": "Domino's",
+      "local": "624 – BARRANCO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 49
+    },
+    {
+      "competidor": "KFC",
+      "local": "03 – AVIACION",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 48
+    },
+    {
+      "competidor": "Domino's",
+      "local": "616 – GUARDIA CIVIL",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 48
+    },
+    {
+      "competidor": "KFC",
+      "local": "17 – PRIMAVERA",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 3,
+      "ventas": 48
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "80 – MALL PLAZA COMAS",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 48
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 96 MALL DEL SUR – SJM",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 48
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "07 – LA MARINA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 47
+    },
+    {
+      "competidor": "KFC",
+      "local": "35 - CHORRILLOS",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 1,
+      "ventas": 47
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "03 – CAMACHO",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 8,
+      "ventas": 47
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "14 – LIMATAMBO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 47
+    },
+    {
+      "competidor": "KFC",
+      "local": "148– BAYOVAR",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 47
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 06 GARDENIAS – SURCO",
+      "cajasTotal": 6,
+      "ticketsReg": 6,
+      "ticketsNoReg": 1,
+      "ventas": 47
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "31 – MERCADERES -",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 46
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "82 – PURUCHUCO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 46
+    },
+    {
+      "competidor": "KFC",
+      "local": "70 – UNIVERSITARIA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 45
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 147 MALL PLAZA – SJL",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 45
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 01 GUARDIA CIVIL – SAN ISIDRO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 6,
+      "ventas": 45
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 147 MALL PLAZA – SJL",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 45
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 10 - ALIAGA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 44
+    },
+    {
+      "competidor": "KFC",
+      "local": "61 – PARQUE ARAUCO -",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 43
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "42 – OPEN MARSANO",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 43
+    },
+    {
+      "competidor": "KFC",
+      "local": "212 – REAL PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 1,
+      "ventas": 43
+    },
+    {
+      "competidor": "KFC",
+      "local": "09 - ESPINAR",
+      "cajasTotal": 3,
+      "ticketsReg": 8,
+      "ticketsNoReg": 1,
+      "ventas": 43
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "02 – LARCO",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 43
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "25 – CANEPA",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 3,
+      "ventas": 42
+    },
+    {
+      "competidor": "KFC",
+      "local": "125 – LURIN",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 42
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "52 – MEGA PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 0,
+      "ventas": 42
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "02–CHORRILLOS",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 42
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 07 ÓVALO GUTIÉRREZ – SURCO",
+      "cajasTotal": 5,
+      "ticketsReg": 5,
+      "ticketsNoReg": 3,
+      "ventas": 42
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "32 – OPEN PLAZA PIURA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 0,
+      "ventas": 41
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "53 – MARSANO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 41
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "40 – SOL DE ICA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 41
+    },
+    {
+      "competidor": "KFC",
+      "local": "198 – CERES",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 41
+    },
+    {
+      "competidor": "KFC",
+      "local": "73 – EL AGUSTINO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 41
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "07 – DOS DE MAYO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 41
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 26 JOCKEY PLAZA – SURCO",
+      "cajasTotal": 9,
+      "ticketsReg": 9,
+      "ticketsNoReg": 2,
+      "ventas": 41
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 23 PRÓCERES – SJL",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 6,
+      "ventas": 41
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 04 DIAGONAL – MIRAFLORES",
+      "cajasTotal": 5,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 41
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 96 MALL DEL SUR – SJM",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 41
+    },
+    {
+      "competidor": "KFC",
+      "local": "131 – REAL PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 40
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 18 – TOTTUS GUIPOR",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 40
+    },
+    {
+      "competidor": "KFC",
+      "local": "86 - CHIMU",
+      "cajasTotal": 4,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 39
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "06 – PLAZA SAN MIGUEL",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 39
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "70 – PLAZA CENTER",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 1,
+      "ventas": 39
+    },
+    {
+      "competidor": "KFC",
+      "local": "69 – BOLIVAR",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 39
+    },
+    {
+      "competidor": "KFC",
+      "local": "76 – BELLAVISTA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 39
+    },
+    {
+      "competidor": "KFC",
+      "local": "190 – OPEN PLAZA TRUJILLO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 39
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 01 GUARDIA CIVIL – SAN ISIDRO",
+      "cajasTotal": 5,
+      "ticketsReg": 5,
+      "ticketsNoReg": 2,
+      "ventas": 39
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 20 BELLAVISTA – CALLAO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 2,
+      "ventas": 39
+    },
+    {
+      "competidor": "KFC",
+      "local": "221 – MEGAPLAZA VES II",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 38
+    },
+    {
+      "competidor": "KFC",
+      "local": "200 – CARABAYLLO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 38
+    },
+    {
+      "competidor": "KFC",
+      "local": "186 – CINE STAR",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 38
+    },
+    {
+      "competidor": "KFC",
+      "local": "99 – REAL PLAZA PIURA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 38
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 06 GARDENIAS – SURCO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 4,
+      "ventas": 38
+    },
+    {
+      "competidor": "KFC",
+      "local": "130 – MALL DEL SUR",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 37
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "52 – SURQUILLO",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 37
+    },
+    {
+      "competidor": "Domino's",
+      "local": "606 – FAUCETT",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 36
+    },
+    {
+      "competidor": "KFC",
+      "local": "45 – PEZET",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 36
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 33 – SAN JUAN DE",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 36
+    },
+    {
+      "competidor": "Domino's",
+      "local": "628 – AV. ARGENTINA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 35
+    },
+    {
+      "competidor": "KFC",
+      "local": "04 – LAS FLORES",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 3,
+      "ventas": 35
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "17 – MEGA PLAZA",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 35
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "01 – AVENIDA PERU",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 35
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 23 PRÓCERES – SJL",
+      "cajasTotal": 4,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 35
+    },
+    {
+      "competidor": "KFC",
+      "local": "159 – 200 MILLAS",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 34
+    },
+    {
+      "competidor": "KFC",
+      "local": "29 – MEGA PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 34
+    },
+    {
+      "competidor": "KFC",
+      "local": "204 – LA MOLINA 2",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 34
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "48 – ZARATE",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 6,
+      "ventas": 34
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "70 – MALL DEL SUR",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 34
+    },
+    {
+      "competidor": "Domino's",
+      "local": "602 – CESAR CANEVARO",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 3,
+      "ventas": 34
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "27– SJL – B127 – EN LOCAL",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 33
+    },
+    {
+      "competidor": "KFC",
+      "local": "39 – FAUCETT",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 1,
+      "ventas": 33
+    },
+    {
+      "competidor": "KFC",
+      "local": "18 – JOCKEY PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 33
+    },
+    {
+      "competidor": "Domino's",
+      "local": "623 – CANADA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 33
+    },
+    {
+      "competidor": "Domino's",
+      "local": "620 – SAENZ PEÑA",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 6,
+      "ventas": 33
+    },
+    {
+      "competidor": "KFC",
+      "local": "64 – OPEN PLAZA PIURA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 33
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 16 CHORRILLOS – CHORRILLOS",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 4,
+      "ventas": 33
+    },
+    {
+      "competidor": "KFC",
+      "local": "191 – MALL SAN JUAN",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 32
+    },
+    {
+      "competidor": "KFC",
+      "local": "155 – PURUCHUCO",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 32
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 30 PURUCHUCO – ATE",
+      "cajasTotal": 5,
+      "ticketsReg": 5,
+      "ticketsNoReg": 0,
+      "ventas": 32
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "60 – ARENALES",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 31
+    },
+    {
+      "competidor": "KFC",
+      "local": "164 – PURUCHUCO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 31
+    },
+    {
+      "competidor": "KFC",
+      "local": "83 – PETIT THOUARS",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 31
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 04 DIAGONAL – MIRAFLORES",
+      "cajasTotal": 6,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 31
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 05 LA AURORA – MIRAFLORES",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 3,
+      "ventas": 31
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 05 LA AURORA – MIRAFLORES",
+      "cajasTotal": 5,
+      "ticketsReg": 5,
+      "ticketsNoReg": 0,
+      "ventas": 31
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 56 MINKA – CALLAO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 31
+    },
+    {
+      "competidor": "KFC",
+      "local": "93 – TOTTUS LA MARINA",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 30
+    },
+    {
+      "competidor": "Domino's",
+      "local": "626 – CAMINOS DEL",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 30
+    },
+    {
+      "competidor": "KFC",
+      "local": "31 – CANEPA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 30
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "88 – SAN LUIS",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 30
+    },
+    {
+      "competidor": "KFC",
+      "local": "87 – MICAELA BASTIDAS",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 30
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "84 – MALL PLAZA COMAS",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 30
+    },
+    {
+      "competidor": "KFC",
+      "local": "213 – TOTTUS SULLANA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 30
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 04 DIAGONAL – MIRAFLORES",
+      "cajasTotal": 6,
+      "ticketsReg": 7,
+      "ticketsNoReg": 0,
+      "ventas": 30
+    },
+    {
+      "competidor": "KFC",
+      "local": "52 – HABICH",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 5,
+      "ventas": 29
+    },
+    {
+      "competidor": "KFC",
+      "local": "11 – PLAZA SAN MIGUEL",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 6,
+      "ventas": 29
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "57 – MALL BELLAVISTA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 29
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "04 – MALL SAN JUAN DE LURIGANCHO",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 3,
+      "ventas": 29
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "29 – VES",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 29
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 20 BELLAVISTA – CALLAO",
+      "cajasTotal": 4,
+      "ticketsReg": 4,
+      "ticketsNoReg": 0,
+      "ventas": 29
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 03 LA ENCALADA – SURCO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 29
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 08 SÁNCHEZ CARRION – MAGDALENA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 2,
+      "ventas": 29
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "88 – LAP",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 28
+    },
+    {
+      "competidor": "KFC",
+      "local": "102 – RIMAC",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 28
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 19 – HUAYLAS",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 28
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "78 – RP VILLA MARIA",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 28
+    },
+    {
+      "competidor": "KFC",
+      "local": "06 – LARCO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 3,
+      "ventas": 28
+    },
+    {
+      "competidor": "KFC",
+      "local": "123 - BOLICHERA",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 28
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 06 GARDENIAS – SURCO",
+      "cajasTotal": 4,
+      "ticketsReg": 4,
+      "ticketsNoReg": 3,
+      "ventas": 28
+    },
+    {
+      "competidor": "KFC",
+      "local": "72 - CAVENECIA",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 27
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "22 – HUANCAYO",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 27
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 29 – ESTACION LOS",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 27
+    },
+    {
+      "competidor": "KFC",
+      "local": "63 – MERCADERES -",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 5,
+      "ventas": 27
+    },
+    {
+      "competidor": "Domino's",
+      "local": "600 – BENAVIDES 1202",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 27
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "52 – MEGA PLAZA CAÑETE",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 2,
+      "ventas": 26
+    },
+    {
+      "competidor": "KFC",
+      "local": "46 – SAN JUAN",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 26
+    },
+    {
+      "competidor": "KFC",
+      "local": "127 – PUENTE PIEDRA",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 26
+    },
+    {
+      "competidor": "Domino's",
+      "local": "614 – CARLOS",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 26
+    },
+    {
+      "competidor": "KFC",
+      "local": "176 – MALL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 26
+    },
+    {
+      "competidor": "KFC",
+      "local": "34 – MATELLINI",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 26
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 10 RISSO – LINCE",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 26
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "13 – SUCRE",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 25
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 28 - ESTACION SAN",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 25
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "12– ESPINAR",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 25
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 14 IZAGUIRRE – INDEPENDENCIA",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 25
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 14 IZAGUIRRE – INDEPENDENCIA",
+      "cajasTotal": 6,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 25
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 16 CHORRILLOS – CHORRILLOS",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 4,
+      "ventas": 25
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "01 - ESPINAR",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 24
+    },
+    {
+      "competidor": "KFC",
+      "local": "208 – CC GAMA",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 24
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 31 – LA MOLINA",
+      "cajasTotal": 5,
+      "ticketsReg": 5,
+      "ticketsNoReg": 3,
+      "ventas": 24
+    },
+    {
+      "competidor": "KFC",
+      "local": "10 – MORELLI",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 23
+    },
+    {
+      "competidor": "KFC",
+      "local": "53 – SURQUILLO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 23
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "10 – PALMERAS",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 23
+    },
+    {
+      "competidor": "Domino's",
+      "local": "608 – LAS FLORES",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 6,
+      "ventas": 23
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 12 - ARAMBURU",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 23
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 03 LA ENCALADA – SURCO",
+      "cajasTotal": 4,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 23
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 31 – LA MOLINA",
+      "cajasTotal": 6,
+      "ticketsReg": 6,
+      "ticketsNoReg": 2,
+      "ventas": 23
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 13 - BOLIVAR",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 22
+    },
+    {
+      "competidor": "KFC",
+      "local": "171– PLAZA QHATU",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 22
+    },
+    {
+      "competidor": "KFC",
+      "local": "140 – ESTACION SAN",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 22
+    },
+    {
+      "competidor": "Domino's",
+      "local": "604 – SUCRE",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 22
+    },
+    {
+      "competidor": "KFC",
+      "local": "166 – AV PERU II",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 22
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "14 – JOCKEY PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 22
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 56 MINKA – CALLAO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 22
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 30 PURUCHUCO – ATE",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 22
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 56 MINKA – CALLAO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 22
+    },
+    {
+      "competidor": "KFC",
+      "local": "121 – OPEN HUANCAYO",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 21
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "16 – JOCKEY PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 21
+    },
+    {
+      "competidor": "KFC",
+      "local": "145 – ESTACION SAN",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 21
+    },
+    {
+      "competidor": "KFC",
+      "local": "19 - CANADA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 21
+    },
+    {
+      "competidor": "KFC",
+      "local": "201 – PASEO CENTRAL",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 21
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 135 PLAZA SAN MIGUEL – SAN MIGUEL",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 2,
+      "ventas": 21
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 19 PLN – INDEPENDENCIA",
+      "cajasTotal": 4,
+      "ticketsReg": 4,
+      "ticketsNoReg": 0,
+      "ventas": 21
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 135 PLAZA SAN MIGUEL – SAN MIGUEL",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 21
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 03 LA ENCALADA – SURCO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 21
+    },
+    {
+      "competidor": "KFC",
+      "local": "103 – CANTO GRANDE",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 20
+    },
+    {
+      "competidor": "KFC",
+      "local": "120 – VENEZUELA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 20
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "62 – QUINDE ICA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 20
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "No detectado",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 20
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "61 – JULIACA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 1,
+      "ventas": 20
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "29 – CHORRILLOS",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 20
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 135 PLAZA SAN MIGUEL – SAN MIGUEL",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 3,
+      "ventas": 20
+    },
+    {
+      "competidor": "KFC",
+      "local": "199 – CHACLACAYO",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 19
+    },
+    {
+      "competidor": "KFC",
+      "local": "20 - SUCRE",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 19
+    },
+    {
+      "competidor": "KFC",
+      "local": "105 – QUINDE ICA",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 19
+    },
+    {
+      "competidor": "KFC",
+      "local": "189 – ALAMEDA SJL",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 19
+    },
+    {
+      "competidor": "KFC",
+      "local": "96 – PORONGOCHE",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 19
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 06 - AVIACION",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 19
+    },
+    {
+      "competidor": "KFC",
+      "local": "119 – TOTTUS",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 19
+    },
+    {
+      "competidor": "KFC",
+      "local": "89 – ANGELICA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 19
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "17 – RUISEÑORES",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 19
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 19 PLN – INDEPENDENCIA",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 19
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 10 RISSO – LINCE",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 19
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 19 PLN – INDEPENDENCIA",
+      "cajasTotal": 4,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 19
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 10 RISSO – LINCE",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 19
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "77 – PLAZA SAN MIGUEL",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 18
+    },
+    {
+      "competidor": "Domino's",
+      "local": "618 – COMANDANTE",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 5,
+      "ventas": 18
+    },
+    {
+      "competidor": "KFC",
+      "local": "40 – TUPAC AMARU",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 18
+    },
+    {
+      "competidor": "KFC",
+      "local": "115 – RAMBLA BRASIL",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 18
+    },
+    {
+      "competidor": "KFC",
+      "local": "139 – SANTA ANITA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 18
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "75 – PURUCHUCO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 3,
+      "ventas": 18
+    },
+    {
+      "competidor": "KFC",
+      "local": "82 – MALL SANTA ANITA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 18
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "56 – MALL AVENTURA",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 6,
+      "ventas": 18
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "48 – LA MERCED",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 18
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "72 – GARDENIAS",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 18
+    },
+    {
+      "competidor": "KFC",
+      "local": "90 – TOTUS HUAYLAS",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 18
+    },
+    {
+      "competidor": "KFC",
+      "local": "59 – CONTISUYO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 18
+    },
+    {
+      "competidor": "KFC",
+      "local": "196 – METRO ALFONSO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 2,
+      "ventas": 18
+    },
+    {
+      "competidor": "KFC",
+      "local": "144 – ESTACION LOS",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 17
+    },
+    {
+      "competidor": "KFC",
+      "local": "193 – MALL SAN JUAN",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 17
+    },
+    {
+      "competidor": "KFC",
+      "local": "197 – REVOLUCION",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 17
+    },
+    {
+      "competidor": "KFC",
+      "local": "124 – LIMA NORTE",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 16
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "43 – MERCADERES -",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 16
+    },
+    {
+      "competidor": "KFC",
+      "local": "49 – MALL AVENTURA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 16
+    },
+    {
+      "competidor": "KFC",
+      "local": "75 – LIMA NORTE",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 16
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 71 OP ANGAMOS – SURQUILLO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 16
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 30 PURUCHUCO – ATE",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 16
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "58 – LIMA NORTE",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 15
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "39 – RP HUANCAYO",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 15
+    },
+    {
+      "competidor": "KFC",
+      "local": "113 – MONTERREY",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 15
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "58 – LIMA NORTE",
+      "cajasTotal": 2,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 15
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "24 – MEGA PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 15
+    },
+    {
+      "competidor": "KFC",
+      "local": "26 – LIMATAMBO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 15
+    },
+    {
+      "competidor": "KFC",
+      "local": "60 – OPEN MARSANO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 15
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 22 – AREQUIPA 1300",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 15
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "28 – MATELLINI",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 2,
+      "ventas": 15
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "14 – CHIMU",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 0,
+      "ventas": 15
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "54 – MALL SANTA ANITA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 15
+    },
+    {
+      "competidor": "KFC",
+      "local": "136 – CANTA CALLAO",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 14
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 04 - PRIMAVERA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 14
+    },
+    {
+      "competidor": "KFC",
+      "local": "22 – SANTA ANITA",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 14
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 03 - CONTISUYO",
+      "cajasTotal": 3,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 14
+    },
+    {
+      "competidor": "KFC",
+      "local": "51 – TOMAS VALLE",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 14
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "40 – ROYAL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 2,
+      "ventas": 14
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "46 – SAN JUAN",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 14
+    },
+    {
+      "competidor": "KFC",
+      "local": "77 – SOL PLAZA PIURA",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 2,
+      "ventas": 14
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 71 OP ANGAMOS – SURQUILLO",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 2,
+      "ventas": 14
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 05 LA AURORA – MIRAFLORES",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 2,
+      "ventas": 14
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 08 SÁNCHEZ CARRION – MAGDALENA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 2,
+      "ventas": 14
+    },
+    {
+      "competidor": "KFC",
+      "local": "07 – CAMACHO",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 8,
+      "ventas": 12
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "10 – JOCKEY PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 12
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "84 – MALL AVENTURA",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 12
+    },
+    {
+      "competidor": "KFC",
+      "local": "43 – SODIMAC",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 12
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "25 – ICA SOL",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 12
+    },
+    {
+      "competidor": "KFC",
+      "local": "219 – MALL DEL SUR III",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 12
+    },
+    {
+      "competidor": "KFC",
+      "local": "27 – SAGA CAYMA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 2,
+      "ventas": 12
+    },
+    {
+      "competidor": "KFC",
+      "local": "187 – MALL AVENTURA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 12
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 11 JIRÓN DE LA UNIÓN – LIMA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 12
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 11 JIRÓN DE LA UNIÓN – LIMA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 12
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "12 - CANADA",
+      "cajasTotal": 3,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 11
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "18 – PLAZA LIMA SUR",
+      "cajasTotal": 2,
+      "ticketsReg": 4,
+      "ticketsNoReg": 1,
+      "ventas": 11
+    },
+    {
+      "competidor": "KFC",
+      "local": "209 – MALL MEGA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 2,
+      "ventas": 11
+    },
+    {
+      "competidor": "Domino's",
+      "local": "612 – GUARDIA CIVIL",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 2,
+      "ventas": 11
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "40 – RIVA AGUERO",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 11
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "79 – MALL AVENTURA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 10
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 71 OP ANGAMOS – SURQUILLO",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 10
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 14 – LA MERCED",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 9
+    },
+    {
+      "competidor": "KFC",
+      "local": "222 – CENCOSUB",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 2,
+      "ventas": 9
+    },
+    {
+      "competidor": "KFC",
+      "local": "58 – MINKA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 9
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 11 JIRÓN DE LA UNIÓN – LIMA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 1,
+      "ventas": 9
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 16 – SAN LUIS 3905",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 8
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "20 – LIMATAMBO",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 8
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "81 – MALL PLAZA CAYMA",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 3,
+      "ventas": 8
+    },
+    {
+      "competidor": "KFC",
+      "local": "15 – JIRON DE LA UNION",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 8
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 25 – VENEZUELA",
+      "cajasTotal": 3,
+      "ticketsReg": 6,
+      "ticketsNoReg": 0,
+      "ventas": 8
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "15 – ARMENDARIZ",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 3,
+      "ventas": 8
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "31– ESCARDO",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 8
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "02 - ALDABAS",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 7
+    },
+    {
+      "competidor": "KFC",
+      "local": "79 – VES",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 0,
+      "ventas": 7
+    },
+    {
+      "competidor": "KFC",
+      "local": "24 – SAGA BEGONIAS",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 3,
+      "ventas": 7
+    },
+    {
+      "competidor": "KFC",
+      "local": "183 – MALL AVENTURA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 7
+    },
+    {
+      "competidor": "KFC",
+      "local": "210– PORTAL PÌZARRO",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 3,
+      "ventas": 7
+    },
+    {
+      "competidor": "KFC",
+      "local": "80 – PRO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 7
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "69 – MINKA",
+      "cajasTotal": 2,
+      "ticketsReg": 5,
+      "ticketsNoReg": 1,
+      "ventas": 6
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "05 – PLAZA SAN MARTIN",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 6
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "46 – PARQUE ARAUCO",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 6
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "84– OVALO LARCO",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 1,
+      "ventas": 6
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- ENERO 2026_MD 08 SÁNCHEZ CARRIÓN – MAGDALENA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 6
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 08 SÁNCHEZ CARRIÓN – MAGDALENA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 6
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 DICIEMBRE_MD 08 SÁNCHEZ CARRIÓN – MAGDALENA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 6
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "36 – MALL PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 5
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "23 – MEGA PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 5
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "No detectado",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 5
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "33 – TUPAC AMARU",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 5
+    },
+    {
+      "competidor": "KFC",
+      "local": "137 – MEGA PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 5
+    },
+    {
+      "competidor": "KFC",
+      "local": "36 - CHICLAYO",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 4
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 24 – MOLICENTRO",
+      "cajasTotal": 2,
+      "ticketsReg": 3,
+      "ticketsNoReg": 3,
+      "ventas": 4
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "85 – CHICLAYO",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 4
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "D 11 – UNIVERSITARIA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 4,
+      "ventas": 4
+    },
+    {
+      "competidor": "KFC",
+      "local": "62 – METRO ALFONSO",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 4
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "68 – REAL PLAZA",
+      "cajasTotal": 2,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 4
+    },
+    {
+      "competidor": "KFC",
+      "local": "152 – PLAZA CENTER",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 1,
+      "ventas": 4
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "55 – MORELLI",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 4
+    },
+    {
+      "competidor": "KFC",
+      "local": "84– OVALO LARCO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 2,
+      "ventas": 4
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "18 – BEGONIAS",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 4
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "30 – REAL PLAZA CHICLAYO",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 4
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "52 – HABICH",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 1,
+      "ventas": 3
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "86 – TERMINAL",
+      "cajasTotal": 1,
+      "ticketsReg": 3,
+      "ticketsNoReg": 0,
+      "ventas": 3
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "21 – LARCOMAR",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 2
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "74 – PORONGOCHE",
+      "cajasTotal": 1,
+      "ticketsReg": 2,
+      "ticketsNoReg": 1,
+      "ventas": 2
+    },
+    {
+      "competidor": "Little Caesars",
+      "local": "44–RAUL FERRERO",
+      "cajasTotal": 3,
+      "ticketsReg": 3,
+      "ticketsNoReg": 1,
+      "ventas": 2
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "96 – PORONGOCHE",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 1,
+      "ventas": 2
+    },
+    {
+      "competidor": "Pizza Hut",
+      "local": "44 – OPEN PLAZA PIURA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 2
+    },
+    {
+      "competidor": "KFC",
+      "local": "14 – MOLINA PLAZA",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 1,
+      "ventas": 0
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "49 – MALL AVENTURA",
+      "cajasTotal": 1,
+      "ticketsReg": 1,
+      "ticketsNoReg": 0,
+      "ventas": 0
+    },
+    {
+      "competidor": "BURGER KING",
+      "local": "93 – TOTTUS LA MARINA",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 1,
+      "ventas": 0
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 14 IZAGUIRRE – INDEPENDENCIA (2 KIOSKOS DIGITALES)",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 1,
+      "ventas": 0
+    },
+    {
+      "competidor": "McDonald's",
+      "local": "- 2025 NOV_MD 08 SÁNCHEZ CARRIÓN – MAGDALENA (2 KIOSKOS DIGITALES)",
+      "cajasTotal": 1,
+      "ticketsReg": 0,
+      "ticketsNoReg": 2,
+      "ventas": 0
+    }
+  ],
+  "competitorTableData": [
+    {
+      "competidor": "KFC",
+      "localesCount": 159,
+      "cajasTotal": 322,
+      "ticketsReg": 548,
+      "ticketsNoReg": 284,
+      "ventas": 7722
+    },
+    {
+      "competidor": "Pizza Hut",
+      "localesCount": 95,
+      "cajasTotal": 167,
+      "ticketsReg": 322,
+      "ticketsNoReg": 160,
+      "ventas": 6277
+    },
+    {
+      "competidor": "McDonald's",
+      "localesCount": 71,
+      "cajasTotal": 232,
+      "ticketsReg": 231,
+      "ticketsNoReg": 135,
+      "ventas": 3025
+    },
+    {
+      "competidor": "BURGER KING",
+      "localesCount": 42,
+      "cajasTotal": 81,
+      "ticketsReg": 143,
+      "ticketsNoReg": 63,
+      "ventas": 1693
+    },
+    {
+      "competidor": "Little Caesars",
+      "localesCount": 24,
+      "cajasTotal": 44,
+      "ticketsReg": 67,
+      "ticketsNoReg": 67,
+      "ventas": 1192
+    },
+    {
+      "competidor": "Domino's",
+      "localesCount": 16,
+      "cajasTotal": 20,
+      "ticketsReg": 18,
+      "ticketsNoReg": 69,
+      "ventas": 1071
+    },
+    {
+      "competidor": "Desconocido",
+      "localesCount": 1,
+      "cajasTotal": 3,
+      "ticketsReg": 12,
+      "ticketsNoReg": 62,
+      "ventas": 657
+    }
+  ]
+}
