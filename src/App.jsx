@@ -294,7 +294,7 @@ export default function App() {
             <div className="flex items-center justify-between border-b border-slate-300 dark:border-white/10 pb-4">
               <div className="flex items-center gap-2">
                 <Activity size={16} className="text-accent-blue" />
-                <h3 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">Tickets Timeline</h3>
+                <h2 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">Tendencia de Tickets</h2>
               </div>
             </div>
             <div className="flex-1 w-full -ml-4 mt-6 h-[250px]">
