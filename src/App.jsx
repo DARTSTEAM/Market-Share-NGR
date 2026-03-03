@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import loadedData from './data.json';
 import MarketShareDashboard from './components/MarketShareDashboard';
+import ComparativosDashboard from './components/ComparativosDashboard';
 import CustomSelect from './components/common/CustomSelect';
 import FilterBar from './components/filters/FilterBar';
 
@@ -49,28 +50,35 @@ const MetricCard = ({ title, value, previousPeriodValue = 0, delay = 0, icon: Ic
 
 const ChartBar = ({ label, value, max, color = "", delay = 0 }) => {
   const percentage = Math.max(5, (value / max) * 100);
-
   const isTailwindClass = color.startsWith('bg-');
 
   return (
-    <div className="flex flex-col items-center gap-2 flex-1 h-full justify-end group cursor-pointer relative">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
-        <div className="px-3 py-1.5 bg-white dark:bg-black/80 backdrop-blur-md rounded border border-slate-200 dark:border-white/10 text-xs font-black uppercase whitespace-nowrap shadow-xl text-slate-900 dark:text-white">
-          {new Intl.NumberFormat('en-US').format(value)} Tickets
+    <div className="flex-1 flex flex-col group cursor-pointer min-w-0">
+      {/* ── Bar zone: flex-1 so all columns are the same height ── */}
+      <div className="relative flex-1 flex justify-center items-end">
+        {/* Tooltip */}
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+          <div className="px-3 py-1.5 bg-white dark:bg-black/80 backdrop-blur-md rounded border border-slate-200 dark:border-white/10 text-xs font-black uppercase whitespace-nowrap shadow-xl text-slate-900 dark:text-white">
+            {new Intl.NumberFormat('en-US').format(value)} Tickets
+          </div>
         </div>
-      </div>
-      <div className="w-full flex justify-center items-end flex-1 min-h-[150px] relative">
+        {/* Bar — anchored to bottom of this zone */}
         <motion.div
           initial={{ height: 0 }}
           animate={{ height: `${percentage}%` }}
           transition={{ duration: 1.2, delay, type: "spring", stiffness: 50, damping: 15 }}
-          className={`w-[80%] max-w-[40px] ${isTailwindClass ? color : ''} rounded-t-lg shadow-lg dark:shadow-[0_0_30px_rgba(255,126,75,0.1)] group-hover:brightness-110 dark:group-hover:brightness-125 transition-all relative overflow-hidden`}
+          className={`w-4/5 ${isTailwindClass ? color : ''} rounded-t-lg shadow-lg dark:shadow-[0_0_30px_rgba(255,126,75,0.1)] group-hover:brightness-110 dark:group-hover:brightness-125 transition-all relative overflow-hidden`}
           style={!isTailwindClass && color ? { backgroundColor: color } : {}}
         >
           <div className="absolute inset-0 bg-gradient-to-b from-white/30 dark:from-white/20 to-transparent" />
         </motion.div>
       </div>
-      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-white/50 group-hover:text-slate-900 dark:group-hover:text-white transition-colors text-center">{label}</span>
+      {/* ── Label zone: fixed height, bottom of column ── */}
+      <div className="h-10 shrink-0 flex items-end justify-center px-1 pb-0.5">
+        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-white/50 group-hover:text-slate-900 dark:group-hover:text-white transition-colors text-center leading-tight">
+          {label}
+        </span>
+      </div>
     </div>
   );
 };
@@ -99,10 +107,10 @@ const CompetitorAnalysis = ({
 
     {isLoaded && (
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard title="Tickets totales" value={kFormatter(metrics.totalTickets)} previousPeriodValue="+12%" delay={0.1} icon={TrendingUp} />
-        <MetricCard title="Locales analizados" value={metrics.localesAnalizados.toString()} previousPeriodValue="+5" delay={0.2} icon={Award} />
+        <MetricCard title="Tickets Totales" value={kFormatter(metrics.totalTickets)} previousPeriodValue="+12%" delay={0.1} icon={TrendingUp} />
+        <MetricCard title="Tickets por Local" value={metrics.localesAnalizados.toString()} previousPeriodValue="+5" delay={0.2} icon={Award} />
         <MetricCard title="Cajas sin registro" value={metrics.cajasSinRegistro.toString()} previousPeriodValue={`-${Math.round((metrics.cajasSinRegistro / (metrics.totalTickets || 1)) * 100)}%`} delay={0.3} icon={ShieldAlert} />
-        <MetricCard title="Cajas analizadas" value={metrics.cajasAnalizadas.toString()} previousPeriodValue={`+${Math.round((metrics.cajasAnalizadas / (metrics.totalTickets || 1)) * 100)}%`} delay={0.4} icon={BarChart2} />
+        <MetricCard title="Cajas cerradas" value={metrics.cajasAnalizadas.toString()} previousPeriodValue={`+${Math.round((metrics.cajasAnalizadas / (metrics.totalTickets || 1)) * 100)}%`} delay={0.4} icon={BarChart2} />
       </section>
     )}
 
@@ -114,29 +122,56 @@ const CompetitorAnalysis = ({
         className="lg:col-span-4 pwa-card p-6 border-slate-300 dark:border-white/5 flex flex-col shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-slate-300 dark:border-white/10 pb-4">
-          <h2 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">Market Split</h2>
+          <h2 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">Ticket Split</h2>
           <div className="flex gap-2 items-center px-3 py-1 rounded-full bg-accent-orange/10 dark:bg-accent-orange/20 border border-accent-orange/30">
             <div className="w-1.5 h-1.5 rounded-full bg-accent-orange animate-pulse shadow-[0_0_8px_rgba(255,94,0,0.8)]" />
             <span className="text-[8px] font-black uppercase tracking-widest text-accent-orange">Live</span>
           </div>
         </div>
 
-        <div className="flex items-end justify-around w-full flex-1 mt-6 gap-2 relative h-[250px]">
-          <div className="absolute top-[30%] w-full border-t border-dashed border-slate-300 dark:border-white/10 z-0">
-            <span className="absolute -top-3 left-0 text-[8px] font-black text-slate-400 dark:text-white/20">
-              {kFormatter(Math.max(...shareData.map(d => d.value)) * 0.7)}
-            </span>
+        {/* Chart area: grows to fill remaining card space */}
+        <div className="flex flex-1 mt-4 gap-1 min-h-0">
+          {/* Y-axis labels + gridlines column */}
+          <div className="relative flex flex-col justify-between pb-10 pr-2 shrink-0 w-8">
+            {[100, 75, 50, 25].map((pct) => {
+              const maxVal = Math.max(...shareData.map(d => d.value)) * 1.1;
+              return (
+                <span key={pct} className="text-[8px] font-black text-slate-400 dark:text-white/20 text-right leading-none">
+                  {kFormatter(maxVal * pct / 100)}
+                </span>
+              );
+            })}
           </div>
-          {shareData.slice(0, 6).map((item, index) => (
-            <ChartBar
-              key={index}
-              label={item.name === "MCDONALD'S" ? "McD's" : item.name === "BURGER KING" ? "BK" : item.name === "LITTLE CAESARS" ? "L. CAESARS" : item.name.substring(0, 10)}
-              value={item.value}
-              max={Math.max(...shareData.map(d => d.value)) * 1.1}
-              color={item.color}
-              delay={0.5 + (index * 0.1)}
-            />
-          ))}
+
+          {/* Bars + gridlines */}
+          <div className="relative flex-1 flex flex-col min-h-0">
+            {/* Gridlines: positioned in the bar area only (above the h-10 label zone) */}
+            <div className="absolute inset-x-0 bottom-10 top-0 pointer-events-none z-0">
+              {[0, 25, 50, 75].map((pct) => (
+                <div
+                  key={pct}
+                  className="absolute w-full border-t border-dashed border-slate-200 dark:border-white/[0.06]"
+                  style={{ bottom: `${pct}%` }}
+                />
+              ))}
+              {/* Solid baseline */}
+              <div className="absolute bottom-0 w-full border-t-2 border-slate-300 dark:border-white/10" />
+            </div>
+
+            {/* Bars row */}
+            <div className="relative flex-1 flex items-stretch gap-1 z-10 min-h-0">
+              {[...shareData].sort((a, b) => b.value - a.value).slice(0, 6).map((item, index) => (
+                <ChartBar
+                  key={index}
+                  label={item.name === "MCDONALD'S" ? "McD's" : item.name === "BURGER KING" ? "BK" : item.name === "LITTLE CAESARS" ? "L. CAE" : item.name.substring(0, 10)}
+                  value={item.value}
+                  max={Math.max(...shareData.map(d => d.value)) * 1.1}
+                  color={item.color}
+                  delay={0.5 + (index * 0.1)}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </motion.section>
 
@@ -152,9 +187,9 @@ const CompetitorAnalysis = ({
             <h3 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">Evolución de Tickets</h3>
           </div>
         </div>
-        <div className="flex-1 w-full -ml-4 mt-6" style={{ minHeight: '320px' }}>
+        <div className="flex-1 w-full mt-6" style={{ minHeight: '320px' }}>
           <ResponsiveContainer width="100%" height={320}>
-            <AreaChart data={trendData} margin={{ top: 30, right: 20, left: 0, bottom: 0 }}>
+            <AreaChart data={trendData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
               <defs>
                 <linearGradient id="colorTickets" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#0070f3" stopOpacity={0.8} />
@@ -180,45 +215,59 @@ const CompetitorAnalysis = ({
       >
         <div className="flex items-center justify-between border-b border-slate-300 dark:border-white/10 pb-4">
           <div className="flex items-center gap-2">
-            <PieChartIcon size={16} className="text-accent-orange" />
+            <BarChart2 size={16} className="text-accent-orange" />
             <h3 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">Share Overview</h3>
           </div>
+          <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/20">Últimos 6 meses</span>
         </div>
-        <div className="flex-1 w-full flex items-center justify-center mt-6" style={{ minHeight: '340px' }}>
-          <ResponsiveContainer width="100%" height={340}>
-            <PieChart>
-              <Pie
-                data={shareData}
-                cx="50%"
-                cy="45%"
-                innerRadius="38%"
-                outerRadius="60%"
-                paddingAngle={3}
-                dataKey="value"
-                stroke="none"
-                label={false}
-              >
-                {shareData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.8)' : '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontWeight: 'bold' }}
-                itemStyle={{ color: theme === 'dark' ? '#fff' : '#1e293b' }}
-                formatter={(value, name) => [`${((value / shareData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(1)}%`, name]}
-              />
-              <Legend
-                iconType="circle"
-                iconSize={8}
-                formatter={(value, entry) => (
-                  <span style={{ fontSize: '9px', fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '0.05em', color: theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }}>
-                    {value} {((entry.payload.value / shareData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(0)}%
-                  </span>
-                )}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        {(() => {
+          const ROLLING_MONTHS = ['Oct', 'Nov', 'Dic', 'Ene', 'Feb', 'Mar'];
+          const seeds = [0.85, 0.92, 1.0, 1.08, 0.97, 1.05];
+          const sorted = [...shareData].sort((a, b) => b.value - a.value).filter(d => d.value > 0);
+          const total = sorted.reduce((s, d) => s + d.value, 0);
+          const rollingData = ROLLING_MONTHS.map((month, mi) => {
+            const entry = { month };
+            sorted.forEach(comp => {
+              const shortName = comp.name === "McDonald's" ? "McD's"
+                : comp.name === 'Burger King' ? 'BK'
+                  : comp.name === 'Little Caesars' ? 'L. CAE'
+                    : comp.name.substring(0, 8);
+              entry[shortName] = Math.round((comp.value / total) * 2400 * seeds[mi] * (0.92 + (comp.name.charCodeAt(0) % 7) * 0.02));
+            });
+            return entry;
+          });
+          const bars = sorted.map(comp => ({
+            key: comp.name === "McDonald's" ? "McD's" : comp.name === 'Burger King' ? 'BK' : comp.name === 'Little Caesars' ? 'L. CAE' : comp.name.substring(0, 8),
+            color: comp.color,
+          }));
+          return (
+            <div className="flex-1 w-full mt-4" style={{ minHeight: '300px' }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={rollingData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }} barCategoryGap="28%" barGap={0}>
+                  <XAxis dataKey="month" stroke="transparent" tick={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.4)', fontSize: 9, fontWeight: 900 }} />
+                  <YAxis stroke="transparent" tick={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.25)', fontSize: 8 }} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.85)' : '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', fontWeight: 'bold' }}
+                    cursor={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)' }}
+                  />
+                  <Legend
+                    iconType="circle"
+                    iconSize={7}
+                    wrapperStyle={{ paddingTop: '12px' }}
+                    formatter={(value) => (
+                      <span style={{ fontSize: '8px', fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '0.05em', color: theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)' }}>
+                        {value}
+                      </span>
+                    )}
+                  />
+                  {bars.map(b => (
+                    <Bar key={b.key} dataKey={b.key} stackId="a" fill={b.color} radius={bars.indexOf(b) === bars.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })()}
       </motion.section>
 
       <motion.section
@@ -240,7 +289,7 @@ const CompetitorAnalysis = ({
                 <th className="px-6 py-5 text-right">Caja</th>
                 <th className="px-6 py-5 text-right">Reg.</th>
                 <th className="px-6 py-5 text-right">No Reg.</th>
-                <th className="px-6 py-5 text-right rounded-tr-xl text-accent-orange drop-shadow-sm dark:drop-shadow-[0_0_8px_rgba(255,126,75,0.4)]">Transacciones Totales</th>
+                <th className="px-6 py-5 text-right rounded-tr-xl text-accent-orange drop-shadow-sm dark:drop-shadow-[0_0_8px_rgba(255,126,75,0.4)]">Tickets Totales</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-xs text-slate-700 dark:text-white/80 font-medium">
@@ -280,7 +329,7 @@ const CompetitorAnalysis = ({
           <CustomSelect
             label="Ordenar por"
             options={[
-              { value: "ventas", label: "Transacciones" },
+              { value: "ventas", label: "Tickets" },
               { value: "local", label: "Local" },
               { value: "competidor", label: "Competidor" },
             ]}
@@ -311,7 +360,7 @@ const CompetitorAnalysis = ({
                   No Reg. <span className="text-accent-orange font-bold">{sortBy === 'ticketsNoReg' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
                 </th>
                 <th className="px-6 py-5 text-right rounded-tr-xl text-accent-orange drop-shadow-sm dark:drop-shadow-[0_0_8px_rgba(255,126,75,0.4)] cursor-pointer hover:opacity-80 transition-opacity" onClick={() => handleSort('ventas')}>
-                  Transacciones Periodo <span className="text-slate-900 dark:text-white font-bold">{sortBy === 'ventas' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                  Tickets Periodo <span className="text-slate-900 dark:text-white font-bold">{sortBy === 'ventas' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
                 </th>
               </tr>
             </thead>
@@ -372,7 +421,14 @@ export default function App() {
   });
 
   const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters(prev => {
+      const newFilters = { ...prev, [key]: value };
+      // Cascading logic: if competitor changes, reset location
+      if (key === 'competitor' && value !== prev.competitor) {
+        newFilters.location = 'all';
+      }
+      return newFilters;
+    });
   };
 
   const handleResetFilters = () => {
@@ -409,10 +465,16 @@ export default function App() {
     ...shareData.map(c => ({ value: c.name, label: c.name }))
   ];
 
-  const locationOptions = [
-    { value: "all", label: "Todos los locales" },
-    ...Array.from(new Set(tableData.map(t => t.local))).sort().map(l => ({ value: l, label: l }))
-  ];
+  const locationOptions = useMemo(() => {
+    const baseOptions = [{ value: "all", label: "Todos los locales" }];
+
+    const filteredTableData = filters.competitor === 'all'
+      ? tableData
+      : tableData.filter(t => t.competidor === filters.competitor);
+
+    const locations = Array.from(new Set(filteredTableData.map(t => t.local))).sort();
+    return [...baseOptions, ...locations.map(l => ({ value: l, label: l }))];
+  }, [filters.competitor]);
 
   const channelOptions = [
     { value: "all", label: "Todos los canales" },
@@ -480,10 +542,12 @@ export default function App() {
 
     return {
       totalTickets: Math.round((totalReg + totalNoReg) * multiplier),
+      totalTransDailyAvg: Math.round(((totalReg + totalNoReg) * multiplier) / 30),
       localesAnalizados: locales,
       cajasSinRegistro: Math.round(totalNoReg * multiplier),
       cajasAnalizadas: cajas,
-      totalVentas: totalVentas * multiplier
+      totalVentas: totalVentas * multiplier,
+      avgTransPerLocal: locales > 0 ? Math.round((totalVentas * multiplier) / locales) : 0
     };
   }, [filteredTableData, filters.month, filters.year]);
 
@@ -516,13 +580,24 @@ export default function App() {
     const yearVal = parseInt(filters.year);
     const yearMultiplier = yearVal === 2026 ? 1 : 0.85;
 
-    const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const monthsList = [];
+    const now = new Date(2026, 2, 1); // March 2026
+    for (let i = 12; i >= 1; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
+      const y = d.getFullYear().toString().slice(-2);
+      monthsList.push({
+        name: `${m.charAt(0).toUpperCase() + m.slice(1)} ${y}`,
+        monthIdx: d.getMonth(),
+        year: d.getFullYear()
+      });
+    }
 
-    return MONTHS.map((month, index) => {
+    return monthsList.map((mInfo, index) => {
       // Simulate seasonality for sales/transactions
-      const seasonality = 1 + (Math.sin(index * 0.8) * 0.25) + (Math.cos(index * 0.3) * 0.15);
+      const seasonality = 1 + (Math.sin(mInfo.monthIdx * 0.8) * 0.25) + (Math.cos(mInfo.monthIdx * 0.3) * 0.15);
       return {
-        name: month,
+        name: mInfo.name,
         tickets: Math.max(1, Math.round(baseVentas * yearMultiplier * seasonality))
       };
     });
@@ -635,7 +710,7 @@ export default function App() {
             <div className="flex flex-col">
               <span className="text-[10px] text-accent-orange font-black uppercase tracking-[0.3em] mb-1">NGR Intelligence Suite</span>
               <h1 className="pwa-title !text-5xl md:!text-6xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
-                {activeTab === 'competitor' ? 'Análisis Competencias' : 'Market Share'} <span className="text-accent-orange">LIVE</span>
+                {activeTab === 'competitor' ? 'Análisis Competencias' : activeTab === 'marketshare' ? 'Market Share' : 'Comparativos'} <span className="text-accent-orange">LIVE</span>
               </h1>
             </div>
           </div>
@@ -667,6 +742,13 @@ export default function App() {
               <PieChartIcon size={14} />
               Market Share
             </button>
+            <button
+              onClick={() => setActiveTab('comparativos')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'comparativos' ? 'bg-accent-orange text-white shadow-[0_0_20px_rgba(255,126,75,0.3)]' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'}`}
+            >
+              <GitCompare size={14} />
+              Comparativos
+            </button>
           </div>
         </nav>
 
@@ -687,7 +769,7 @@ export default function App() {
               sortDirection={sortDirection}
               filterBar={globalFilterBar}
             />
-          ) : (
+          ) : activeTab === 'marketshare' ? (
             <MarketShareDashboard
               key="marketshare"
               filters={filters}
@@ -697,6 +779,14 @@ export default function App() {
               shareData={reactiveShareData}
               trendData={reactiveTrendData}
               filteredTableData={sortedTableData}
+            />
+          ) : (
+            <ComparativosDashboard
+              key="comparativos"
+              shareData={reactiveShareData}
+              tableData={sortedTableData}
+              metrics={reactiveMetrics}
+              theme={theme}
             />
           )}
         </AnimatePresence>

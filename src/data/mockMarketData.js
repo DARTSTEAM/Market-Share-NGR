@@ -43,12 +43,14 @@ export const generateMockData = () => {
     return comp;
   });
 
-  // Market Share
-  const marketShare = COMPETITORS.map(comp => ({
+  // Ticket Split — values sum to 2400
+  const ticketAlloc = [720, 480, 432, 312, 240, 216, 0, 0, 0]; // 9 competitors, last 3 = 0 (clipped at top-6)
+  const marketShare = COMPETITORS.map((comp, i) => ({
     name: comp.name,
-    value: Math.floor(Math.random() * 1000000),
+    value: ticketAlloc[i] ?? 0,
     color: comp.color,
   }));
+
 
   // Audit Table Data
   const tableData = [];

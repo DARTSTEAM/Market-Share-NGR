@@ -117,16 +117,16 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                     trend={+8.5}
                 />
                 <KPICard
-                    title="Tickets Totales"
-                    value={new Intl.NumberFormat('en-US').format(reactiveMetrics.totalTickets || 0)}
-                    subtitle="Cantidad de tickets totales integrados"
+                    title="Promedio de Transacciones Diarias"
+                    value={new Intl.NumberFormat('en-US').format(reactiveMetrics.totalTransDailyAvg || 0)}
+                    subtitle="Promedio de transacciones generadas por día"
                     icon={TrendingUp}
                     trend={+12.1}
                 />
                 <KPICard
-                    title="Cajas Activas"
-                    value={reactiveMetrics.cajasAnalizadas || 0}
-                    subtitle="Cajas registrando ventas"
+                    title="Transacciones por Local"
+                    value={new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(reactiveMetrics.avgTransPerLocal || 0)}
+                    subtitle="Promedio de transacciones por sede"
                     icon={Users}
                     trend={-2.4}
                 />
@@ -143,9 +143,9 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                         </h3>
                         <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
                     </div>
-                    <div className="flex-1 w-full -ml-4 mt-6" style={{ minHeight: '320px' }}>
+                    <div className="flex-1 w-full mt-6" style={{ minHeight: '320px' }}>
                         <ResponsiveContainer width="100%" height={320}>
-                            <AreaChart data={trendData} margin={{ top: 30, right: 20, left: 0, bottom: 0 }}>
+                            <AreaChart data={trendData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
                                 <defs>
                                     <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#ff5e00" stopOpacity={0.8} />
@@ -176,7 +176,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                         <ResponsiveContainer width="100%" height={340}>
                             <RechartsPieChart>
                                 <Pie
-                                    data={shareData}
+                                    data={[...shareData].sort((a, b) => b.value - a.value)}
                                     cx="50%"
                                     cy="45%"
                                     innerRadius="38%"
@@ -186,7 +186,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                     stroke="none"
                                     label={false}
                                 >
-                                    {shareData.map((entry, index) => (
+                                    {[...shareData].sort((a, b) => b.value - a.value).map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
                                     ))}
                                 </Pie>
@@ -297,6 +297,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                 <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('competidor')}>Competidor{sortIcon('competidor')}</th>
                                 <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('local')}>Sede / Local{sortIcon('local')}</th>
                                 <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('canal')}>Canal{sortIcon('canal')}</th>
+                                <th className="px-6 py-5 text-center">Caja</th>
                                 <th className="px-6 py-5 text-center cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('transacciones')}>Transacciones{sortIcon('transacciones')}</th>
                                 <th className="px-6 py-5 text-center cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('promDiario')}>Prom. Diario{sortIcon('promDiario')}</th>
                                 <th className="px-6 py-5 text-center">Momento (A/C)</th>
@@ -324,6 +325,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                             {row.canal}
                                         </span>
                                     </td>
+                                    <td className="px-6 py-5 text-center font-bold text-slate-500 dark:text-white/40">{row.cajasTotal || '-'}</td>
                                     <td className="px-6 py-5 text-center font-black text-slate-900 dark:text-white font-mono">{row.transacciones}</td>
                                     <td className="px-6 py-5 text-center text-emerald-600 dark:text-accent-lemon font-black font-mono">{row.promDiario}</td>
                                     <td className="px-6 py-5 text-center">
@@ -365,6 +367,251 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                     </div>
                 )}
             </section>
+            <MonthlyTransactionsTable
+                data={filteredTableData}
+                shareData={shareData}
+            />
         </div>
     );
 }
+
+const MonthlyTransactionsTable = ({ data, shareData }) => {
+    const [localFilters, setLocalFilters] = useState({
+        competidor: 'all',
+        local: 'all',
+        caja: 'all'
+    });
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 15;
+
+    const months = useMemo(() => {
+        const list = [];
+        const now = new Date(2026, 2, 1); // Marzo 2026
+        for (let i = 12; i >= 1; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const m = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
+            const y = d.getFullYear().toString().slice(-2);
+            list.push({
+                label: `${m.charAt(0).toUpperCase() + m.slice(1)} ${y}`,
+                monthIdx: d.getMonth(),
+                year: d.getFullYear()
+            });
+        }
+        return list;
+    }, []);
+
+    // Matrix data generation logic (Monthly)
+    const matrixData = useMemo(() => {
+        return data.map((item, i) => {
+            const monthlyData = months.map((mInfo, mIdx) => {
+                // Mock monthly data based on the yearly total
+                const base = item.ventas / 12;
+                const seasonalVariation = 1 + (Math.sin(mInfo.monthIdx / 2) * 0.2);
+                const hash = item.local.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const randomVariation = (Math.sin(mInfo.monthIdx + hash + i) * 0.1) + 1;
+                return Math.max(0, Math.round(base * seasonalVariation * randomVariation));
+            });
+
+            return {
+                ...item,
+                monthly: monthlyData,
+                total: monthlyData.reduce((a, b) => a + b, 0)
+            };
+        });
+    }, [data, months]);
+
+    const filteredMatrix = useMemo(() => {
+        return matrixData.filter(row => {
+            const mComp = localFilters.competidor === 'all' || row.competidor === localFilters.competidor;
+            const mLoc = localFilters.local === 'all' || row.local === localFilters.local;
+            const mCaj = localFilters.caja === 'all' || String(row.cajasTotal) === localFilters.caja;
+            return mComp && mLoc && mCaj;
+        });
+    }, [matrixData, localFilters]);
+
+    // Reset to page 1 when filters change
+    useEffect(() => { setCurrentPage(1); }, [filteredMatrix]);
+
+    const totalPages = Math.ceil(filteredMatrix.length / itemsPerPage);
+    const displayedRows = useMemo(
+        () => filteredMatrix.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage),
+        [filteredMatrix, currentPage]
+    );
+
+    // Monthly totals for the top row
+    const monthlyTotals = useMemo(() => {
+        const totals = new Array(12).fill(0);
+        filteredMatrix.forEach(row => {
+            row.monthly.forEach((val, i) => {
+                totals[i] += val;
+            });
+        });
+        return totals;
+    }, [filteredMatrix]);
+
+    const grandTotal = useMemo(() => filteredMatrix.reduce((sum, row) => sum + row.total, 0), [filteredMatrix]);
+
+    // Internal Cascading Filters Logic
+    const competitors = useMemo(() => ['all', ...new Set(matrixData.map(d => d.competidor))], [matrixData]);
+
+    const locations = useMemo(() => {
+        const base = ['all'];
+        const filtered = localFilters.competidor === 'all'
+            ? matrixData
+            : matrixData.filter(d => d.competidor === localFilters.competidor);
+        return [...base, ...new Set(filtered.map(d => d.local))];
+    }, [matrixData, localFilters.competidor]);
+
+    const boxes = useMemo(() => {
+        const base = ['all'];
+        const filtered = matrixData.filter(d => {
+            const mComp = localFilters.competidor === 'all' || d.competidor === localFilters.competidor;
+            const mLoc = localFilters.local === 'all' || d.local === localFilters.local;
+            return mComp && mLoc;
+        });
+        return [...base, ...new Set(filtered.map(d => String(d.cajasTotal)))];
+    }, [matrixData, localFilters.competidor, localFilters.local]);
+
+    const handleLocalFilterChange = (key, value) => {
+        setLocalFilters(prev => {
+            const newFilters = { ...prev, [key]: value };
+            if (key === 'competidor') {
+                newFilters.local = 'all';
+                newFilters.caja = 'all';
+            } else if (key === 'local') {
+                newFilters.caja = 'all';
+            }
+            return newFilters;
+        });
+    };
+
+    return (
+        <section className="pwa-card overflow-hidden border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/50">
+            <div className="p-6 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] space-y-4">
+                <div className="flex flex-wrap gap-4 items-center justify-between">
+                    <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
+                        <TrendingUp className="w-4 h-4 text-accent-orange" />
+                        Matriz de Transacciones Mensuales (Rolling 12M)
+                    </h3>
+                    <div className="px-3 py-1 bg-accent-orange/10 rounded-full border border-accent-orange/20">
+                        <span className="text-[10px] font-black uppercase text-accent-orange">
+                            Pág. {currentPage} de {totalPages || 1} · {filteredMatrix.length} locales
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-4 pt-2">
+                    <div className="space-y-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Competidor</span>
+                        <CustomSelect
+                            selected={localFilters.competidor}
+                            onChange={(v) => handleLocalFilterChange('competidor', v)}
+                            options={competitors.map(c => ({ value: c, label: c === 'all' ? 'Todos' : c }))}
+                            width="w-40"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Local</span>
+                        <CustomSelect
+                            selected={localFilters.local}
+                            onChange={(v) => handleLocalFilterChange('local', v)}
+                            options={locations.map(l => ({ value: l, label: l === 'all' ? 'Todos' : l }))}
+                            width="w-40"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Caja</span>
+                        <CustomSelect
+                            selected={localFilters.caja}
+                            onChange={(v) => handleLocalFilterChange('caja', v)}
+                            options={boxes.map(b => ({ value: b, label: b === 'all' ? 'Todas' : `Caja ${b}` }))}
+                            width="w-32"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="overflow-x-auto relative custom-scrollbar max-h-[600px]">
+                <table className="w-full text-left border-collapse min-w-[1200px]">
+                    <thead className="bg-[#f8fafc] dark:bg-black/40 text-slate-500 dark:text-white/40 font-black text-[9px] uppercase tracking-[0.1em] sticky top-0 z-30">
+                        <tr>
+                            <th className="px-4 py-4 sticky left-0 z-40 bg-[#f8fafc] dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] min-w-[120px]">Competidor</th>
+                            <th className="px-4 py-4 sticky left-[120px] z-40 bg-[#f8fafc] dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] min-w-[160px]">Local</th>
+                            <th className="px-4 py-4 sticky left-[280px] z-40 bg-[#f8fafc] dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] min-w-[80px]">Caja</th>
+                            {months.map(m => (
+                                <th key={m.label} className="px-3 py-4 text-center min-w-[80px] border-l border-slate-200 dark:border-white/5">{m.label}</th>
+                            ))}
+                            <th className="px-4 py-4 text-center bg-accent-orange/5 text-accent-orange font-bold min-w-[100px]">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[10px] text-slate-700 dark:text-white/70">
+                        {/* Totals Row (Sticky under the header) */}
+                        <tr className="bg-slate-100 dark:bg-white/10 font-black text-slate-900 dark:text-white sticky top-[44px] z-20 backdrop-blur-md">
+                            <td colSpan="3" className="px-4 py-3 sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.1)] text-right uppercase italic text-accent-orange">Totales Consolidados</td>
+                            {monthlyTotals.map((total, i) => (
+                                <td key={i} className="px-3 py-3 text-center text-accent-orange font-mono border-l border-slate-200 dark:border-white/5">
+                                    {new Intl.NumberFormat('es-ES').format(total)}
+                                </td>
+                            ))}
+                            <td className="px-4 py-3 text-center bg-accent-orange text-white font-black shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]">
+                                {new Intl.NumberFormat('es-ES').format(grandTotal)}
+                            </td>
+                        </tr>
+
+                        {displayedRows.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors group">
+                                <td className="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1 h-3 rounded-full" style={{ backgroundColor: shareData.find(s => s.name === row.competidor)?.color || '#ccc' }} />
+                                        <span className="font-bold truncate text-[9px] uppercase tracking-tighter">{row.competidor}</span>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-3 sticky left-[120px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] font-medium text-slate-500 truncate">{row.local}</td>
+                                <td className="px-4 py-3 sticky left-[280px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] text-center font-bold opacity-50">{row.cajasTotal}</td>
+                                {row.monthly.map((val, i) => (
+                                    <td key={i} className={`px-3 py-3 text-center font-mono border-l border-slate-100 dark:border-white/[0.02] ${val > 2500 ? 'text-emerald-500 font-bold' : val === 0 ? 'opacity-20' : ''}`}>
+                                        {new Intl.NumberFormat('es-ES').format(val)}
+                                    </td>
+                                ))}
+                                <td className="px-4 py-3 text-center bg-accent-orange/[0.02] font-black text-accent-orange group-hover:bg-accent-orange/[0.05]">
+                                    {new Intl.NumberFormat('es-ES').format(row.total)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {filteredMatrix.length === 0 ? (
+                <div className="p-20 text-center space-y-4">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto text-slate-300">
+                        <TrendingUp className="w-8 h-8 opacity-20" />
+                    </div>
+                    <p className="text-xs font-bold text-slate-400 dark:text-white/20 uppercase tracking-widest">No se encontraron datos para los filtros seleccionados</p>
+                </div>
+            ) : totalPages > 1 && (
+                <div className="p-4 flex justify-between items-center bg-slate-50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/10">
+                    <span className="text-xs font-bold text-slate-500 dark:text-white/40">
+                        Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, filteredMatrix.length)} de {filteredMatrix.length} locales
+                    </span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1.5 rounded-md bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-white/80 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
+                        >
+                            Anterior
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-3 py-1.5 rounded-md bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-white/80 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
+                        >
+                            Siguiente
+                        </button>
+                    </div>
+                </div>
+            )}
+        </section>
+    );
+};
