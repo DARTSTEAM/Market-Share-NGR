@@ -1,16 +1,73 @@
-# React + Vite
+# 📊 NGR Market Share - Guía para Colaboradores
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+¡Bienvenido al proyecto! Este dashboard automatizado procesa reportes consolidados en CSV y los visualiza en tiempo real. Aquí tienes todo lo necesario para empezar a trabajar.
 
-Currently, two official plugins are available:
+## 🔗 Enlaces Importantes
+- **Repositorio:** [DARTSTEAM/Market-Share-NGR](https://github.com/DARTSTEAM/Market-Share-NGR)
+- **URL en Vivo:** [ngr-market-share.web.app](https://ngr-market-share.web.app/)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## 🛠 Entorno de Desarrollo
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. **Clonar el repo:**
+   ```bash
+   git clone https://github.com/DARTSTEAM/Market-Share-NGR.git
+   cd Market-Share-NGR
+   ```
 
-## Expanding the ESLint configuration
+2. **Instalar dependencias:**
+   ```bash
+   npm install
+   ```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+3. **Correr en local:**
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 📅 Cómo Actualizar los Datos
+
+El dashboard no lee el CSV directamente en el navegador por performance. Usa un script intermedio que genera un JSON optimizado.
+
+1. Reemplaza el archivo `public/data.csv` con el nuevo reporte (debe mantener el mismo nombre).
+2. Procesa los datos localmente para ver los cambios:
+   ```bash
+   node process_csv.cjs
+   ```
+3. Verifica que la tabla y gráficos se vean bien en tu `localhost`.
+
+---
+
+## 🚀 Flujo de Publicación (CI/CD)
+
+**No necesitas desplegar manualmente a Firebase.** Todo está automatizado con GitHub Actions.
+
+### Para cambios menores:
+1. Haz tus cambios en el código (`src/App.jsx`, etc.) o actualiza el CSV.
+2. Sube a la rama principal:
+   ```bash
+   git add .
+   git commit -m "Descripción clara del cambio"
+   git push origin master
+   ```
+3. Al hacer el push, GitHub iniciará el "Action" automáticamente. En **2 minutos**, la web se actualizará sola.
+
+### Para cambios grandes:
+1. Crea una rama nueva: `git checkout -b mejora-grafico`.
+2. Sube la rama y abre un **Pull Request (PR)** en GitHub.
+3. El sistema te responderá en el PR con una **Preview URL** temporal para que Agus revise el cambio antes de pasarlo a producción.
+
+---
+
+## 🗂 Estructura del Proyecto
+- `src/App.jsx`: UI principal y lógica del Dashboard.
+- `process_csv.cjs`: Script en Node que limpia y agrupa la data del CSV.
+- `src/data.json`: El archivo que consume el frontend (se genera automáticamente).
+- `public/data.csv`: Tu fuente de verdad.
+
+---
+
+**Nota:** Si el despliegue falla, revisa la pestaña **Actions** en GitHub para ver el log de errores.
