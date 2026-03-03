@@ -5,12 +5,12 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f5f7fa;
+  --bg: #f0f2f5;
   --fg: #0f172a;
   --accent-orange: #ff6600;
   --accent-blue: #0066cc;
   --accent-lemon: #8ab300;
-  --mesh-bg: #f5f7fa;
+  --mesh-bg: #f0f2f5;
 }
 
 .dark {
@@ -85,7 +85,7 @@ body {
   }
 
   .pwa-card {
-    @apply bg-slate-400/[0.08] dark:bg-white/[0.03] backdrop-blur-[40px] border border-slate-400/[0.2] dark:border-white/[0.08] rounded-[32px] overflow-hidden transition-all duration-500 shadow-sm dark:shadow-none;
+    @apply bg-white dark:bg-black/40 backdrop-blur-[40px] border border-slate-200 dark:border-white/[0.1] rounded-[32px] transition-all duration-500 shadow-xl shadow-slate-200/50 dark:shadow-none;
   }
 
   .pwa-card:hover {
