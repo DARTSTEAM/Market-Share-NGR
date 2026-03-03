@@ -210,7 +210,7 @@ export default function App() {
             <div className="flex flex-col">
               <span className="text-[10px] text-accent-orange font-black uppercase tracking-[0.3em] mb-1">NGR Intelligence Suite</span>
               <h1 className="pwa-title !text-5xl md:!text-6xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
-                Market Share
+                Market Share <span className="text-accent-orange">LIVE</span>
               </h1>
             </div>
           </div>
