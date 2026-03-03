@@ -90,9 +90,9 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
     const totalPages = Math.ceil(sortedTableData.length / itemsPerPage);
     const paginatedData = sortedTableData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-    // Channel mix logic based on reactiveShareData
+    // Channel mix logic based on shareData
     const channelMix = useMemo(() => {
-        return reactiveShareData.map((comp, i) => {
+        return shareData.map((comp, i) => {
             const h = comp.name.charCodeAt(0) + i;
             return {
                 name: comp.name,
@@ -101,7 +101,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                 'Salón': 100 - (30 + (h % 30)) - (15 + (h % 20))
             };
         });
-    }, [reactiveShareData]);
+    }, [shareData]);
 
     const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 
@@ -307,7 +307,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                 <tr key={row.competidor + row.local} className="hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
                                     <td className="px-6 py-5">
                                         {(() => {
-                                            const color = reactiveShareData.find(s => s.name === row.competidor)?.color || '#94a3b8';
+                                            const color = shareData.find(s => s.name === row.competidor)?.color || '#94a3b8';
                                             return (
                                                 <span
                                                     className="font-black text-[10px] tracking-widest px-3 py-1.5 rounded-full border inline-block truncate max-w-[140px]"
