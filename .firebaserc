@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "hike-agentic-playground"
-  }
+  },
+  "targets": {
+    "hike-agentic-playground": {
+      "hosting": {
+        "ngr_dashboard": [
+          "ngr-market-share"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
