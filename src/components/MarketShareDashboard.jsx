@@ -35,7 +35,7 @@ const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
     </motion.div>
 );
 
-export default function MarketShareDashboard({ filters, reactiveMetrics, reactiveShareData, reactiveTrendData, filteredTableData }) {
+export default function MarketShareDashboard({ filters, onFilterChange, globalFilterBar, reactiveMetrics, shareData, trendData, filteredTableData }) {
     const [currentPage, setCurrentPage] = useState(1);
     const [sortKey, setSortKey] = useState('transacciones');
     const [sortDir, setSortDir] = useState('desc');
@@ -145,7 +145,7 @@ export default function MarketShareDashboard({ filters, reactiveMetrics, reactiv
                     </div>
                     <div className="flex-1 w-full -ml-4 mt-6" style={{ minHeight: '320px' }}>
                         <ResponsiveContainer width="100%" height={320}>
-                            <AreaChart data={reactiveTrendData} margin={{ top: 30, right: 20, left: 0, bottom: 0 }}>
+                            <AreaChart data={trendData} margin={{ top: 30, right: 20, left: 0, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#ff5e00" stopOpacity={0.8} />
@@ -176,7 +176,7 @@ export default function MarketShareDashboard({ filters, reactiveMetrics, reactiv
                         <ResponsiveContainer width="100%" height={340}>
                             <RechartsPieChart>
                                 <Pie
-                                    data={reactiveShareData}
+                                    data={shareData}
                                     cx="50%"
                                     cy="45%"
                                     innerRadius="38%"
@@ -186,21 +186,21 @@ export default function MarketShareDashboard({ filters, reactiveMetrics, reactiv
                                     stroke="none"
                                     label={false}
                                 >
-                                    {reactiveShareData.map((entry, index) => (
+                                    {shareData.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={entry.color} />
                                     ))}
                                 </Pie>
                                 <RechartsTooltip
                                     contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.8)' : '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontWeight: 'bold' }}
                                     itemStyle={{ color: theme === 'dark' ? '#fff' : '#1e293b' }}
-                                    formatter={(value, name) => [`${((value / reactiveShareData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(1)}%`, name]}
+                                    formatter={(value, name) => [`${((value / shareData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(1)}%`, name]}
                                 />
                                 <RechartsLegend
                                     iconType="circle"
                                     iconSize={8}
                                     formatter={(value, entry) => (
                                         <span style={{ fontSize: '9px', fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '0.05em', color: theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }}>
-                                            {value} {((entry.payload.value / reactiveShareData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(0)}%
+                                            {value} {((entry.payload.value / shareData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(0)}%
                                         </span>
                                     )}
                                 />

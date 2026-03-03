@@ -694,7 +694,7 @@ export default function App() {
               onFilterChange={handleFilterChange}
               globalFilterBar={globalFilterBar}
               reactiveMetrics={reactiveMetrics}
-              reactiveShareData={reactiveShareData}
+              shareData={reactiveShareData}
               trendData={reactiveTrendData}
               filteredTableData={sortedTableData}
             />
