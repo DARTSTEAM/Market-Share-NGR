@@ -35,7 +35,7 @@ const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
     </motion.div>
 );
 
-export default function MarketShareDashboard({ filters, onFilterChange, globalFilterBar, reactiveMetrics, shareData, trendData, filteredTableData }) {
+export default function MarketShareDashboard({ filters, onFilterChange, globalFilterBar, reactiveMetrics, shareData, trendData, filteredTableData, allRecords }) {
     const [currentPage, setCurrentPage] = useState(1);
     const [sortKey, setSortKey] = useState('transacciones');
     const [sortDir, setSortDir] = useState('desc');
@@ -43,11 +43,12 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
 
     const channelOptions = ['Delivery', 'Recojo en tienda', 'Salón'];
 
-    // Generate deterministic channel and AC values for table display so it doesn't flicker on every render
+    // Use real values from the aggregated data
     const displayTableData = useMemo(() => {
         return filteredTableData.map((item, i) => {
             const hash = item.competidor.charCodeAt(0) + item.local.charCodeAt(0) + i;
             const canal = channelOptions[hash % channelOptions.length];
+
             // Filter out by channel filter if selected
             if (filters.channel !== 'all' && canal.toLowerCase() !== filters.channel.toLowerCase() && filters.channel.toLowerCase() !== (canal === 'Recojo en tienda' ? 'tienda' : canal.toLowerCase())) {
                 return null;
@@ -56,9 +57,8 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
             return {
                 ...item,
                 canal,
-                transacciones: Math.round(item.ventas * 1.5),
-                promDiario: Math.round(item.ventas / 30),
-                ac: (hash % 3) - 1
+                transacciones: item.ventas,
+                promDiario: parseFloat(item.promedioDiario) || 0
             };
         }).filter(Boolean);
     }, [filteredTableData, filters.channel]);
@@ -152,7 +152,18 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                         <stop offset="95%" stopColor="#ff5e00" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
-                                <XAxis dataKey="name" stroke={theme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"} fontSize={10} tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }} />
+                                <XAxis
+                                    dataKey="name"
+                                    stroke={theme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"}
+                                    fontSize={10}
+                                    tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
+                                    tickFormatter={(str) => {
+                                        if (!str || !str.includes('-')) return str;
+                                        const [y, m] = str.split('-');
+                                        const months = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
+                                        return `${months[parseInt(m) - 1]} ${y.slice(-2)}`;
+                                    }}
+                                />
                                 <RechartsTooltip
                                     contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.8)' : '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontWeight: 'bold' }}
                                     itemStyle={{ color: '#ff5e00' }}
@@ -274,6 +285,8 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                 options={[
                                     { value: 'transacciones_desc', label: 'Transacciones ↓' },
                                     { value: 'transacciones_asc', label: 'Transacciones ↑' },
+                                    { value: 'codigo_tienda_asc', label: 'Cód. Tienda A→Z' },
+                                    { value: 'codigo_tienda_desc', label: 'Cód. Tienda Z→A' },
                                     { value: 'promDiario_desc', label: 'Prom. Diario ↓' },
                                     { value: 'promDiario_asc', label: 'Prom. Diario ↑' },
                                     { value: 'competidor_asc', label: 'Competidor A→Z' },
@@ -295,6 +308,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                         <thead className="bg-[#f8fafc] dark:bg-black/20 border-b border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40 font-black text-[9px] uppercase tracking-[0.2em]">
                             <tr>
                                 <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('competidor')}>Competidor{sortIcon('competidor')}</th>
+                                <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('codigo_tienda')}>Cód. Tienda{sortIcon('codigo_tienda')}</th>
                                 <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('local')}>Sede / Local{sortIcon('local')}</th>
                                 <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('canal')}>Canal{sortIcon('canal')}</th>
                                 <th className="px-6 py-5 text-center">Caja</th>
@@ -319,6 +333,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                             );
                                         })()}
                                     </td>
+                                    <td className="px-6 py-5 font-black text-[10px] text-accent-orange/80 font-mono tracking-tight">{row.codigo_tienda || '-'}</td>
                                     <td className="px-6 py-5 font-bold uppercase text-[10px] text-slate-500 dark:text-white/60">{row.local}</td>
                                     <td className="px-6 py-5">
                                         <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
@@ -368,14 +383,15 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                 )}
             </section>
             <MonthlyTransactionsTable
-                data={filteredTableData}
+                allRecords={allRecords}
                 shareData={shareData}
+                currentFilters={filters}
             />
         </div>
     );
 }
 
-const MonthlyTransactionsTable = ({ data, shareData }) => {
+const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => {
     const [localFilters, setLocalFilters] = useState({
         competidor: 'all',
         local: 'all',
@@ -384,41 +400,75 @@ const MonthlyTransactionsTable = ({ data, shareData }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 15;
 
+    // Generate real months based on available data or a rolling 12M from selection
     const months = useMemo(() => {
         const list = [];
-        const now = new Date(2026, 2, 1); // Marzo 2026
-        for (let i = 12; i >= 1; i--) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const selectedYear = parseInt(currentFilters.year);
+        const selectedMonth = currentFilters.month === 'all' ? 11 : parseInt(currentFilters.month);
+
+        // Use the selected month/year as the END of the 12 month period
+        const endDate = new Date(selectedYear || 2026, selectedMonth, 1);
+
+        for (let i = 11; i >= 0; i--) {
+            const d = new Date(endDate.getFullYear(), endDate.getMonth() - i, 1);
             const m = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
             const y = d.getFullYear().toString().slice(-2);
             list.push({
                 label: `${m.charAt(0).toUpperCase() + m.slice(1)} ${y}`,
-                monthIdx: d.getMonth(),
-                year: d.getFullYear()
+                month: d.getMonth(),
+                year: d.getFullYear(),
+                key: `${d.getFullYear()}-${d.getMonth()}`
             });
         }
         return list;
-    }, []);
+    }, [currentFilters.year, currentFilters.month]);
 
-    // Matrix data generation logic (Monthly)
+    // Matrix data generation logic (Real Monthly data from allRecords)
     const matrixData = useMemo(() => {
-        return data.map((item, i) => {
-            const monthlyData = months.map((mInfo, mIdx) => {
-                // Mock monthly data based on the yearly total
-                const base = item.ventas / 12;
-                const seasonalVariation = 1 + (Math.sin(mInfo.monthIdx / 2) * 0.2);
-                const hash = item.local.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                const randomVariation = (Math.sin(mInfo.monthIdx + hash + i) * 0.1) + 1;
-                return Math.max(0, Math.round(base * seasonalVariation * randomVariation));
-            });
+        // Group allRecords by Local and Month
+        const localMonthMap = {};
 
-            return {
-                ...item,
-                monthly: monthlyData,
-                total: monthlyData.reduce((a, b) => a + b, 0)
-            };
+        allRecords.forEach(rec => {
+            // Priority: use rec.mes and rec.ano if available
+            let y, m;
+            if (rec.mes && rec.ano) {
+                y = parseInt(rec.ano);
+                m = parseInt(rec.mes) - 1; // 1-12 to 0-11
+            } else {
+                const date = new Date(rec.fecha_y_hora_registro || rec.fecha);
+                y = date.getFullYear();
+                m = date.getMonth();
+            }
+
+            const key = `${rec.local}_${y}_${m}`;
+            if (!localMonthMap[key]) localMonthMap[key] = 0;
+            localMonthMap[key] += parseInt(rec.transacciones_diferencial || rec.transacciones) || 0;
         });
-    }, [data, months]);
+
+        // Get unique locals and their metadata
+        const localsMetadata = {};
+        allRecords.forEach(rec => {
+            if (!localsMetadata[rec.local]) {
+                localsMetadata[rec.local] = {
+                    competidor: rec.competidor,
+                    local: rec.local,
+                    cajasTotal: rec.caja || 1
+                };
+            }
+        });
+
+        return Object.values(localsMetadata).map(meta => {
+            const monthly = months.map(m => {
+                const key = `${meta.local}_${m.year}_${m.month}`;
+                return localMonthMap[key] || 0;
+            });
+            return {
+                ...meta,
+                monthly,
+                total: monthly.reduce((a, b) => a + b, 0)
+            };
+        }).filter(row => row.total > 0);
+    }, [allRecords, months]);
 
     const filteredMatrix = useMemo(() => {
         return matrixData.filter(row => {

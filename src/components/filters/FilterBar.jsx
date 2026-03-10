@@ -39,10 +39,9 @@ const FilterBar = ({
             <CustomSelect
                 label="Categoría"
                 options={categoryOptions}
-                selected={filters.categories}
-                onChange={(val) => onFilterChange('categories', val)}
+                selected={filters.category}
+                onChange={(val) => onFilterChange('category', val)}
                 width="w-44"
-                multi
             />
 
             {/* Logic Filters Group */}
@@ -56,8 +55,8 @@ const FilterBar = ({
             <CustomSelect
                 label="Local"
                 options={locationOptions}
-                selected={filters.location}
-                onChange={(val) => onFilterChange('location', val)}
+                selected={filters.local}
+                onChange={(val) => onFilterChange('local', val)}
                 width="w-48"
                 searchable
             />

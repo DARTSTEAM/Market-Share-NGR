@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare } from 'lucide-react';
+import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import loadedData from './data.json';
 import MarketShareDashboard from './components/MarketShareDashboard';
 import ComparativosDashboard from './components/ComparativosDashboard';
+import TicketsDashboard from './components/TicketsDashboard';
 import CustomSelect from './components/common/CustomSelect';
 import FilterBar from './components/filters/FilterBar';
 
-const { shareData, trendData, metrics, tableData, competitorTableData } = loadedData;
+const { records: allRecords = [], tickets: allTickets = [] } = loadedData;
 
 const kFormatter = (num) => {
   if (Math.abs(num) > 999999) return Math.sign(num) * ((Math.abs(num) / 1000000).toFixed(1)) + 'M';
@@ -106,11 +107,12 @@ const CompetitorAnalysis = ({
     {/* Header removed from here, now in App */}
 
     {isLoaded && (
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
         <MetricCard title="Tickets Totales" value={kFormatter(metrics.totalTickets)} previousPeriodValue="+12%" delay={0.1} icon={TrendingUp} />
-        <MetricCard title="Tickets por Local" value={metrics.localesAnalizados.toString()} previousPeriodValue="+5" delay={0.2} icon={Award} />
-        <MetricCard title="Cajas sin registro" value={metrics.cajasSinRegistro.toString()} previousPeriodValue={`-${Math.round((metrics.cajasSinRegistro / (metrics.totalTickets || 1)) * 100)}%`} delay={0.3} icon={ShieldAlert} />
-        <MetricCard title="Cajas cerradas" value={metrics.cajasAnalizadas.toString()} previousPeriodValue={`+${Math.round((metrics.cajasAnalizadas / (metrics.totalTickets || 1)) * 100)}%`} delay={0.4} icon={BarChart2} />
+        <MetricCard title="Importe Total" value={new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 }).format(metrics.totalImporte)} previousPeriodValue="+8%" delay={0.2} icon={DollarSign} />
+        <MetricCard title="Tickets sin local" value={metrics.ticketsSinLocal.toString()} previousPeriodValue={`-${Math.round((metrics.ticketsSinLocal / (metrics.totalTickets || 1)) * 100)}%`} delay={0.3} icon={ShieldAlert} />
+        <MetricCard title="Cajas cerradas" value={metrics.cajasCerradas.toString()} previousPeriodValue={`+${Math.round((metrics.cajasCerradas / (metrics.totalTickets || 1)) * 100)}%`} delay={0.4} icon={BarChart2} />
+        <MetricCard title="Cajas con Error" value={metrics.cajasConError.toString()} previousPeriodValue="!" delay={0.5} icon={ShieldAlert} />
       </section>
     )}
 
@@ -359,8 +361,26 @@ const CompetitorAnalysis = ({
                 <th className="px-6 py-5 text-right cursor-pointer hover:text-slate-700 dark:hover:text-white transition-colors" onClick={() => handleSort('ticketsNoReg')}>
                   No Reg. <span className="text-accent-orange font-bold">{sortBy === 'ticketsNoReg' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
                 </th>
+                <th className="px-6 py-5 text-right cursor-pointer hover:text-slate-700 dark:hover:text-white transition-colors" onClick={() => handleSort('ticket_anterior')}>
+                  T. Ant. <span className="text-accent-orange font-bold">{sortBy === 'ticket_anterior' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                </th>
+                <th className="px-6 py-5 text-right cursor-pointer hover:text-slate-700 dark:hover:text-white transition-colors" onClick={() => handleSort('fecha_anterior')}>
+                  F. Ant. <span className="text-accent-orange font-bold">{sortBy === 'fecha_anterior' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                </th>
+                <th className="px-6 py-5 text-right cursor-pointer hover:text-slate-700 dark:hover:text-white transition-colors" onClick={() => handleSort('delta_dias')}>
+                  Delta <span className="text-accent-orange font-bold">{sortBy === 'delta_dias' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                </th>
+                <th className="px-6 py-5 text-right cursor-pointer hover:text-slate-700 dark:hover:text-white transition-colors" onClick={() => handleSort('ac')}>
+                  AC <span className="text-accent-orange font-bold">{sortBy === 'ac' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                </th>
+                <th className="px-6 py-5 text-right cursor-pointer hover:text-slate-700 dark:hover:text-white transition-colors" onClick={() => handleSort('promedioDiario')}>
+                  Prom. <span className="text-accent-orange font-bold">{sortBy === 'promedioDiario' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                </th>
+                <th className="px-6 py-5 text-right cursor-pointer hover:text-slate-700 dark:hover:text-white transition-colors" onClick={() => handleSort('uniqueTicketsCount')}>
+                  T. Únicos <span className="text-accent-orange font-bold">{sortBy === 'uniqueTicketsCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                </th>
                 <th className="px-6 py-5 text-right rounded-tr-xl text-accent-orange drop-shadow-sm dark:drop-shadow-[0_0_8px_rgba(255,126,75,0.4)] cursor-pointer hover:opacity-80 transition-opacity" onClick={() => handleSort('ventas')}>
-                  Tickets Periodo <span className="text-slate-900 dark:text-white font-bold">{sortBy === 'ventas' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
+                  Transas <span className="text-slate-900 dark:text-white font-bold">{sortBy === 'ventas' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}</span>
                 </th>
               </tr>
             </thead>
@@ -374,6 +394,12 @@ const CompetitorAnalysis = ({
                 <td className="px-6 py-5 text-right opacity-50">{metrics.totalTickets}</td>
                 <td className="px-6 py-5 text-right opacity-50 font-mono">{metrics.cajasAnalizadas}</td>
                 <td className="px-6 py-5 text-right text-red-600 dark:text-accent-lemon font-mono drop-shadow-sm">{metrics.cajasSinRegistro}</td>
+                <td className="px-6 py-5 text-right opacity-50 font-mono">-</td>
+                <td className="px-6 py-5 text-right opacity-50 font-mono">-</td>
+                <td className="px-6 py-5 text-right opacity-50 font-mono">-</td>
+                <td className="px-6 py-5 text-right opacity-50 font-mono">-</td>
+                <td className="px-6 py-5 text-right opacity-50 font-mono">-</td>
+                <td className="px-6 py-5 text-right opacity-50 font-mono">{metrics.totalTickets}</td>
                 <td className="px-6 py-5 text-right text-xl text-slate-900 dark:text-white drop-shadow-sm dark:drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] italic">{new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(metrics.totalVentas)}</td>
               </motion.tr>
               {tableData.map((row, index) => {
@@ -393,6 +419,12 @@ const CompetitorAnalysis = ({
                     <td className="px-6 py-5 text-right opacity-50 font-mono">{row.cajasTotal}</td>
                     <td className="px-6 py-5 text-right font-mono">{row.ticketsReg}</td>
                     <td className={`px-6 py-5 text-right font-mono ${row.ticketsNoReg > 0 ? 'text-red-500 dark:text-accent-pink font-bold' : 'text-slate-400 dark:text-white/20'}`}>{row.ticketsNoReg}</td>
+                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.ticket_anterior}</td>
+                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.fecha_anterior}</td>
+                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.delta_dias}</td>
+                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.ac}</td>
+                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.promedioDiario}</td>
+                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.uniqueTicketsCount}</td>
                     <td className="px-6 py-5 text-right font-black text-accent-orange/90 font-mono text-sm">{new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(row.ventas)}</td>
                   </motion.tr>
                 );
@@ -410,22 +442,117 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState('dark');
 
-  // GLOBAL FILTERS STATE
+  // Derive filter options from raw records
+  const monthsArr = useMemo(() => {
+    const unique = new Set();
+    allRecords.forEach(rec => {
+      if (rec.mes) {
+        // rec.mes is 1-12 from BQ. We want 0-11 for the selector mapping
+        const m = parseInt(rec.mes) - 1;
+        if (!isNaN(m)) unique.add(m);
+      } else if (rec.fecha) {
+        const d = new Date(rec.fecha);
+        unique.add(d.getMonth());
+      }
+    });
+    return Array.from(unique).sort((a, b) => a - b);
+  }, []);
+
+  const yearsArr = useMemo(() => {
+    const unique = new Set();
+    allRecords.forEach(rec => {
+      if (rec.ano) {
+        const y = parseInt(rec.ano);
+        if (!isNaN(y)) unique.add(y);
+      } else if (rec.fecha) {
+        const d = new Date(rec.fecha);
+        unique.add(d.getFullYear());
+      }
+    });
+    return Array.from(unique).sort((a, b) => b - a);
+  }, []);
+
+  const competitorsArr = useMemo(() => {
+    return Array.from(new Set(allRecords.map(r => r.competidor))).filter(Boolean).sort();
+  }, []);
+
+  const allLocales = useMemo(() => {
+    return Array.from(new Set(allRecords.map(r => r.local))).filter(Boolean).sort();
+  }, []);
+
+  // Filter state
   const [filters, setFilters] = useState({
-    month: "1",
-    year: "2026",
-    competitor: "all",
-    location: "all",
-    channel: "all",
-    categories: []   // empty = all categories
+    month: 'all',
+    year: 'all',
+    competitor: 'all',
+    local: 'all',
+    category: 'all',
+    channel: 'all'
   });
+
+  // Derived Options for FilterBar
+  const monthOptions = useMemo(() => {
+    const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    return [
+      { value: 'all', label: 'Todos los Meses' },
+      ...monthsArr.map(m => ({ value: m.toString(), label: months[m] }))
+    ];
+  }, [monthsArr]);
+
+  const yearOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'Todos los Años' },
+      ...yearsArr.map(y => ({ value: y.toString(), label: y.toString() }))
+    ];
+  }, [yearsArr]);
+
+  const competitorOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'Todos los Competidores' },
+      ...competitorsArr.map(c => ({ value: c, label: c }))
+    ];
+  }, [competitorsArr]);
+
+  const latestYear = useMemo(() => {
+    return yearsArr.length > 0 ? yearsArr[0].toString() : "all";
+  }, [yearsArr]);
+
+  // Set default year if not set
+  useEffect(() => {
+    if (latestYear !== 'all' && filters.year === 'all') {
+      setFilters(prev => ({ ...prev, year: latestYear }));
+    }
+  }, [latestYear]);
+
+  // Location options filtered by competitor
+  const locationOptions = useMemo(() => {
+    const baseOptions = [{ value: "all", label: "Todos los locales" }];
+    const filteredLocs = filters.competitor === 'all'
+      ? allLocales
+      : Array.from(new Set(allRecords.filter(r => r.competidor === filters.competitor).map(r => r.local))).filter(Boolean).sort();
+
+    return [...baseOptions, ...filteredLocs.map(l => ({ value: l, label: l }))];
+  }, [filters.competitor, allLocales]);
+
+  const channelOptions = [
+    { value: 'all', label: 'Todos los Canales' },
+    { value: 'delivery', label: 'Delivery' },
+    { value: 'tienda', label: 'Tienda' },
+    { value: 'salon', label: 'Salón' }
+  ];
+
+  const categoryOptions = [
+    { value: "all", label: "Todas las Categorias" },
+    { value: "Pollo Frito", label: "🍗 Pollo Frito" },
+    { value: "Hamburguesa", label: "🍔 Hamburguesa" },
+    { value: "Pizza", label: "🍕 Pizza" },
+  ];
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => {
       const newFilters = { ...prev, [key]: value };
-      // Cascading logic: if competitor changes, reset location
       if (key === 'competitor' && value !== prev.competitor) {
-        newFilters.location = 'all';
+        newFilters.local = 'all';
       }
       return newFilters;
     });
@@ -433,76 +560,291 @@ export default function App() {
 
   const handleResetFilters = () => {
     setFilters({
-      month: '1',
-      year: '2024',
-      competitor: 'all',
-      location: 'all',
-      channel: 'all',
-      categories: []
+      month: "all",
+      year: latestYear,
+      competitor: "all",
+      local: "all",
+      category: "all",
+      channel: "all"
     });
   };
 
-  // Filter Options Generation
-  const monthOptions = [
-    { value: "1", label: "Enero" },
-    { value: "2", label: "Febrero" },
-    { value: "3", label: "Marzo" },
-    { value: "4", label: "Abril" },
-    { value: "5", label: "Mayo" },
-    { value: "6", label: "Junio" },
-    { value: "7", label: "Julio" },
-    { value: "8", label: "Agosto" },
-    { value: "9", label: "Septiembre" },
-    { value: "10", label: "Octubre" },
-    { value: "11", label: "Noviembre" },
-    { value: "12", label: "Diciembre" }
-  ];
+  // 1. Core Data Filtering (Full routine for auditing)
+  const filteredRecords = useMemo(() => {
+    return allRecords.filter(rec => {
+      // Prioritize mes/ano columns if present
+      let mMatch = filters.month === 'all';
+      let yMatch = filters.year === 'all';
 
-  const yearOptions = [{ value: "2026", label: "2026" }];
+      if (!mMatch) {
+        if (rec.mes) {
+          mMatch = (parseInt(rec.mes) - 1).toString() === filters.month;
+        } else if (rec.fecha) {
+          mMatch = new Date(rec.fecha).getMonth().toString() === filters.month;
+        }
+      }
 
-  const competitorOptions = [
-    { value: "all", label: "Todos los competidores" },
-    ...shareData.map(c => ({ value: c.name, label: c.name }))
-  ];
+      if (!yMatch) {
+        if (rec.ano) {
+          yMatch = rec.ano.toString() === filters.year;
+        } else if (rec.fecha) {
+          yMatch = new Date(rec.fecha).getFullYear().toString() === filters.year;
+        }
+      }
 
-  const locationOptions = useMemo(() => {
-    const baseOptions = [{ value: "all", label: "Todos los locales" }];
+      const cMatch = filters.competitor === 'all' || rec.competidor === filters.competitor;
+      const lMatch = filters.local === 'all' || rec.local === filters.local;
+      return mMatch && yMatch && cMatch && lMatch;
+    });
+  }, [allRecords, filters]);
 
-    const filteredTableData = filters.competitor === 'all'
-      ? tableData
-      : tableData.filter(t => t.competidor === filters.competitor);
+  // 1b. Market Share Specific Filtering (Only status_busqueda === 'OK')
+  const marketShareRecords = useMemo(() => {
+    return filteredRecords.filter(r => r.status_busqueda === 'OK');
+  }, [filteredRecords]);
 
-    const locations = Array.from(new Set(filteredTableData.map(t => t.local))).sort();
-    return [...baseOptions, ...locations.map(l => ({ value: l, label: l }))];
-  }, [filters.competitor]);
+  // 1c. Core Tickets Filtering (facturas_v2)
+  const filteredTickets = useMemo(() => {
+    return allTickets.filter(t => {
+      const cMatch = filters.competitor === 'all' || t.competidor === filters.competitor;
+      const lMatch = filters.local === 'all' || t.local === filters.local;
+      return cMatch && lMatch;
+    });
+  }, [allTickets, filters]);
 
-  const channelOptions = [
-    { value: "all", label: "Todos los canales" },
-    { value: "delivery", label: "Delivery" },
-    { value: "tienda", label: "Recojo en tienda" },
-    { value: "salon", label: "Salón" }
-  ];
+  // 2. Reactive Metrics
+  const reactiveMetrics = useMemo(() => {
+    const totalTransactions = marketShareRecords.reduce((sum, r) => sum + (parseFloat(r.transacciones) || 0), 0);
+    const totalDailyAvg = marketShareRecords.reduce((sum, r) => sum + (parseFloat(r.promedio) || 0), 0);
 
-  // Mapping: competitor name → food category
-  const COMPETITOR_CATEGORY_MAP = {
-    "KFC": "Pollo Frito",
-    "Popeyes": "Pollo Frito",
-    "McDonald's": "Hamburguesa",
-    "BURGER KING": "Hamburguesa",
-    "Bembos": "Hamburguesa",
-    "Pizza Hut": "Pizza",
-    "Little Caesars": "Pizza",
-    "Domino's": "Pizza",
-    "Papa Johns": "Pizza",
-  };
+    // Tickets from facturas_v2 (Filtered specifically for this tab if needed, but here simple match)
+    const filteredTicketsCount = filteredTickets.length;
+    const totalImporteCount = filteredTickets.reduce((sum, t) => sum + (parseFloat(t.importe) || 0), 0);
+    const ticketsSinLocalCount = allTickets.filter(t => {
+      const matchesComp = filters.competitor === 'all' || t.competidor === filters.competitor;
+      return matchesComp && (!t.local || t.local === 'DESCONOCIDO' || t.local === 'Desconocido');
+    }).length;
 
-  const categoryOptions = [
-    { value: "Pollo Frito", label: "🍗 Pollo Frito" },
-    { value: "Hamburguesa", label: "🍔 Hamburguesa" },
-    { value: "Pizza", label: "🍕 Pizza" },
-  ];
+    // Routine Stats - Always use full filteredRecords to show audit health
+    const routineStats = filteredRecords.reduce((acc, r) => {
+      if (r.status_busqueda === 'OK') acc.cerradas++;
+      else acc.conError++;
+      return acc;
+    }, { cerradas: 0, conError: 0 });
 
-  // Table Sorting logic (Existing)
+    return {
+      totalVentas: totalTransactions,
+      totalTickets: filteredTicketsCount,
+      totalImporte: totalImporteCount,
+      ticketsSinLocal: ticketsSinLocalCount,
+      cajasCerradas: routineStats.cerradas,
+      cajasConError: routineStats.conError,
+      totalTransDailyAvg: totalDailyAvg,
+      avgTransPerLocal: totalTransactions / (new Set(marketShareRecords.map(r => r.local)).size || 1)
+    };
+  }, [filteredRecords, marketShareRecords, filteredTickets, allTickets, filters.competitor]);
+
+  // 3. Reactive Share Data (Exclusive for Market Share - based on Routine OK)
+  const reactiveShareDataRoutine = useMemo(() => {
+    const totalsByComp = {};
+    marketShareRecords.forEach(r => {
+      if (!totalsByComp[r.competidor]) totalsByComp[r.competidor] = 0;
+      totalsByComp[r.competidor] += (parseFloat(r.transacciones) || 0);
+    });
+
+    const palette = ['#ff5e00', '#0070f3', '#ccff00', '#7000f3', '#00f3a0'];
+    return Object.entries(totalsByComp).map(([name, value], i) => ({
+      name,
+      value,
+      color: palette[i % palette.length]
+    })).sort((a, b) => b.value - a.value);
+  }, [marketShareRecords]);
+
+  // 3b. Reactive Share Data (For Competitor Analysis - based on facturas_v2)
+  const reactiveShareDataTickets = useMemo(() => {
+    const totalsByComp = {};
+    filteredTickets.forEach(t => {
+      if (!totalsByComp[t.competidor]) totalsByComp[t.competidor] = 0;
+      totalsByComp[t.competidor] += 1; // Count of tickets
+    });
+
+    const palette = ['#ff5e00', '#0070f3', '#ccff00', '#7000f3', '#00f3a0'];
+    return Object.entries(totalsByComp).map(([name, value], i) => ({
+      name,
+      value,
+      color: palette[i % palette.length]
+    })).sort((a, b) => b.value - a.value);
+  }, [filteredTickets]);
+
+  // 4. Reactive Trend Data (Exclusive for Market Share - based on Routine OK)
+  const reactiveTrendDataRoutine = useMemo(() => {
+    const monthlyData = marketShareRecords.reduce((acc, r) => {
+      let y, m;
+      if (r.mes && r.ano) {
+        y = r.ano;
+        m = r.mes.padStart(2, '0');
+      } else {
+        const date = new Date(r.fecha);
+        y = date.getFullYear();
+        m = (date.getMonth() + 1).toString().padStart(2, '0');
+      }
+      const key = `${y}-${m}`;
+      acc[key] = (acc[key] || 0) + (parseFloat(r.transacciones) || 0);
+      return acc;
+    }, {});
+
+    const sortedKeys = Object.keys(monthlyData).sort();
+    return sortedKeys.map(key => ({
+      name: key, // e.g., "2025-12"
+      tickets: monthlyData[key]
+    })).slice(-12); // Show last 12 months
+  }, [marketShareRecords]);
+
+  // 4b. Reactive Trend Data (For Competitor Analysis - based on facturas_v2)
+  const reactiveTrendDataTickets = useMemo(() => {
+    const timeline = filteredTickets.reduce((acc, t) => {
+      const date = t.fecha || 'Unknown';
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(timeline)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, val]) => ({
+        name: date.substring(5),
+        tickets: val
+      })).slice(-15);
+  }, [filteredTickets]);
+
+  // 5. Reactive Table Data (Market Share View - OK only)
+  const aggregatedTableDataRoutine = useMemo(() => {
+    const localMap = {};
+    marketShareRecords.forEach(r => {
+      if (!localMap[r.local]) {
+        localMap[r.local] = {
+          competidor: r.competidor,
+          codigo_tienda: r.codigo_tienda || '',
+          local: r.local,
+          ventas: 0,
+          uniqueTicketsCount: 0,
+          cajasTotal: new Set(),
+          ticketsReg: 0,
+          ticketsNoReg: 0,
+          ticket_anterior: r.ticket_actual || '-',
+          fecha_anterior: r.fecha_y_hora_registro || '-',
+          delta_dias: r.delta_dias || 0,
+          ac: r.ac || 0,
+          promedioDiario: 0
+        };
+      }
+      const trans = parseFloat(r.transacciones) || 0;
+      localMap[r.local].ventas += trans;
+      localMap[r.local].uniqueTicketsCount += 1;
+      localMap[r.local].cajasTotal.add(r.caja);
+      localMap[r.local].ticketsReg += 1;
+      localMap[r.local].promedioDiario += (parseFloat(r.promedio) || 0);
+    });
+
+    return Object.values(localMap).map(l => ({
+      ...l,
+      cajasTotal: l.cajasTotal.size
+    }));
+  }, [marketShareRecords]);
+
+  // 5b. Reactive Table Data (Competitor Analysis View - Full Routine for auditing)
+  const aggregatedTableDataFull = useMemo(() => {
+    const localMap = {};
+    filteredRecords.forEach(r => {
+      if (!localMap[r.local]) {
+        localMap[r.local] = {
+          competidor: r.competidor,
+          codigo_tienda: r.codigo_tienda || '',
+          local: r.local,
+          ventas: 0,
+          uniqueTicketsCount: 0,
+          cajasTotal: new Set(),
+          ticketsReg: 0,
+          ticketsNoReg: 0,
+          ticket_anterior: r.ticket_actual || '-',
+          fecha_anterior: r.fecha_y_hora_registro || '-',
+          delta_dias: r.delta_dias || 0,
+          ac: r.ac || 0,
+          promedioDiario: 0
+        };
+      }
+      const trans = parseFloat(r.transacciones) || 0;
+      localMap[r.local].ventas += trans;
+      localMap[r.local].uniqueTicketsCount += 1;
+      localMap[r.local].cajasTotal.add(r.caja);
+      localMap[r.local].ticketsReg += 1;
+      localMap[r.local].promedioDiario += (parseFloat(r.promedio) || 0);
+    });
+
+    return Object.values(localMap).map(l => ({
+      ...l,
+      cajasTotal: l.cajasTotal.size
+    }));
+  }, [filteredRecords]);
+
+  // 6. Reactive Competitor Table (Market Share View - OK only)
+  const filteredCompetitorTableDataRoutine = useMemo(() => {
+    const groups = marketShareRecords.reduce((acc, r) => {
+      if (!acc[r.competidor]) {
+        acc[r.competidor] = {
+          competidor: r.competidor,
+          locales: new Set(),
+          cajas: new Set(),
+          ventas: 0,
+          ticketsReg: 0
+        };
+      }
+      acc[r.competidor].locales.add(r.local);
+      acc[r.competidor].cajas.add(`${r.local}-${r.caja}`);
+      acc[r.competidor].ventas += (parseFloat(r.transacciones) || 0);
+      acc[r.competidor].ticketsReg += 1;
+      return acc;
+    }, {});
+
+    return Object.values(groups).map(g => ({
+      competidor: g.competidor,
+      localesCount: g.locales.size,
+      cajasTotal: g.cajas.size,
+      ticketsReg: g.ticketsReg,
+      ticketsNoReg: 0,
+      ventas: Math.round(g.ventas)
+    })).sort((a, b) => b.ventas - a.ventas);
+  }, [marketShareRecords]);
+
+  // 6b. Reactive Competitor Table (Competitor Analysis View - Full Routine)
+  const filteredCompetitorTableDataFull = useMemo(() => {
+    const groups = filteredRecords.reduce((acc, r) => {
+      if (!acc[r.competidor]) {
+        acc[r.competidor] = {
+          competidor: r.competidor,
+          locales: new Set(),
+          cajas: new Set(),
+          ventas: 0,
+          ticketsReg: 0
+        };
+      }
+      acc[r.competidor].locales.add(r.local);
+      acc[r.competidor].cajas.add(`${r.local}-${r.caja}`);
+      acc[r.competidor].ventas += (parseFloat(r.transacciones) || 0);
+      acc[r.competidor].ticketsReg += 1;
+      return acc;
+    }, {});
+
+    return Object.values(groups).map(g => ({
+      competidor: g.competidor,
+      localesCount: g.locales.size,
+      cajasTotal: g.cajas.size,
+      ticketsReg: g.ticketsReg,
+      ticketsNoReg: 0,
+      ventas: Math.round(g.ventas)
+    })).sort((a, b) => b.ventas - a.ventas);
+  }, [filteredRecords]);
+
+  // UI Sorting Logic
   const [sortBy, setSortBy] = useState("ventas");
   const [sortDirection, setSortDirection] = useState("desc");
 
@@ -515,96 +857,8 @@ export default function App() {
     }
   };
 
-  // 1. Data Filtering Logic
-  const filteredTableData = useMemo(() => {
-    return tableData.filter(item => {
-      const matchCompetitor = filters.competitor === 'all' || item.competidor === filters.competitor;
-      const matchLocation = filters.location === 'all' || item.local === filters.location;
-      const matchCategory =
-        filters.categories.length === 0 ||
-        filters.categories.includes(COMPETITOR_CATEGORY_MAP[item.competidor] ?? 'Otro');
-      return matchCompetitor && matchLocation && matchCategory;
-    });
-  }, [filters.competitor, filters.location, filters.categories]);
-
-  // 2. Aggregate Metrics (Reactive Scorecards)
-  const reactiveMetrics = useMemo(() => {
-    const totalReg = filteredTableData.reduce((sum, item) => sum + (item.ticketsReg || 0), 0);
-    const totalNoReg = filteredTableData.reduce((sum, item) => sum + (item.ticketsNoReg || 0), 0);
-    const totalVentas = filteredTableData.reduce((sum, item) => sum + (item.ventas || 0), 0);
-    const locales = new Set(filteredTableData.map(item => item.local)).size;
-    const cajas = filteredTableData.reduce((sum, item) => sum + (item.cajasTotal || 0), 0);
-
-    // Scale based on month/year simulation (Since data.json only has Jan 2026)
-    const monthVal = parseInt(filters.month);
-    const yearVal = parseInt(filters.year);
-    const multiplier = (monthVal * 0.08) + (yearVal === 2026 ? 1 : 0.85);
-
-    return {
-      totalTickets: Math.round((totalReg + totalNoReg) * multiplier),
-      totalTransDailyAvg: Math.round(((totalReg + totalNoReg) * multiplier) / 30),
-      localesAnalizados: locales,
-      cajasSinRegistro: Math.round(totalNoReg * multiplier),
-      cajasAnalizadas: cajas,
-      totalVentas: totalVentas * multiplier,
-      avgTransPerLocal: locales > 0 ? Math.round((totalVentas * multiplier) / locales) : 0
-    };
-  }, [filteredTableData, filters.month, filters.year]);
-
-  // 3. Reactive Share Data (Grouped results from the filtered table)
-  const reactiveShareData = useMemo(() => {
-    // If no specific competitor is selected, show top competitors split
-    // If a competitor is selected, we still show the pie chart but maybe highlighted or filtered?
-    // Actually, it's better to show the full share but highlighted if one is selected.
-    const groups = filteredTableData.reduce((acc, item) => {
-      if (!acc[item.competidor]) acc[item.competidor] = 0;
-      acc[item.competidor] += item.ventas;
-      return acc;
-    }, {});
-
-    // Month scaling for visuals
-    const monthVal = parseInt(filters.month);
-    const multiplier = (monthVal * 0.08);
-
-    return shareData.map(item => ({
-      ...item,
-      value: Math.round((groups[item.name] || 0) * (1 + multiplier))
-    })).sort((a, b) => b.value - a.value);
-  }, [filters.month, filteredTableData, shareData]);
-
-  // 4. Reactive Trend Data (Simulated Scaling)
-  const reactiveTrendData = useMemo(() => {
-    const totalVentas = filteredTableData.reduce((sum, item) => sum + (item.ventas || 0), 0);
-    const baseVentas = totalVentas || 10;
-
-    const yearVal = parseInt(filters.year);
-    const yearMultiplier = yearVal === 2026 ? 1 : 0.85;
-
-    const monthsList = [];
-    const now = new Date(2026, 2, 1); // March 2026
-    for (let i = 12; i >= 1; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const m = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
-      const y = d.getFullYear().toString().slice(-2);
-      monthsList.push({
-        name: `${m.charAt(0).toUpperCase() + m.slice(1)} ${y}`,
-        monthIdx: d.getMonth(),
-        year: d.getFullYear()
-      });
-    }
-
-    return monthsList.map((mInfo, index) => {
-      // Simulate seasonality for sales/transactions
-      const seasonality = 1 + (Math.sin(mInfo.monthIdx * 0.8) * 0.25) + (Math.cos(mInfo.monthIdx * 0.3) * 0.15);
-      return {
-        name: mInfo.name,
-        tickets: Math.max(1, Math.round(baseVentas * yearMultiplier * seasonality))
-      };
-    });
-  }, [filteredTableData, filters.year]);
-
-  const sortedTableData = useMemo(() => {
-    return [...filteredTableData].sort((a, b) => {
+  const sortedTableDataRoutine = useMemo(() => {
+    return [...aggregatedTableDataRoutine].sort((a, b) => {
       let aVal = a[sortBy];
       let bVal = b[sortBy];
       if (typeof aVal === 'string') aVal = aVal.toLowerCase();
@@ -613,36 +867,21 @@ export default function App() {
       if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [filteredTableData, sortBy, sortDirection]);
+  }, [aggregatedTableDataRoutine, sortBy, sortDirection]);
 
-  const filteredCompetitorTableData = useMemo(() => {
-    const groups = filteredTableData.reduce((acc, item) => {
-      const comp = item.competidor;
-      if (!acc[comp]) {
-        acc[comp] = {
-          competidor: comp,
-          localesCount: 0,
-          cajasTotal: 0,
-          ticketsReg: 0,
-          ticketsNoReg: 0,
-          ventas: 0,
-          locales: new Set()
-        };
-      }
-      acc[comp].locales.add(item.local);
-      acc[comp].cajasTotal += item.cajasTotal;
-      acc[comp].ticketsReg += item.ticketsReg;
-      acc[comp].ticketsNoReg += item.ticketsNoReg;
-      acc[comp].ventas += item.ventas;
-      return acc;
-    }, {});
+  const sortedTableDataFull = useMemo(() => {
+    return [...aggregatedTableDataFull].sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [aggregatedTableDataFull, sortBy, sortDirection]);
 
-    return Object.values(groups).map(g => ({
-      ...g,
-      localesCount: g.locales.size
-    })).sort((a, b) => b.ventas - a.ventas);
-  }, [filteredTableData]);
-
+  // Theme Logic
   useEffect(() => {
     setIsLoaded(true);
     const savedTheme = localStorage.getItem('theme');
@@ -710,7 +949,7 @@ export default function App() {
             <div className="flex flex-col">
               <span className="text-[10px] text-accent-orange font-black uppercase tracking-[0.3em] mb-1">NGR Intelligence Suite</span>
               <h1 className="pwa-title !text-5xl md:!text-6xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
-                {activeTab === 'competitor' ? 'Análisis Competencias' : activeTab === 'marketshare' ? 'Market Share' : 'Comparativos'} <span className="text-accent-orange">LIVE</span>
+                {activeTab === 'competitor' ? 'Análisis Competencias' : activeTab === 'marketshare' ? 'Market Share' : activeTab === 'tickets' ? 'Tickets' : 'Comparativos'} <span className="text-accent-orange">LIVE</span>
               </h1>
             </div>
           </div>
@@ -725,30 +964,25 @@ export default function App() {
             {globalFilterBar}
           </div>
         </motion.header>
+
         {/* Navigation Tabs */}
         <nav className="flex justify-center mb-8">
           <div className="bg-white/50 dark:bg-white/5 backdrop-blur-xl border border-slate-300 dark:border-white/10 p-1.5 rounded-2xl flex gap-1 shadow-sm">
-            <button
-              onClick={() => setActiveTab('competitor')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'competitor' ? 'bg-accent-orange text-white shadow-[0_0_20px_rgba(255,126,75,0.3)]' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'}`}
-            >
-              <LayoutDashboard size={14} />
-              Análisis Competencias
-            </button>
-            <button
-              onClick={() => setActiveTab('marketshare')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'marketshare' ? 'bg-accent-orange text-white shadow-[0_0_20px_rgba(255,126,75,0.3)]' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'}`}
-            >
-              <PieChartIcon size={14} />
-              Market Share
-            </button>
-            <button
-              onClick={() => setActiveTab('comparativos')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === 'comparativos' ? 'bg-accent-orange text-white shadow-[0_0_20px_rgba(255,126,75,0.3)]' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'}`}
-            >
-              <GitCompare size={14} />
-              Comparativos
-            </button>
+            {[
+              { id: 'competitor', icon: LayoutDashboard, label: 'Análisis Competencias' },
+              { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
+              { id: 'tickets', icon: Ticket, label: 'Tickets' },
+              { id: 'comparativos', icon: GitCompare, label: 'Comparativos' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === tab.id ? 'bg-accent-orange text-white shadow-[0_0_20px_rgba(255,126,75,0.3)]' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'}`}
+              >
+                <tab.icon size={14} />
+                {tab.label}
+              </button>
+            ))}
           </div>
         </nav>
 
@@ -760,10 +994,10 @@ export default function App() {
               toggleTheme={toggleTheme}
               isLoaded={isLoaded}
               metrics={reactiveMetrics}
-              shareData={reactiveShareData}
-              trendData={reactiveTrendData}
-              competitorTableData={filteredCompetitorTableData}
-              tableData={sortedTableData}
+              shareData={reactiveShareDataTickets}
+              trendData={reactiveTrendDataTickets}
+              competitorTableData={filteredCompetitorTableDataFull}
+              tableData={sortedTableDataFull}
               sortBy={sortBy}
               handleSort={handleSort}
               sortDirection={sortDirection}
@@ -776,15 +1010,25 @@ export default function App() {
               onFilterChange={handleFilterChange}
               globalFilterBar={globalFilterBar}
               reactiveMetrics={reactiveMetrics}
-              shareData={reactiveShareData}
-              trendData={reactiveTrendData}
-              filteredTableData={sortedTableData}
+              shareData={reactiveShareDataRoutine}
+              trendData={reactiveTrendDataRoutine}
+              filteredTableData={sortedTableDataRoutine}
+              allRecords={marketShareRecords}
+            />
+          ) : activeTab === 'tickets' ? (
+            <TicketsDashboard
+              key="tickets"
+              tickets={allTickets}
+              records={allRecords}
+              shareData={reactiveShareDataTickets}
+              globalFilters={filters}
+              onFilterChange={setFilters}
             />
           ) : (
             <ComparativosDashboard
               key="comparativos"
-              shareData={reactiveShareData}
-              tableData={sortedTableData}
+              shareData={reactiveShareDataRoutine}
+              tableData={sortedTableDataRoutine}
               metrics={reactiveMetrics}
               theme={theme}
             />
