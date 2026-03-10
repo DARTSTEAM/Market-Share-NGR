@@ -22,6 +22,7 @@ import CustomSelect from './common/CustomSelect';
 const formatCurrency = (val) => new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 }).format(val);
 
 const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onFilterChange }) => {
+    const itemsPerPage = 10;
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [filters, setFilters] = useState({
@@ -80,10 +81,6 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
         const start = (currentPage - 1) * itemsPerPage;
         return filteredTickets.slice(start, start + itemsPerPage);
     }, [filteredTickets, currentPage, itemsPerPage]);
-
-    const formatCurrency = (val) => {
-        return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(val);
-    };
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';

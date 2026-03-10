@@ -1,21 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign } from 'lucide-react';
+import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import loadedData from './data.json';
 import MarketShareDashboard from './components/MarketShareDashboard';
 import ComparativosDashboard from './components/ComparativosDashboard';
 import TicketsDashboard from './components/TicketsDashboard';
+import AlarmasDashboard from './components/AlarmasDashboard';
 import CustomSelect from './components/common/CustomSelect';
 import FilterBar from './components/filters/FilterBar';
-
-const { records: allRecords = [], tickets: allTickets = [] } = loadedData;
-
-const kFormatter = (num) => {
-  if (Math.abs(num) > 999999) return Math.sign(num) * ((Math.abs(num) / 1000000).toFixed(1)) + 'M';
-  if (Math.abs(num) > 999) return Math.sign(num) * ((Math.abs(num) / 1000).toFixed(1)) + 'k';
-  return Math.sign(num) * Math.abs(num);
-};
 
 const COMPETITOR_TO_CATEGORY = {
   'BURGER KING': 'Hamburguesa',
@@ -428,11 +421,6 @@ const CompetitorAnalysis = ({
                     <td className="px-6 py-5 text-right font-mono">{row.ticketsReg}</td>
                     <td className={`px-6 py-5 text-right font-mono ${row.ticketsNoReg > 0 ? 'text-red-500 dark:text-accent-pink font-bold' : 'text-slate-400 dark:text-white/20'}`}>{row.ticketsNoReg}</td>
                     <td className="px-6 py-5 text-right font-mono text-slate-400">{row.ticket_anterior}</td>
-                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.fecha_anterior}</td>
-                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.delta_dias}</td>
-                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.ac}</td>
-                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.promedioDiario}</td>
-                    <td className="px-6 py-5 text-right font-mono text-slate-400">{row.uniqueTicketsCount}</td>
                     <td className="px-6 py-5 text-right font-black text-accent-orange/90 font-mono text-sm">{new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(row.ventas)}</td>
                   </motion.tr>
                 );
@@ -445,16 +433,111 @@ const CompetitorAnalysis = ({
   </motion.div>
 );
 
+const { records: initialRecords = [], tickets: initialTickets = [] } = loadedData;
+
+const kFormatter = (num) => {
+  if (Math.abs(num) > 999999) return Math.sign(num) * ((Math.abs(num) / 1000000).toFixed(1)) + 'M';
+  if (Math.abs(num) > 999) return Math.sign(num) * ((Math.abs(num) / 1000).toFixed(1)) + 'k';
+  return Math.sign(num) * Math.abs(num);
+};
+
+// Removed redundant COMPETITOR_TO_CATEGORY redeclaration if any
+
 export default function App() {
   const [activeCategory, setActiveCategory] = useState('competitor');
   const [activeSubTab, setActiveSubTab] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState('dark');
+  const [notification, setNotification] = useState(null);
+
+  // Use state for data to make it reactive to updates
+  const [records, setRecords] = useState(initialRecords);
+  const [tickets, setTickets] = useState(initialTickets);
+
+  const handleUpdateTicket = async (ticketData) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/update-ticket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: ticketData.filename || ticketData.originalFilename,
+          ticket: ticketData.ticket,
+          importe: ticketData.importe,
+          fecha: ticketData.fecha,
+          caja: ticketData.caja,
+          local: ticketData.local,
+          competidor: ticketData.competidor,
+          codigoTienda: ticketData.codigoTienda
+        })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setNotification({ type: 'success', message: '¡Ticket actualizado con éxito en BigQuery!' });
+
+        // Update local state reactiveley
+        const targetFilename = ticketData.filename || ticketData.originalFilename;
+
+        // 1. Update tickets list
+        setTickets(prev => prev.map(t =>
+          (t.filename === targetFilename)
+            ? {
+              ...t,
+              ticket: ticketData.ticket,
+              importe: ticketData.importe,
+              fecha: ticketData.fecha,
+              numero_de_caja: ticketData.caja,
+              caja: ticketData.caja,
+              local: ticketData.local,
+              competidor: ticketData.competidor,
+              codigo_tienda: ticketData.codigoTienda,
+              codigoTienda: ticketData.codigoTienda
+            }
+            : t
+        ));
+
+        // 2. Update alarm records list
+        setRecords(prev => prev.map(r => {
+          let updated = { ...r };
+          let hasChange = false;
+
+          if (r.filename_actual === targetFilename) {
+            updated.ticket_actual = ticketData.ticket;
+            updated.fecha = ticketData.fecha;
+            updated.numero_de_caja = ticketData.caja;
+            updated.local = ticketData.local;
+            updated.competidor = ticketData.competidor;
+            updated.codigo_tienda = ticketData.codigoTienda;
+            hasChange = true;
+          }
+
+          if (r.filename_anterior === targetFilename) {
+            updated.ticket_anterior = ticketData.ticket;
+            updated.fecha_anterior = ticketData.fecha;
+            updated.numero_de_caja = ticketData.caja;
+            updated.local = ticketData.local;
+            updated.competidor = ticketData.competidor;
+            updated.codigo_tienda = ticketData.codigoTienda;
+            hasChange = true;
+          }
+
+          return hasChange ? updated : r;
+        }));
+
+      } else {
+        throw new Error(result.error || 'Error al actualizar el ticket');
+      }
+    } catch (error) {
+      console.error('Update error:', error);
+      setNotification({ type: 'error', message: `Error: ${error.message}` });
+    }
+    // Auto-hide notification
+    setTimeout(() => setNotification(null), 5000);
+  };
 
   // Derive filter options from raw records
   const monthsArr = useMemo(() => {
     const unique = new Set();
-    allRecords.forEach(rec => {
+    records.forEach(rec => {
       if (rec.mes) {
         // rec.mes is 1-12 from BQ. We want 0-11 for the selector mapping
         const m = parseInt(rec.mes) - 1;
@@ -465,11 +548,11 @@ export default function App() {
       }
     });
     return Array.from(unique).sort((a, b) => a - b);
-  }, []);
+  }, [records]);
 
   const yearsArr = useMemo(() => {
     const unique = new Set();
-    allRecords.forEach(rec => {
+    records.forEach(rec => {
       if (rec.ano) {
         const y = parseInt(rec.ano);
         if (!isNaN(y)) unique.add(y);
@@ -479,15 +562,15 @@ export default function App() {
       }
     });
     return Array.from(unique).sort((a, b) => b - a);
-  }, []);
+  }, [records]);
 
   const competitorsArr = useMemo(() => {
-    return Array.from(new Set(allRecords.map(r => r.competidor))).filter(Boolean).sort();
-  }, []);
+    return Array.from(new Set(records.map(r => r.competidor))).filter(Boolean).sort();
+  }, [records]);
 
   const allLocales = useMemo(() => {
-    return Array.from(new Set(allRecords.map(r => r.local))).filter(Boolean).sort();
-  }, []);
+    return Array.from(new Set(records.map(r => r.local))).filter(Boolean).sort();
+  }, [records]);
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -539,7 +622,7 @@ export default function App() {
   const locationOptions = useMemo(() => {
     const baseOptions = [{ value: "all", label: "Todos los locales" }];
 
-    let filteredRecordsForLocs = allRecords;
+    let filteredRecordsForLocs = records;
     if (filters.category !== 'all') {
       filteredRecordsForLocs = filteredRecordsForLocs.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
     }
@@ -549,7 +632,7 @@ export default function App() {
 
     const filteredLocs = Array.from(new Set(filteredRecordsForLocs.map(r => r.local))).filter(Boolean).sort();
     return [...baseOptions, ...filteredLocs.map(l => ({ value: l, label: l }))];
-  }, [filters.competitor, filters.category, allRecords]);
+  }, [filters.competitor, filters.category, records]);
 
   const channelOptions = [
     { value: 'all', label: 'Todos los Canales' },
@@ -592,7 +675,7 @@ export default function App() {
 
   // 1. Core Data Filtering (Full routine for auditing)
   const filteredRecords = useMemo(() => {
-    return allRecords.filter(rec => {
+    return records.filter(rec => {
       // Prioritize mes/ano columns if present
       let mMatch = filters.month === 'all';
       let yMatch = filters.year === 'all';
@@ -619,7 +702,7 @@ export default function App() {
 
       return mMatch && yMatch && cMatch && lMatch && catMatch;
     });
-  }, [allRecords, filters]);
+  }, [records, filters]);
 
   // 1b. Market Share Specific Filtering (Only status_busqueda === 'OK')
   const marketShareRecords = useMemo(() => {
@@ -628,14 +711,14 @@ export default function App() {
 
   // 1c. Core Tickets Filtering (facturas_v2)
   const filteredTickets = useMemo(() => {
-    return allTickets.filter(t => {
+    return tickets.filter(t => {
       const cMatch = filters.competitor === 'all' || t.competidor === filters.competitor;
       const lMatch = filters.local === 'all' || t.local === filters.local;
       const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[t.competidor] === filters.category;
 
       return cMatch && lMatch && catMatch;
     });
-  }, [allTickets, filters]);
+  }, [tickets, filters]);
 
   // 2. Reactive Metrics
   const reactiveMetrics = useMemo(() => {
@@ -645,7 +728,7 @@ export default function App() {
     // Tickets from facturas_v2 (Filtered specifically for this tab if needed, but here simple match)
     const filteredTicketsCount = filteredTickets.length;
     const totalImporteCount = filteredTickets.reduce((sum, t) => sum + (parseFloat(t.importe) || 0), 0);
-    const ticketsSinLocalCount = allTickets.filter(t => {
+    const ticketsSinLocalCount = tickets.filter(t => {
       const matchesComp = filters.competitor === 'all' || t.competidor === filters.competitor;
       return matchesComp && (!t.local || t.local === 'DESCONOCIDO' || t.local === 'Desconocido');
     }).length;
@@ -667,7 +750,7 @@ export default function App() {
       totalTransDailyAvg: totalDailyAvg,
       avgTransPerLocal: totalTransactions / (new Set(marketShareRecords.map(r => r.local)).size || 1)
     };
-  }, [filteredRecords, marketShareRecords, filteredTickets, allTickets, filters.competitor]);
+  }, [filteredRecords, marketShareRecords, filteredTickets, tickets, filters.competitor]);
 
   // 3. Reactive Share Data (Exclusive for Market Share - based on Routine OK)
   const reactiveShareDataRoutine = useMemo(() => {
@@ -954,7 +1037,26 @@ export default function App() {
         <div className="mesh-orb-2 " />
       </div>
 
-      <div className="max-w-7xl mx-auto space-y-8 relative z-10">
+      <main className="max-w-7xl mx-auto space-y-8 relative">
+        {/* Notification Overlay */}
+        <AnimatePresence>
+          {notification && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
+            >
+              <div className={`px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border backdrop-blur-md ${notification.type === 'success'
+                ? 'bg-emerald-500/90 border-emerald-400 text-white'
+                : 'bg-red-500/90 border-red-400 text-white'
+                }`}>
+                {notification.type === 'success' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                <span className="text-sm font-black uppercase tracking-tighter">{notification.message}</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1103,22 +1205,17 @@ export default function App() {
             )
           ) : (
             activeSubTab === 'alarmas' ? (
-              <motion.div
+              <AlarmasDashboard
                 key="alarmas"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="pwa-card p-12 flex flex-col items-center justify-center text-center gap-4 border-dashed border-2 border-slate-300 dark:border-white/10"
-              >
-                <ShieldAlert size={48} className="text-accent-orange opacity-50" />
-                <h2 className="text-2xl font-black uppercase tracking-widest text-slate-400 dark:text-white/40">Módulo de Alarmas</h2>
-                <p className="text-slate-500 dark:text-white/20 font-medium">Próximamente: Seguimiento de incidencias y alertas críticas.</p>
-              </motion.div>
+                records={records}
+                tickets={tickets}
+                onUpdateTicket={handleUpdateTicket}
+              />
             ) : (
               <TicketsDashboard
                 key="tickets"
-                tickets={allTickets}
-                records={allRecords}
+                tickets={tickets}
+                records={records}
                 shareData={reactiveShareDataTickets}
                 globalFilters={filters}
                 onFilterChange={setFilters}
@@ -1126,7 +1223,7 @@ export default function App() {
             )
           )}
         </AnimatePresence>
-      </div>
+      </main>
     </div>
   );
 }
