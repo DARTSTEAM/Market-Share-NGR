@@ -17,6 +17,14 @@ const kFormatter = (num) => {
   return Math.sign(num) * Math.abs(num);
 };
 
+const COMPETITOR_TO_CATEGORY = {
+  'BURGER KING': 'Hamburguesa',
+  'DOMINOS': 'Pizza',
+  'LITTLE CAESARS': 'Pizza',
+  'PIZZA HUT': 'Pizza',
+  'KFC': 'Pollo Frito'
+};
+
 // CustomSelect was extracted to src/components/common/CustomSelect.jsx
 
 const MetricCard = ({ title, value, previousPeriodValue = 0, delay = 0, icon: Icon }) => (
@@ -508,11 +516,13 @@ export default function App() {
   }, [yearsArr]);
 
   const competitorOptions = useMemo(() => {
-    return [
-      { value: 'all', label: 'Todos los Competidores' },
-      ...competitorsArr.map(c => ({ value: c, label: c }))
-    ];
-  }, [competitorsArr]);
+    const baseOptions = [{ value: 'all', label: 'Todos los Competidores' }];
+    const filteredComps = filters.category === 'all'
+      ? competitorsArr
+      : competitorsArr.filter(c => COMPETITOR_TO_CATEGORY[c] === filters.category);
+
+    return [...baseOptions, ...filteredComps.map(c => ({ value: c, label: c }))];
+  }, [competitorsArr, filters.category]);
 
   const latestYear = useMemo(() => {
     return yearsArr.length > 0 ? yearsArr[0].toString() : "all";
@@ -528,12 +538,18 @@ export default function App() {
   // Location options filtered by competitor
   const locationOptions = useMemo(() => {
     const baseOptions = [{ value: "all", label: "Todos los locales" }];
-    const filteredLocs = filters.competitor === 'all'
-      ? allLocales
-      : Array.from(new Set(allRecords.filter(r => r.competidor === filters.competitor).map(r => r.local))).filter(Boolean).sort();
 
+    let filteredRecordsForLocs = allRecords;
+    if (filters.category !== 'all') {
+      filteredRecordsForLocs = filteredRecordsForLocs.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
+    }
+    if (filters.competitor !== 'all') {
+      filteredRecordsForLocs = filteredRecordsForLocs.filter(r => r.competidor === filters.competitor);
+    }
+
+    const filteredLocs = Array.from(new Set(filteredRecordsForLocs.map(r => r.local))).filter(Boolean).sort();
     return [...baseOptions, ...filteredLocs.map(l => ({ value: l, label: l }))];
-  }, [filters.competitor, allLocales]);
+  }, [filters.competitor, filters.category, allRecords]);
 
   const channelOptions = [
     { value: 'all', label: 'Todos los Canales' },
@@ -552,6 +568,10 @@ export default function App() {
   const handleFilterChange = (key, value) => {
     setFilters(prev => {
       const newFilters = { ...prev, [key]: value };
+      if (key === 'category' && value !== prev.category) {
+        newFilters.competitor = 'all';
+        newFilters.local = 'all';
+      }
       if (key === 'competitor' && value !== prev.competitor) {
         newFilters.local = 'all';
       }
@@ -595,7 +615,9 @@ export default function App() {
 
       const cMatch = filters.competitor === 'all' || rec.competidor === filters.competitor;
       const lMatch = filters.local === 'all' || rec.local === filters.local;
-      return mMatch && yMatch && cMatch && lMatch;
+      const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[rec.competidor] === filters.category;
+
+      return mMatch && yMatch && cMatch && lMatch && catMatch;
     });
   }, [allRecords, filters]);
 
@@ -609,7 +631,9 @@ export default function App() {
     return allTickets.filter(t => {
       const cMatch = filters.competitor === 'all' || t.competidor === filters.competitor;
       const lMatch = filters.local === 'all' || t.local === filters.local;
-      return cMatch && lMatch;
+      const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[t.competidor] === filters.category;
+
+      return cMatch && lMatch && catMatch;
     });
   }, [allTickets, filters]);
 
