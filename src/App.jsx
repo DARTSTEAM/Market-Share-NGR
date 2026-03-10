@@ -438,7 +438,8 @@ const CompetitorAnalysis = ({
 );
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('competitor');
+  const [activeCategory, setActiveCategory] = useState('competitor');
+  const [activeSubTab, setActiveSubTab] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState('dark');
 
@@ -949,7 +950,10 @@ export default function App() {
             <div className="flex flex-col">
               <span className="text-[10px] text-accent-orange font-black uppercase tracking-[0.3em] mb-1">NGR Intelligence Suite</span>
               <h1 className="pwa-title !text-5xl md:!text-6xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
-                {activeTab === 'competitor' ? 'Análisis Competencias' : activeTab === 'marketshare' ? 'Market Share' : activeTab === 'tickets' ? 'Tickets' : 'Comparativos'} <span className="text-accent-orange">LIVE</span>
+                {activeCategory === 'competitor' ? 'Análisis Competencias' :
+                  activeCategory === 'marketshare' ? (activeSubTab === 'comparativos' ? 'Comparativos' : 'Market Share') :
+                    activeCategory === 'tickets' ? (activeSubTab === 'alarmas' ? 'Alarmas' : 'Tickets') :
+                      'Dashboard'} <span className="text-accent-orange">LIVE</span>
               </h1>
             </div>
           </div>
@@ -965,29 +969,62 @@ export default function App() {
           </div>
         </motion.header>
 
-        {/* Navigation Tabs */}
-        <nav className="flex justify-center mb-8">
+        <nav className="flex flex-col items-center gap-4 mb-8">
+          {/* Main Categories Navigation */}
           <div className="bg-white/50 dark:bg-white/5 backdrop-blur-xl border border-slate-300 dark:border-white/10 p-1.5 rounded-2xl flex gap-1 shadow-sm">
             {[
               { id: 'competitor', icon: LayoutDashboard, label: 'Análisis Competencias' },
               { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
-              { id: 'tickets', icon: Ticket, label: 'Tickets' },
-              { id: 'comparativos', icon: GitCompare, label: 'Comparativos' }
-            ].map(tab => (
+              { id: 'tickets', icon: Ticket, label: 'Tickets' }
+            ].map(cat => (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === tab.id ? 'bg-accent-orange text-white shadow-[0_0_20px_rgba(255,126,75,0.3)]' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'}`}
+                key={cat.id}
+                onClick={() => {
+                  setActiveCategory(cat.id);
+                  if (cat.id === 'marketshare') setActiveSubTab('marketshare');
+                  else if (cat.id === 'tickets') setActiveSubTab('tickets');
+                  else setActiveSubTab('');
+                }}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeCategory === cat.id ? 'bg-accent-orange text-white shadow-[0_0_20px_rgba(255,126,75,0.3)]' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'}`}
               >
-                <tab.icon size={14} />
-                {tab.label}
+                <cat.icon size={14} />
+                {cat.label}
               </button>
             ))}
           </div>
+
+          {/* Sub-tabs Navigation */}
+          <AnimatePresence>
+            {(activeCategory === 'marketshare' || activeCategory === 'tickets') && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="bg-slate-100/50 dark:bg-white/[0.02] backdrop-blur-md border border-slate-200 dark:border-white/5 p-1 rounded-xl flex gap-1 shadow-inner"
+              >
+                {(activeCategory === 'marketshare' ? [
+                  { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
+                  { id: 'comparativos', icon: GitCompare, label: 'Comparativos' }
+                ] : [
+                  { id: 'tickets', icon: Ticket, label: 'Tickets' },
+                  { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' }
+                ]).map(sub => (
+                  <button
+                    key={sub.id}
+                    onClick={() => setActiveSubTab(sub.id)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeSubTab === sub.id ? 'bg-white dark:bg-white/10 text-accent-orange shadow-sm' : 'text-slate-400 dark:text-white/20 hover:text-slate-600 dark:hover:text-white/60'}`}
+                  >
+                    <sub.icon size={12} />
+                    {sub.label}
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </nav>
 
         <AnimatePresence mode="wait">
-          {activeTab === 'competitor' ? (
+          {activeCategory === 'competitor' ? (
             <CompetitorAnalysis
               key="competitor"
               theme={theme}
@@ -1003,35 +1040,51 @@ export default function App() {
               sortDirection={sortDirection}
               filterBar={globalFilterBar}
             />
-          ) : activeTab === 'marketshare' ? (
-            <MarketShareDashboard
-              key="marketshare"
-              filters={filters}
-              onFilterChange={handleFilterChange}
-              globalFilterBar={globalFilterBar}
-              reactiveMetrics={reactiveMetrics}
-              shareData={reactiveShareDataRoutine}
-              trendData={reactiveTrendDataRoutine}
-              filteredTableData={sortedTableDataRoutine}
-              allRecords={marketShareRecords}
-            />
-          ) : activeTab === 'tickets' ? (
-            <TicketsDashboard
-              key="tickets"
-              tickets={allTickets}
-              records={allRecords}
-              shareData={reactiveShareDataTickets}
-              globalFilters={filters}
-              onFilterChange={setFilters}
-            />
+          ) : activeCategory === 'marketshare' ? (
+            activeSubTab === 'comparativos' ? (
+              <ComparativosDashboard
+                key="comparativos"
+                shareData={reactiveShareDataRoutine}
+                tableData={sortedTableDataRoutine}
+                metrics={reactiveMetrics}
+                theme={theme}
+              />
+            ) : (
+              <MarketShareDashboard
+                key="marketshare"
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                globalFilterBar={globalFilterBar}
+                reactiveMetrics={reactiveMetrics}
+                shareData={reactiveShareDataRoutine}
+                trendData={reactiveTrendDataRoutine}
+                filteredTableData={sortedTableDataRoutine}
+                allRecords={marketShareRecords}
+              />
+            )
           ) : (
-            <ComparativosDashboard
-              key="comparativos"
-              shareData={reactiveShareDataRoutine}
-              tableData={sortedTableDataRoutine}
-              metrics={reactiveMetrics}
-              theme={theme}
-            />
+            activeSubTab === 'alarmas' ? (
+              <motion.div
+                key="alarmas"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="pwa-card p-12 flex flex-col items-center justify-center text-center gap-4 border-dashed border-2 border-slate-300 dark:border-white/10"
+              >
+                <ShieldAlert size={48} className="text-accent-orange opacity-50" />
+                <h2 className="text-2xl font-black uppercase tracking-widest text-slate-400 dark:text-white/40">Módulo de Alarmas</h2>
+                <p className="text-slate-500 dark:text-white/20 font-medium">Próximamente: Seguimiento de incidencias y alertas críticas.</p>
+              </motion.div>
+            ) : (
+              <TicketsDashboard
+                key="tickets"
+                tickets={allTickets}
+                records={allRecords}
+                shareData={reactiveShareDataTickets}
+                globalFilters={filters}
+                onFilterChange={setFilters}
+              />
+            )
           )}
         </AnimatePresence>
       </div>
