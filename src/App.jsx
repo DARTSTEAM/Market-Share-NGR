@@ -931,77 +931,91 @@ export default function App() {
       </div>
 
       <div className="max-w-7xl mx-auto space-y-8 relative z-10">
-        {/* Persistent Header */}
         <motion.header
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 border-b border-slate-300 dark:border-white/10 pb-6 relative"
+          className="flex flex-col gap-6 border-b border-slate-300 dark:border-white/10 pb-6 relative"
         >
-          <div className="flex items-center gap-6">
-            <motion.div
-              whileHover={{ rotate: 180, scale: 1.1 }}
-              transition={{ duration: 0.4 }}
-              className="w-16 h-16 rounded-2xl bg-white/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center overflow-hidden shadow-lg dark:shadow-[0_0_30px_rgba(255,126,75,0.15)] relative group cursor-pointer"
-            >
-              <div className="absolute inset-0 bg-accent-orange/10 dark:bg-accent-orange/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
-              <img src="/favicon.png" alt="NGR Logo" className="w-10 h-10 object-contain relative z-10 dark:brightness-110" />
-            </motion.div>
-            <div className="flex flex-col">
-              <span className="text-[10px] text-accent-orange font-black uppercase tracking-[0.3em] mb-1">NGR Intelligence Suite</span>
-              <h1 className="pwa-title !text-5xl md:!text-6xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
-                {activeCategory === 'competitor' ? 'Análisis Competencias' :
-                  activeCategory === 'marketshare' ? (activeSubTab === 'comparativos' ? 'Comparativos' : 'Market Share') :
-                    activeCategory === 'tickets' ? (activeSubTab === 'alarmas' ? 'Alarmas' : 'Tickets') :
-                      'Dashboard'} <span className="text-accent-orange">LIVE</span>
-              </h1>
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div className="flex items-center gap-6">
+              <motion.div
+                whileHover={{ rotate: 180, scale: 1.1 }}
+                transition={{ duration: 0.4 }}
+                className="w-16 h-16 rounded-2xl bg-white/80 dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center overflow-hidden shadow-lg dark:shadow-[0_0_30px_rgba(255,126,75,0.15)] relative group cursor-pointer"
+              >
+                <div className="absolute inset-0 bg-accent-orange/10 dark:bg-accent-orange/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                <img src="/favicon.png" alt="NGR Logo" className="w-10 h-10 object-contain relative z-10 dark:brightness-110" />
+              </motion.div>
+              <div className="flex flex-col">
+                <span className="text-[10px] text-accent-orange font-black uppercase tracking-[0.3em] mb-1">NGR Intelligence Suite</span>
+                <h1 className="pwa-title !text-4xl md:!text-5xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
+                  {activeCategory === 'competitor' ? 'Análisis Competencias' :
+                    activeCategory === 'marketshare' ? (activeSubTab === 'comparativos' ? 'Comparativos' : 'Market Share') :
+                      activeCategory === 'tickets' ? (activeSubTab === 'alarmas' ? 'Alarmas' : 'Tickets') :
+                        'Dashboard'} <span className="text-accent-orange">LIVE</span>
+                </h1>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-center flex-wrap">
+              <button
+                onClick={toggleTheme}
+                className="p-3 bg-white/50 dark:bg-white/[0.02] rounded-2xl border border-slate-300 dark:border-white/5 backdrop-blur-md shadow-sm hover:scale-105 transition-all text-slate-600 dark:text-white/80 hover:text-accent-orange dark:hover:text-accent-lemon"
+                aria-label="Toggle Theme"
+              >
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              {globalFilterBar}
             </div>
           </div>
-          <div className="flex gap-4 items-center flex-wrap">
+
+          {/* Integrated Navbar */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-2">
+            <div className="flex gap-2 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
+              {[
+                { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
+                { id: 'tickets', icon: Ticket, label: 'Tickets' }
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    setActiveCategory(cat.id);
+                    if (cat.id === 'marketshare') setActiveSubTab('marketshare');
+                    else if (cat.id === 'tickets') setActiveSubTab('tickets');
+                  }}
+                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeCategory === cat.id ? 'bg-accent-orange text-white shadow-lg' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'}`}
+                >
+                  <cat.icon size={13} />
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            {/* De-emphasized Competitor Link */}
             <button
-              onClick={toggleTheme}
-              className="p-3 bg-white/50 dark:bg-white/[0.02] rounded-2xl border border-slate-300 dark:border-white/5 backdrop-blur-md shadow-sm hover:scale-105 transition-all text-slate-600 dark:text-white/80 hover:text-accent-orange dark:hover:text-accent-lemon"
-              aria-label="Toggle Theme"
+              onClick={() => {
+                setActiveCategory('competitor');
+                setActiveSubTab('');
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest transition-all ${activeCategory === 'competitor' ? 'bg-slate-200 dark:bg-white/10 text-slate-900 dark:text-white' : 'text-slate-400 dark:text-white/20 hover:text-slate-600 dark:hover:text-white/40'}`}
             >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              <LayoutDashboard size={12} />
+              Análisis Competencias
             </button>
-            {globalFilterBar}
           </div>
         </motion.header>
 
-        <nav className="flex flex-col items-center gap-4 mb-8">
-          {/* Main Categories Navigation */}
-          <div className="bg-white/50 dark:bg-white/5 backdrop-blur-xl border border-slate-300 dark:border-white/10 p-1.5 rounded-2xl flex gap-1 shadow-sm">
-            {[
-              { id: 'competitor', icon: LayoutDashboard, label: 'Análisis Competencias' },
-              { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
-              { id: 'tickets', icon: Ticket, label: 'Tickets' }
-            ].map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setActiveCategory(cat.id);
-                  if (cat.id === 'marketshare') setActiveSubTab('marketshare');
-                  else if (cat.id === 'tickets') setActiveSubTab('tickets');
-                  else setActiveSubTab('');
-                }}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeCategory === cat.id ? 'bg-accent-orange text-white shadow-[0_0_20px_rgba(255,126,75,0.3)]' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5'}`}
-              >
-                <cat.icon size={14} />
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Sub-tabs Navigation */}
-          <AnimatePresence>
-            {(activeCategory === 'marketshare' || activeCategory === 'tickets') && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="bg-slate-100/50 dark:bg-white/[0.02] backdrop-blur-md border border-slate-200 dark:border-white/5 p-1 rounded-xl flex gap-1 shadow-inner"
-              >
+        {/* Floating Sub-tabs Bar */}
+        <AnimatePresence>
+          {(activeCategory === 'marketshare' || activeCategory === 'tickets') && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="flex justify-center -mt-4 mb-4"
+            >
+              <div className="bg-white/40 dark:bg-white/[0.02] backdrop-blur-xl border border-slate-200 dark:border-white/5 p-1 rounded-xl flex gap-1 shadow-sm">
                 {(activeCategory === 'marketshare' ? [
                   { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
                   { id: 'comparativos', icon: GitCompare, label: 'Comparativos' }
@@ -1018,10 +1032,11 @@ export default function App() {
                     {sub.label}
                   </button>
                 ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </nav>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
 
         <AnimatePresence mode="wait">
           {activeCategory === 'competitor' ? (
