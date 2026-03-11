@@ -19,7 +19,7 @@ const COMPETITOR_TO_CATEGORY = {
 
 const API_BASE_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
-  : 'https://tu-api-proxy-url.com'; // TODO: EL USUARIO DEBE REEMPLAZAR ESTO CON LA URL DE SU SERVIDOR PROXY
+  : 'https://ngr-proxy-server-624953786850.us-central1.run.app';
 
 const MetricCard = ({ title, value, previousPeriodValue = 0, delay = 0, icon: Icon }) => (
   <motion.div

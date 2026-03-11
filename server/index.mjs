@@ -18,10 +18,14 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const bigquery = new BigQuery({
+const bqOptions = {
     projectId: process.env.BIGQUERY_PROJECT_ID,
-    keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
+};
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+    bqOptions.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+}
+
+const bigquery = new BigQuery(bqOptions);
 
 // Endpoint to fetch current data
 app.get('/api/data', (req, res) => {

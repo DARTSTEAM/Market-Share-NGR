@@ -4,10 +4,14 @@ const fs = require('fs');
 const path = require('path');
 
 async function fetchBigQueryData() {
-  const bigquery = new BigQuery({
+  const bqOptions = {
     projectId: process.env.BIGQUERY_PROJECT_ID,
-    keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-  });
+  };
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+    bqOptions.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  }
+
+  const bigquery = new BigQuery(bqOptions);
 
   const queryRecords = `
     SELECT
