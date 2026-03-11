@@ -4,6 +4,7 @@ import { BigQuery } from '@google-cloud/bigquery';
 import dotenv from 'dotenv';
 import path from 'path';
 import { exec } from 'child_process';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
@@ -59,24 +60,36 @@ app.post('/api/update-ticket', async (req, res) => {
 
         console.log(`Executing update for filename: ${filename}`);
         const [job] = await bigquery.createQueryJob(options);
-        const [rows] = await job.getQueryResults();
+        await job.getQueryResults();
 
-        res.json({ success: true, message: 'Ticket updated in BigQuery', details: rows });
+        // Trigger background refresh of local data and WAIT for it
+        console.log('Triggering data refresh...');
 
-        // Trigger background refresh of local data
-        console.log('Triggering background data refresh...');
-        exec('npm run fetch && node process_csv.cjs', { cwd: path.join(__dirname, '..') }, (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Error in background refresh: ${error.message}`);
-                return;
-            }
-            if (stderr) {
-                console.error(`Refresh stderr: ${stderr}`);
-            }
-            console.log(`Background refresh completed: ${stdout}`);
+        const refreshPromise = new Promise((resolve, reject) => {
+            exec('npm run fetch && node process_csv.cjs', { cwd: path.join(__dirname, '..') }, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`Error in refresh: ${error.message}`);
+                    return reject(error);
+                }
+                console.log(`Refresh completed: ${stdout}`);
+                resolve();
+            });
         });
+
+        await refreshPromise;
+
+        // Read the updated data.json
+        const dataJsonPath = path.join(__dirname, '..', 'src', 'data.json');
+        const updatedData = JSON.parse(fs.readFileSync(dataJsonPath, 'utf8'));
+
+        res.json({
+            success: true,
+            message: 'Ticket updated and data refreshed',
+            data: updatedData
+        });
+
     } catch (error) {
-        console.error('Error updating BigQuery:', error);
+        console.error('Error updating BigQuery or refreshing:', error);
         res.status(500).json({ error: error.message });
     }
 });

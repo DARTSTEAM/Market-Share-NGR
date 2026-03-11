@@ -449,6 +449,7 @@ export default function App() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState('dark');
   const [notification, setNotification] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Use state for data to make it reactive to updates
   const [records, setRecords] = useState(initialRecords);
@@ -456,6 +457,9 @@ export default function App() {
 
   const handleUpdateTicket = async (ticketData) => {
     try {
+      setIsRefreshing(true);
+      setNotification({ type: 'info', message: 'Actualizando BigQuery y refrescando datos...' });
+
       const response = await fetch('http://localhost:3001/api/update-ticket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -470,11 +474,18 @@ export default function App() {
           codigoTienda: ticketData.codigoTienda
         })
       });
-      const result = await response.json();
-      if (result.success) {
-        setNotification({ type: 'success', message: '¡Ticket actualizado con éxito en BigQuery!' });
 
-        // Update local state reactiveley
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setNotification({ type: 'success', message: '¡Datos sincronizados correctamente con BigQuery!' });
+
+        // Update entire state from the server response which contains calculated fields
+        setRecords(result.data.records);
+        setTickets(result.data.tickets);
+      } else if (result.success) {
+        // Fallback for success without full data
+        setNotification({ type: 'success', message: '¡Ticket actualizado con éxito!' });
         const targetFilename = ticketData.filename || ticketData.originalFilename;
 
         // 1. Update tickets list
@@ -529,9 +540,11 @@ export default function App() {
     } catch (error) {
       console.error('Update error:', error);
       setNotification({ type: 'error', message: `Error: ${error.message}` });
+    } finally {
+      setIsRefreshing(false);
+      // Auto-hide notification
+      setTimeout(() => setNotification(null), 5000);
     }
-    // Auto-hide notification
-    setTimeout(() => setNotification(null), 5000);
   };
 
   // Derive filter options from raw records
@@ -1049,9 +1062,13 @@ export default function App() {
             >
               <div className={`px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border backdrop-blur-md ${notification.type === 'success'
                 ? 'bg-emerald-500/90 border-emerald-400 text-white'
-                : 'bg-red-500/90 border-red-400 text-white'
+                : notification.type === 'info'
+                  ? 'bg-blue-500/90 border-blue-400 text-white'
+                  : 'bg-red-500/90 border-red-400 text-white'
                 }`}>
-                {notification.type === 'success' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+                {notification.type === 'success' ? <CheckCircle2 size={18} /> :
+                  notification.type === 'info' ? <Activity size={18} className="animate-pulse" /> :
+                    <XCircle size={18} />}
                 <span className="text-sm font-black uppercase tracking-tighter">{notification.message}</span>
               </div>
             </motion.div>
@@ -1210,6 +1227,7 @@ export default function App() {
                 records={records}
                 tickets={tickets}
                 onUpdateTicket={handleUpdateTicket}
+                isRefreshing={isRefreshing}
               />
             ) : (
               <TicketsDashboard

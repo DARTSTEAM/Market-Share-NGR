@@ -8,6 +8,7 @@ import {
     CheckCircle2,
     XCircle,
     Info,
+    Loader2,
     RefreshCw,
     Image as ImageIcon,
     Save,
@@ -43,7 +44,7 @@ const ALARM_STATUS_CONFIG = {
 
 const ITEMS_PER_PAGE = 10;
 
-const AlarmasDashboard = ({ records, tickets, onUpdateTicket }) => {
+const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) => {
     const [selectedStatus, setSelectedStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [editingTicket, setEditingTicket] = useState(null);
@@ -367,10 +368,20 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket }) => {
                                 <div className="pt-6 space-y-4">
                                     <button
                                         onClick={handleSave}
-                                        className="w-full py-4 bg-accent-orange text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-accent-orange/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+                                        disabled={isRefreshing}
+                                        className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 ${isRefreshing ? 'bg-slate-400 cursor-not-allowed opacity-70' : 'bg-accent-orange text-white shadow-accent-orange/20 hover:scale-[1.02] active:scale-95'}`}
                                     >
-                                        <Save size={18} />
-                                        Sincronizar BQ
+                                        {isRefreshing ? (
+                                            <>
+                                                <Loader2 size={20} className="animate-spin" />
+                                                Sincronizando...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save size={20} />
+                                                Guardar Cambios
+                                            </>
+                                        )}
                                     </button>
                                     <p className="text-[8px] text-center text-slate-400 font-bold uppercase underline leading-relaxed">
                                         Se ejecutarán comandos UPDATE en facturas_v2 para asegurar la consistencia.
