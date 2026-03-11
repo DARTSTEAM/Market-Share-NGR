@@ -35,11 +35,10 @@ const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
     </motion.div>
 );
 
+const ITEMS_PER_PAGE_MAIN = 20;
+
 export default function MarketShareDashboard({ filters, onFilterChange, globalFilterBar, reactiveMetrics, shareData, trendData, filteredTableData, allRecords }) {
-    const [currentPage, setCurrentPage] = useState(1);
-    const [sortKey, setSortKey] = useState('transacciones');
-    const [sortDir, setSortDir] = useState('desc');
-    const itemsPerPage = 20;
+
 
     const channelOptions = ['Delivery', 'Recojo en tienda', 'Salón'];
 
@@ -87,8 +86,8 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
         return <span className="ml-1 text-accent-orange">{sortDir === 'asc' ? '↑' : '↓'}</span>;
     };
 
-    const totalPages = Math.ceil(sortedTableData.length / itemsPerPage);
-    const paginatedData = sortedTableData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const totalPages = Math.ceil(sortedTableData.length / ITEMS_PER_PAGE_MAIN);
+    const paginatedData = sortedTableData.slice((currentPage - 1) * ITEMS_PER_PAGE_MAIN, currentPage * ITEMS_PER_PAGE_MAIN);
 
     // Channel mix logic based on shareData
     const channelMix = useMemo(() => {
@@ -361,7 +360,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                 {totalPages > 1 && (
                     <div className="p-4 flex justify-between items-center bg-slate-50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/10">
                         <span className="text-xs font-bold text-slate-500 dark:text-white/40">
-                            Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, displayTableData.length)} de {displayTableData.length} registros
+                            Mostrando {(currentPage - 1) * ITEMS_PER_PAGE_MAIN + 1} a {Math.min(currentPage * ITEMS_PER_PAGE_MAIN, displayTableData.length)} de {displayTableData.length} registros
                         </span>
                         <div className="flex gap-2">
                             <button
@@ -391,14 +390,10 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
     );
 }
 
+const ITEMS_PER_PAGE_MONTHLY = 15;
+
 const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => {
-    const [localFilters, setLocalFilters] = useState({
-        competidor: 'all',
-        local: 'all',
-        caja: 'all'
-    });
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 15;
+
 
     // Generate real months based on available data or a rolling 12M from selection
     const months = useMemo(() => {
@@ -482,9 +477,9 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
     // Reset to page 1 when filters change
     useEffect(() => { setCurrentPage(1); }, [filteredMatrix]);
 
-    const totalPages = Math.ceil(filteredMatrix.length / itemsPerPage);
+    const totalPages = Math.ceil(filteredMatrix.length / ITEMS_PER_PAGE_MONTHLY);
     const displayedRows = useMemo(
-        () => filteredMatrix.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage),
+        () => filteredMatrix.slice((currentPage - 1) * ITEMS_PER_PAGE_MONTHLY, currentPage * ITEMS_PER_PAGE_MONTHLY),
         [filteredMatrix, currentPage]
     );
 
@@ -642,7 +637,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
             ) : totalPages > 1 && (
                 <div className="p-4 flex justify-between items-center bg-slate-50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/10">
                     <span className="text-xs font-bold text-slate-500 dark:text-white/40">
-                        Mostrando {(currentPage - 1) * itemsPerPage + 1} a {Math.min(currentPage * itemsPerPage, filteredMatrix.length)} de {filteredMatrix.length} locales
+                        Mostrando {(currentPage - 1) * ITEMS_PER_PAGE_MONTHLY + 1} a {Math.min(currentPage * ITEMS_PER_PAGE_MONTHLY, filteredMatrix.length)} de {filteredMatrix.length} locales
                     </span>
                     <div className="flex gap-2">
                         <button

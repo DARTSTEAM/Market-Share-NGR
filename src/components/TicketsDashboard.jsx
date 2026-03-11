@@ -21,8 +21,10 @@ import CustomSelect from './common/CustomSelect';
 
 const formatCurrency = (val) => new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 }).format(val);
 
+const ITEMS_PER_PAGE = 10;
+
 const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onFilterChange }) => {
-    const itemsPerPage = 10;
+
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [filters, setFilters] = useState({
@@ -76,11 +78,11 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
     }, [tickets, searchTerm, filters]);
 
     // Pagination
-    const totalPages = Math.ceil(filteredTickets.length / itemsPerPage);
+    const totalPages = Math.ceil(filteredTickets.length / ITEMS_PER_PAGE);
     const paginatedTickets = useMemo(() => {
-        const start = (currentPage - 1) * itemsPerPage;
-        return filteredTickets.slice(start, start + itemsPerPage);
-    }, [filteredTickets, currentPage, itemsPerPage]);
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredTickets.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredTickets, currentPage, ITEMS_PER_PAGE]);
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '-';
@@ -288,7 +290,7 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
                 {/* Pagination Footer */}
                 <div className="px-6 py-4 bg-slate-50/50 dark:bg-black/20 border-t border-slate-200 dark:border-white/10 flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
-                        Mostrando <span className="text-slate-900 dark:text-white">{Math.min(paginatedTickets.length, itemsPerPage)}</span> de <span className="text-slate-900 dark:text-white">{filteredTickets.length}</span> tickets
+                        Mostrando <span className="text-slate-900 dark:text-white">{Math.min(paginatedTickets.length, ITEMS_PER_PAGE)}</span> de <span className="text-slate-900 dark:text-white">{filteredTickets.length}</span> tickets
                     </span>
 
                     <div className="flex gap-2">

@@ -41,12 +41,10 @@ const ALARM_STATUS_CONFIG = {
     'SIN_HISTORIAL': { label: 'Sin Historial', color: 'text-slate-500', bg: 'bg-slate-500/10', icon: Info },
 };
 
+const ITEMS_PER_PAGE = 10;
+
 const AlarmasDashboard = ({ records, tickets, onUpdateTicket }) => {
-    const [selectedStatus, setSelectedStatus] = useState('all');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [editingTicket, setEditingTicket] = useState(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+
 
     // Filtered records based on status and search
     const alarmRecords = useMemo(() => {
@@ -77,11 +75,11 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket }) => {
     }, [records]);
 
     const paginatedRecords = useMemo(() => {
-        const start = (currentPage - 1) * itemsPerPage;
-        return alarmRecords.slice(start, start + itemsPerPage);
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return alarmRecords.slice(start, start + ITEMS_PER_PAGE);
     }, [alarmRecords, currentPage]);
 
-    const totalPages = Math.ceil(alarmRecords.length / itemsPerPage);
+    const totalPages = Math.ceil(alarmRecords.length / ITEMS_PER_PAGE);
 
     const handleEdit = (record) => {
         const foundActual = tickets.find(t => t.filename === record.filename_actual);
