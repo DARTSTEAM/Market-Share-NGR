@@ -49,11 +49,12 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
     const [searchTerm, setSearchTerm] = useState('');
     const [editingTicket, setEditingTicket] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [sortBy, setSortBy] = useState('fecha_desc');
 
 
     // Filtered records based on status and search
     const alarmRecords = useMemo(() => {
-        return records.filter(r => {
+        const filtered = records.filter(r => {
             if (r.status_busqueda === 'OK') return false;
 
             const matchesStatus = selectedStatus === 'all' || r.status_busqueda === selectedStatus;
@@ -64,7 +65,15 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
 
             return matchesStatus && matchesSearch;
         });
-    }, [records, selectedStatus, searchTerm]);
+
+        return [...filtered].sort((a, b) => {
+            if (sortBy === 'fecha_desc') return new Date(b.fecha) - new Date(a.fecha);
+            if (sortBy === 'fecha_asc') return new Date(a.fecha) - new Date(b.fecha);
+            if (sortBy === 'competidor') return (a.competidor || '').localeCompare(b.competidor || '');
+            if (sortBy === 'local') return (a.local || '').localeCompare(b.local || '');
+            return 0;
+        });
+    }, [records, selectedStatus, searchTerm, sortBy]);
 
     // Summary stats
     const stats = useMemo(() => {
@@ -219,6 +228,19 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                             />
                         </div>
+                        <div className="w-full lg:w-48">
+                            <CustomSelect
+                                value={sortBy}
+                                onChange={(val) => { setSortBy(val); setCurrentPage(1); }}
+                                options={[
+                                    { value: 'fecha_desc', label: 'Fecha (Más reciente)' },
+                                    { value: 'fecha_asc', label: 'Fecha (Más antiguo)' },
+                                    { value: 'competidor', label: 'Competidor (A-Z)' },
+                                    { value: 'local', label: 'Local (A-Z)' }
+                                ]}
+                                icon={<Filter size={14} />}
+                            />
+                        </div>
                     </div>
 
                     <div className="overflow-x-auto">
@@ -226,6 +248,7 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                             <thead className="bg-slate-50 dark:bg-black/20 text-slate-500 dark:text-white/40 font-black text-[9px] uppercase tracking-[0.2em]">
                                 <tr>
                                     <th className="px-6 py-4">Status</th>
+                                    <th className="px-6 py-4 text-center">ID Tienda</th>
                                     <th className="px-6 py-4">Competidor / Local</th>
                                     <th className="px-6 py-4">Caja</th>
                                     <th className="px-6 py-4">Ticket Detec.</th>
@@ -243,6 +266,9 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                                                     <config.icon size={12} className={config.color} />
                                                     <span className={`font-black uppercase tracking-tighter ${config.color}`}>{config.label}</span>
                                                 </div>
+                                            </td>
+                                            <td className="px-6 py-4 font-mono font-bold text-slate-400">
+                                                {r.codigo_tienda || 'N/A'}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
