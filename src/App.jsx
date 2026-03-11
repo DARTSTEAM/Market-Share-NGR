@@ -15,10 +15,11 @@ const COMPETITOR_TO_CATEGORY = {
   'DOMINOS': 'Pizza',
   'LITTLE CAESARS': 'Pizza',
   'PIZZA HUT': 'Pizza',
-  'KFC': 'Pollo Frito'
 };
 
-// CustomSelect was extracted to src/components/common/CustomSelect.jsx
+const API_BASE_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:3001'
+  : 'https://tu-api-proxy-url.com'; // TODO: EL USUARIO DEBE REEMPLAZAR ESTO CON LA URL DE SU SERVIDOR PROXY
 
 const MetricCard = ({ title, value, previousPeriodValue = 0, delay = 0, icon: Icon }) => (
   <motion.div
@@ -455,12 +456,32 @@ export default function App() {
   const [records, setRecords] = useState(initialRecords);
   const [tickets, setTickets] = useState(initialTickets);
 
+  // Initial data fetch to sync with BigQuery on load
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/data`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.facturas_audit) setRecords(data.facturas_audit);
+          if (data.facturas_v2) setTickets(data.facturas_v2);
+          setIsLoaded(true);
+        }
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+        // Fallback to static data is already set
+        setIsLoaded(true);
+      }
+    };
+    fetchInitialData();
+  }, []);
+
   const handleUpdateTicket = async (ticketData) => {
     try {
       setIsRefreshing(true);
       setNotification({ type: 'info', message: 'Actualizando BigQuery y refrescando datos...' });
 
-      const response = await fetch('http://localhost:3001/api/update-ticket', {
+      const response = await fetch(`${API_BASE_URL}/api/update-ticket`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

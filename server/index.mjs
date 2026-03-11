@@ -23,6 +23,22 @@ const bigquery = new BigQuery({
     keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
 });
 
+// Endpoint to fetch current data
+app.get('/api/data', (req, res) => {
+    try {
+        const dataJsonPath = path.join(__dirname, '..', 'src', 'data.json');
+        if (fs.existsSync(dataJsonPath)) {
+            const data = JSON.parse(fs.readFileSync(dataJsonPath, 'utf8'));
+            res.json(data);
+        } else {
+            res.status(404).json({ error: 'Data file not found' });
+        }
+    } catch (error) {
+        console.error('Error reading data:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 app.post('/api/update-ticket', async (req, res) => {
     const { filename, ticket, importe, fecha, caja, local, competidor, codigoTienda } = req.body;
 
