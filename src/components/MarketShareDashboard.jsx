@@ -38,6 +38,9 @@ const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
 const ITEMS_PER_PAGE_MAIN = 20;
 
 export default function MarketShareDashboard({ filters, onFilterChange, globalFilterBar, reactiveMetrics, shareData, trendData, filteredTableData, allRecords }) {
+    const [currentPage, setCurrentPage] = useState(1);
+    const [sortKey, setSortKey] = useState('transacciones');
+    const [sortDir, setSortDir] = useState('desc');
 
 
     const channelOptions = ['Delivery', 'Recojo en tienda', 'Salón'];
@@ -393,6 +396,12 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
 const ITEMS_PER_PAGE_MONTHLY = 15;
 
 const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => {
+    const [localFilters, setLocalFilters] = useState({
+        competidor: 'all',
+        local: 'all',
+        caja: 'all'
+    });
+    const [currentPage, setCurrentPage] = useState(1);
 
 
     // Generate real months based on available data or a rolling 12M from selection

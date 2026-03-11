@@ -44,6 +44,10 @@ const ALARM_STATUS_CONFIG = {
 const ITEMS_PER_PAGE = 10;
 
 const AlarmasDashboard = ({ records, tickets, onUpdateTicket }) => {
+    const [selectedStatus, setSelectedStatus] = useState('all');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [editingTicket, setEditingTicket] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
 
 
     // Filtered records based on status and search
