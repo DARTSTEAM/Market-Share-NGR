@@ -307,23 +307,6 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                             </button>
                         ))}
                     </div>
-                    {/* Competitor sub-filter */}
-                    {categoryCompetitors.length > 1 && (
-                        <div className="flex gap-2 flex-wrap">
-                            {['all', ...categoryCompetitors].map(comp => (
-                                <button
-                                    key={comp}
-                                    onClick={() => setFilterCompetidor(comp)}
-                                    className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCompetidor === comp
-                                        ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                        : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                        }`}
-                                >
-                                    {comp === 'all' ? 'Todos los competidores' : comp}
-                                </button>
-                            ))}
-                        </div>
-                    )}
                 </div>
             </header>
 
@@ -395,36 +378,59 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                             </div>
 
                             {/* Controls for Distribución table */}
-                            <div className="flex flex-wrap items-center gap-3 px-1">
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Filtrar por mes:</span>
-                                <div className="flex flex-wrap gap-1">
-                                    {[{ key: 'all', label: 'Todos' }, ...cajaMonths].map(m => (
-                                        <button
-                                            key={m.key}
-                                            onClick={() => setFilterCajaMes(m.key)}
-                                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCajaMes === m.key
-                                                ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                                }`}
+                            <div className="pwa-card p-4 flex flex-col gap-3">
+                                {/* Row 1: Competitor filter */}
+                                {categoryCompetitors.length > 1 && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Competidor:</span>
+                                        <div className="flex flex-wrap gap-1">
+                                            {['all', ...categoryCompetitors].map(comp => (
+                                                <button
+                                                    key={comp}
+                                                    onClick={() => setFilterCompetidor(comp)}
+                                                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCompetidor === comp
+                                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                                        }`}
+                                                >
+                                                    {comp === 'all' ? 'Todos' : comp}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                {/* Row 2: Month filter + Sort */}
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Mes:</span>
+                                    <div className="flex flex-wrap gap-1">
+                                        {[{ key: 'all', label: 'Todos' }, ...cajaMonths].map(m => (
+                                            <button
+                                                key={m.key}
+                                                onClick={() => setFilterCajaMes(m.key)}
+                                                className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCajaMes === m.key
+                                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                                    }`}
+                                            >
+                                                {m.label || 'Todos'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="ml-auto flex items-center gap-2">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
+                                        <select
+                                            value={sortCaja}
+                                            onChange={e => setSortCaja(e.target.value)}
+                                            className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
                                         >
-                                            {m.label || 'Todos'}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="ml-auto flex items-center gap-2">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
-                                    <select
-                                        value={sortCaja}
-                                        onChange={e => setSortCaja(e.target.value)}
-                                        className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
-                                    >
-                                        <option value="competidor_asc">Competidor (A-Z)</option>
-                                        <option value="local_asc">Local (A-Z)</option>
-                                        <option value="caja_asc">Caja (A-Z)</option>
-                                        <option value="trx_desc">Trx &darr; (Mayor)</option>
-                                        <option value="trx_asc">Trx &uarr; (Menor)</option>
-                                        <option value="pct_desc">% Local &darr;</option>
-                                    </select>
+                                            <option value="competidor_asc">Competidor (A-Z)</option>
+                                            <option value="local_asc">Local (A-Z)</option>
+                                            <option value="caja_asc">Caja (A-Z)</option>
+                                            <option value="trx_desc">Trx ↓ (Mayor)</option>
+                                            <option value="trx_asc">Trx ↑ (Menor)</option>
+                                            <option value="pct_desc">% Local ↓</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
