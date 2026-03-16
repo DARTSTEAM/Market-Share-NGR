@@ -1166,7 +1166,7 @@ export default function App() {
               >
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-              {activeCategory !== 'tickets' && globalFilterBar}
+              {activeCategory !== 'tickets' && activeCategory !== 'clientes' && globalFilterBar}
             </div>
           </div>
 

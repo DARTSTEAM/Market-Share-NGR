@@ -88,7 +88,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [selectedCategory, setSelectedCategory] = useState('Hamburguesa');
     const [filterCompetidor, setFilterCompetidor] = useState('all');
     const [filterCajaMes, setFilterCajaMes] = useState('all');
-    const [sortCaja, setSortCaja] = useState('local_asc');
+    const [sortCaja, setSortCaja] = useState('competidor_asc');
 
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
@@ -217,6 +217,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             pct: localTotals[r.local] ? (r.displayTrx / localTotals[r.local]) * 100 : 0,
         }));
         return [...withPct].sort((a, b) => {
+            if (sortCaja === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
             if (sortCaja === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
             if (sortCaja === 'trx_desc') return b.displayTrx - a.displayTrx;
             if (sortCaja === 'trx_asc') return a.displayTrx - b.displayTrx;
@@ -402,8 +403,8 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             key={m.key}
                                             onClick={() => setFilterCajaMes(m.key)}
                                             className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCajaMes === m.key
-                                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                                ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
                                                 }`}
                                         >
                                             {m.label || 'Todos'}
@@ -417,6 +418,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                         onChange={e => setSortCaja(e.target.value)}
                                         className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
                                     >
+                                        <option value="competidor_asc">Competidor (A-Z)</option>
                                         <option value="local_asc">Local (A-Z)</option>
                                         <option value="caja_asc">Caja (A-Z)</option>
                                         <option value="trx_desc">Trx &darr; (Mayor)</option>
@@ -436,21 +438,22 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             </th>
                                         </tr>
                                         <tr className="bg-slate-100 dark:bg-white/[0.04]">
-                                            {['Local', 'Competidor', 'Caja', 'Trx Totales', '% del Local'].map(h => (
+                                            {['Competidor', 'Local', 'Caja', 'Trx Totales', '% del Local'].map(h => (
                                                 <th key={h} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right first:text-left">{h}</th>
                                             ))}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                                         {distribRows.map((row, i) => {
-                                            const isFirstOfLocal = sortCaja === 'local_asc' && (i === 0 || distribRows[i - 1].local !== row.local);
+                                            const isFirstOfLocal = sortCaja === 'competidor_asc' && (i === 0 || distribRows[i - 1].competidor !== row.competidor || distribRows[i - 1].local !== row.local);
+                                            const isNewComp = sortCaja === 'competidor_asc' && (i === 0 || distribRows[i - 1].competidor !== row.competidor);
                                             return (
-                                                <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${isFirstOfLocal ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${isNewComp ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
                                                     <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                        {isFirstOfLocal ? row.local : <span className="text-slate-300 dark:text-white/20">↳</span>}
+                                                        {isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>}
                                                     </td>
-                                                    <td className="px-4 py-2.5 text-right text-slate-500 dark:text-white/40 font-bold">{row.competidor}</td>
-                                                    <td className="px-4 py-2.5 text-right font-mono text-slate-700 dark:text-white/70">{row.caja}</td>
+                                                    <td className="px-4 py-2.5 text-right font-bold text-slate-700 dark:text-white/70">{row.local}</td>
+                                                    <td className="px-4 py-2.5 text-right font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
                                                     <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900 dark:text-white">
                                                         {new Intl.NumberFormat('es-PE').format(Math.round(row.displayTrx))}
                                                     </td>
