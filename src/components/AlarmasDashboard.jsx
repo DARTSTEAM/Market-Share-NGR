@@ -44,26 +44,74 @@ const ALARM_STATUS_CONFIG = {
 
 const ITEMS_PER_PAGE = 10;
 
+const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
 const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) => {
     const [selectedStatus, setSelectedStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterMes, setFilterMes] = useState('all');
+    const [filterCompetidor, setFilterCompetidor] = useState('all');
+    const [filterLocal, setFilterLocal] = useState('all');
     const [editingTicket, setEditingTicket] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [sortBy, setSortBy] = useState('fecha_desc');
 
 
-    // Filtered records based on status and search
+    // Dynamic filter options derived from records
+    const mesOptions = useMemo(() => {
+        const meses = new Set();
+        records.forEach(r => {
+            const m = r.mes ? parseInt(r.mes) : (r.fecha ? new Date(r.fecha).getMonth() + 1 : null);
+            if (m && !isNaN(m)) meses.add(m);
+        });
+        return [
+            { value: 'all', label: 'Todos los Meses' },
+            ...Array.from(meses).sort((a, b) => a - b).map(m => ({ value: String(m), label: MONTH_NAMES[m - 1] }))
+        ];
+    }, [records]);
+
+    const competidorOptions = useMemo(() => {
+        const comps = new Set(records.filter(r => r.status_busqueda !== 'OK').map(r => r.competidor).filter(Boolean));
+        return [
+            { value: 'all', label: 'Todos los Competidores' },
+            ...Array.from(comps).sort().map(c => ({ value: c, label: c }))
+        ];
+    }, [records]);
+
+    const localOptions = useMemo(() => {
+        const locals = new Set(
+            records
+                .filter(r => r.status_busqueda !== 'OK' && (filterCompetidor === 'all' || r.competidor === filterCompetidor))
+                .map(r => r.local)
+                .filter(Boolean)
+        );
+        return [
+            { value: 'all', label: 'Todos los Locales' },
+            ...Array.from(locals).sort().map(l => ({ value: l, label: l }))
+        ];
+    }, [records, filterCompetidor]);
+
+    // Filtered records based on status, selectors and search
     const alarmRecords = useMemo(() => {
         const filtered = records.filter(r => {
             if (r.status_busqueda === 'OK') return false;
 
             const matchesStatus = selectedStatus === 'all' || r.status_busqueda === selectedStatus;
+
+            const matchesMes = filterMes === 'all' || (() => {
+                const m = r.mes ? parseInt(r.mes) : (r.fecha ? new Date(r.fecha).getMonth() + 1 : null);
+                return String(m) === filterMes;
+            })();
+
+            const matchesCompetidor = filterCompetidor === 'all' || r.competidor === filterCompetidor;
+            const matchesLocal = filterLocal === 'all' || r.local === filterLocal;
+
             const matchesSearch =
                 (r.local || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (r.competidor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (r.filename_actual || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            return matchesStatus && matchesSearch;
+            return matchesStatus && matchesMes && matchesCompetidor && matchesLocal && matchesSearch;
         });
 
         return [...filtered].sort((a, b) => {
@@ -71,9 +119,14 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
             if (sortBy === 'fecha_asc') return new Date(a.fecha) - new Date(b.fecha);
             if (sortBy === 'competidor') return (a.competidor || '').localeCompare(b.competidor || '');
             if (sortBy === 'local') return (a.local || '').localeCompare(b.local || '');
+            if (sortBy === 'status') return (a.status_busqueda || '').localeCompare(b.status_busqueda || '');
+            if (sortBy === 'caja') return (a.caja || '').localeCompare(b.caja || '');
+            if (sortBy === 'ticket_desc') return (parseInt(b.ticket_actual) || 0) - (parseInt(a.ticket_actual) || 0);
+            if (sortBy === 'ticket_asc') return (parseInt(a.ticket_actual) || 0) - (parseInt(b.ticket_actual) || 0);
+            if (sortBy === 'codigo_tienda') return (a.codigo_tienda || '').localeCompare(b.codigo_tienda || '');
             return 0;
         });
-    }, [records, selectedStatus, searchTerm, sortBy]);
+    }, [records, selectedStatus, searchTerm, filterMes, filterCompetidor, filterLocal, sortBy]);
 
     // Summary stats
     const stats = useMemo(() => {
@@ -217,29 +270,72 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
             {/* Main Content */}
             <div className="grid grid-cols-1 gap-6">
                 <section className="pwa-card overflow-hidden border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/50">
-                    <div className="p-4 border-b border-slate-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex-1 min-w-[300px] relative group">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-accent-orange transition-colors" />
-                            <input
-                                type="text"
-                                placeholder="Buscar por local, competidor o archivo..."
-                                className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pl-11 pr-4 text-sm font-bold text-slate-700 dark:text-white placeholder:text-slate-400 focus:outline-none transition-all"
-                                value={searchTerm}
-                                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                            />
+                    <div className="p-4 border-b border-slate-200 dark:border-white/10 flex flex-col gap-3">
+                        {/* Fila 1: Buscador + Ordenar */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex-1 min-w-[240px] relative group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-accent-orange transition-colors" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por local, competidor o archivo..."
+                                    className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pl-11 pr-4 text-sm font-bold text-slate-700 dark:text-white placeholder:text-slate-400 focus:outline-none transition-all"
+                                    value={searchTerm}
+                                    onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                                />
+                            </div>
+                            <div className="w-52 shrink-0">
+                                <CustomSelect
+                                    selected={sortBy}
+                                    onChange={(val) => { setSortBy(val); setCurrentPage(1); }}
+                                    options={[
+                                        { value: 'fecha_desc', label: 'Fecha ↓ (Reciente)' },
+                                        { value: 'fecha_asc', label: 'Fecha ↑ (Antiguo)' },
+                                        { value: 'competidor', label: 'Competidor (A-Z)' },
+                                        { value: 'local', label: 'Local (A-Z)' },
+                                        { value: 'status', label: 'Tipo Alarma' },
+                                        { value: 'caja', label: 'Caja' },
+                                        { value: 'ticket_desc', label: 'Ticket # ↓' },
+                                        { value: 'ticket_asc', label: 'Ticket # ↑' },
+                                        { value: 'codigo_tienda', label: 'Código Tienda' },
+                                    ]}
+                                    icon={<Filter size={14} />}
+                                />
+                            </div>
                         </div>
-                        <div className="w-full lg:w-48">
-                            <CustomSelect
-                                value={sortBy}
-                                onChange={(val) => { setSortBy(val); setCurrentPage(1); }}
-                                options={[
-                                    { value: 'fecha_desc', label: 'Fecha (Más reciente)' },
-                                    { value: 'fecha_asc', label: 'Fecha (Más antiguo)' },
-                                    { value: 'competidor', label: 'Competidor (A-Z)' },
-                                    { value: 'local', label: 'Local (A-Z)' }
-                                ]}
-                                icon={<Filter size={14} />}
-                            />
+                        {/* Fila 2: Selectores de Mes / Competidor / Local */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="w-44 shrink-0">
+                                <CustomSelect
+                                    selected={filterMes}
+                                    onChange={(val) => { setFilterMes(val); setCurrentPage(1); }}
+                                    options={mesOptions}
+                                    icon={<CalendarIcon size={14} />}
+                                />
+                            </div>
+                            <div className="w-52 shrink-0">
+                                <CustomSelect
+                                    selected={filterCompetidor}
+                                    onChange={(val) => { setFilterCompetidor(val); setFilterLocal('all'); setCurrentPage(1); }}
+                                    options={competidorOptions}
+                                    icon={<Store size={14} />}
+                                />
+                            </div>
+                            <div className="w-56 shrink-0">
+                                <CustomSelect
+                                    selected={filterLocal}
+                                    onChange={(val) => { setFilterLocal(val); setCurrentPage(1); }}
+                                    options={localOptions}
+                                    icon={<MapPin size={14} />}
+                                />
+                            </div>
+                            {(filterMes !== 'all' || filterCompetidor !== 'all' || filterLocal !== 'all' || searchTerm) && (
+                                <button
+                                    onClick={() => { setFilterMes('all'); setFilterCompetidor('all'); setFilterLocal('all'); setSearchTerm(''); setCurrentPage(1); }}
+                                    className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-accent-orange transition-colors flex items-center gap-1"
+                                >
+                                    <X size={12} /> Limpiar filtros
+                                </button>
+                            )}
                         </div>
                     </div>
 
