@@ -94,21 +94,16 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         // Filter to OK records in selected category
         const filtered = records.filter(r =>
             r.status_busqueda === 'OK' &&
+            r.mes && r.ano &&
             (competitorToCategory[r.competidor] === selectedCategory)
         );
 
         // Derive sorted months
         const monthSet = {};
         filtered.forEach(r => {
-            let ano, mes;
-            if (r.ano && r.mes) {
-                ano = parseInt(r.ano);
-                mes = parseInt(r.mes);
-            } else if (r.fecha) {
-                const d = new Date(r.fecha);
-                ano = d.getFullYear();
-                mes = d.getMonth() + 1;
-            } else return;
+            const ano = parseInt(r.ano);
+            const mes = parseInt(r.mes);
+            if (!ano || !mes || isNaN(ano) || isNaN(mes)) return;
             const key = `${ano}-${String(mes).padStart(2, '0')}`;
             if (!monthSet[key]) monthSet[key] = { key, ano, mes, label: `${MONTH_SHORT[mes - 1]}-${String(ano).slice(2)}` };
         });
@@ -127,10 +122,9 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         months.forEach(m => { pivotTotal[m.key] = { trx: 0, locals: new Set() }; });
 
         filtered.forEach(r => {
-            let ano, mes;
-            if (r.ano && r.mes) { ano = parseInt(r.ano); mes = parseInt(r.mes); }
-            else if (r.fecha) { const d = new Date(r.fecha); ano = d.getFullYear(); mes = d.getMonth() + 1; }
-            else return;
+            const ano = parseInt(r.ano);
+            const mes = parseInt(r.mes);
+            if (!ano || !mes || isNaN(ano) || isNaN(mes)) return;
             const mk = `${ano}-${String(mes).padStart(2, '0')}`;
             const comp = r.competidor;
             if (!comp || !pivot[comp]) return;

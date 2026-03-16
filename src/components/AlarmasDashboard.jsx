@@ -61,8 +61,10 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
     const mesOptions = useMemo(() => {
         const meses = new Set();
         records.forEach(r => {
-            const m = r.mes ? parseInt(r.mes) : (r.fecha ? new Date(r.fecha).getMonth() + 1 : null);
-            if (m && !isNaN(m)) meses.add(m);
+            if (r.mes) {
+                const m = parseInt(r.mes);
+                if (!isNaN(m)) meses.add(m);
+            }
         });
         return [
             { value: 'all', label: 'Todos los Meses' },
@@ -98,10 +100,9 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
 
             const matchesStatus = selectedStatus === 'all' || r.status_busqueda === selectedStatus;
 
-            const matchesMes = filterMes === 'all' || (() => {
-                const m = r.mes ? parseInt(r.mes) : (r.fecha ? new Date(r.fecha).getMonth() + 1 : null);
-                return String(m) === filterMes;
-            })();
+            const matchesMes = filterMes === 'all' || (
+                r.mes && String(parseInt(r.mes)) === filterMes
+            );
 
             const matchesCompetidor = filterCompetidor === 'all' || r.competidor === filterCompetidor;
             const matchesLocal = filterLocal === 'all' || r.local === filterLocal;

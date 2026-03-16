@@ -849,15 +849,9 @@ export default function App() {
   // 4. Reactive Trend Data (Exclusive for Market Share - based on Routine OK)
   const reactiveTrendDataRoutine = useMemo(() => {
     const monthlyData = marketShareRecords.reduce((acc, r) => {
-      let y, m;
-      if (r.mes && r.ano) {
-        y = r.ano;
-        m = r.mes.padStart(2, '0');
-      } else {
-        const date = new Date(r.fecha);
-        y = date.getFullYear();
-        m = (date.getMonth() + 1).toString().padStart(2, '0');
-      }
+      if (!r.mes || !r.ano) return acc;
+      const y = parseInt(r.ano);
+      const m = String(parseInt(r.mes)).padStart(2, '0');
       const key = `${y}-${m}`;
       acc[key] = (acc[key] || 0) + (parseFloat(r.transacciones) || 0);
       return acc;
@@ -865,9 +859,9 @@ export default function App() {
 
     const sortedKeys = Object.keys(monthlyData).sort();
     return sortedKeys.map(key => ({
-      name: key, // e.g., "2025-12"
+      name: key,
       tickets: monthlyData[key]
-    })).slice(-12); // Show last 12 months
+    })).slice(-12);
   }, [marketShareRecords]);
 
   // 4b. Reactive Trend Data (For Competitor Analysis - based on facturas_v2)
