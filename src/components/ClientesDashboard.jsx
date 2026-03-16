@@ -90,6 +90,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [filterCajaMes, setFilterCajaMes] = useState('all');
     const [sortCaja, setSortCaja] = useState('competidor_asc');
     const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
+    const [sortEvol, setSortEvol] = useState('competidor_asc');
 
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
@@ -481,9 +482,9 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                             </div>
 
                             {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
-                            {/* Toggle */}
-                            <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Evolución — mostrar:</span>
+                            {/* Controls row */}
+                            <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Evolución — mostrar:</span>
                                 {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }].map(opt => (
                                     <button
                                         key={opt.value}
@@ -496,6 +497,18 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                         {opt.label}
                                     </button>
                                 ))}
+                                <div className="ml-auto flex items-center gap-2">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
+                                    <select
+                                        value={sortEvol}
+                                        onChange={e => setSortEvol(e.target.value)}
+                                        className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
+                                    >
+                                        <option value="competidor_asc">Competidor (A-Z)</option>
+                                        <option value="local_asc">Local (A-Z)</option>
+                                        <option value="caja_asc">Caja (A-Z)</option>
+                                    </select>
+                                </div>
                             </div>
                             <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
                                 <table className="w-full text-left whitespace-nowrap text-[11px]">
@@ -506,8 +519,8 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             </th>
                                         </tr>
                                         <tr className="bg-slate-100 dark:bg-white/[0.04]">
+                                            <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Competidor</th>
                                             <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Local</th>
-                                            <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 110 }}>Competidor</th>
                                             <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 80 }}>Caja</th>
                                             {cajaMonths.map(m => (
                                                 <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right" style={{ minWidth: 90 }}>
@@ -517,15 +530,21 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                                        {cajaRows.map((row, i) => {
-                                            const isFirstOfLocal = i === 0 || cajaRows[i - 1].local !== row.local;
+                                        {[...cajaRows].sort((a, b) => {
+                                            if (sortEvol === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
+                                            if (sortEvol === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
+                                            if (sortEvol === 'caja_asc') return String(a.caja).localeCompare(String(b.caja));
+                                            return 0;
+                                        }).map((row, i, arr) => {
+                                            const isNewComp = sortEvol === 'competidor_asc' && (i === 0 || arr[i - 1].competidor !== row.competidor);
+                                            const isNewLocal = sortEvol === 'competidor_asc' && (i === 0 || arr[i - 1].competidor !== row.competidor || arr[i - 1].local !== row.local);
                                             return (
-                                                <tr key={`ev-${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${isFirstOfLocal ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                <tr key={`ev-${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${isNewComp ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
                                                     <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                        {isFirstOfLocal ? row.local : <span className="text-slate-300 dark:text-white/20">↳</span>}
+                                                        {isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isNewLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>}
                                                     </td>
-                                                    <td className="px-4 py-2.5 text-slate-500 dark:text-white/40 font-bold">{row.competidor}</td>
-                                                    <td className="px-4 py-2.5 font-mono text-slate-700 dark:text-white/70">{row.caja}</td>
+                                                    <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
+                                                    <td className="px-4 py-2.5 font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
                                                     {cajaMonths.map(m => {
                                                         const total = row.months[m.key];
                                                         const promSum = row.promedios?.[m.key];
