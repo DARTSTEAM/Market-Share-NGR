@@ -457,12 +457,16 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                                         {distribRows.map((row, i) => {
-                                            const isFirstOfLocal = sortCaja === 'competidor_asc' && (i === 0 || distribRows[i - 1].competidor !== row.competidor || distribRows[i - 1].local !== row.local);
-                                            const isNewComp = sortCaja === 'competidor_asc' && (i === 0 || distribRows[i - 1].competidor !== row.competidor);
+                                            const compChanged = i === 0 || distribRows[i - 1].competidor !== row.competidor;
+                                            const isFirstOfLocal = sortCaja === 'competidor_asc' && (compChanged || distribRows[i - 1].local !== row.local);
+                                            const isNewComp = sortCaja === 'competidor_asc' && compChanged;
                                             return (
-                                                <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${isNewComp ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
                                                     <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                        {isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>}
+                                                        {sortCaja === 'competidor_asc'
+                                                            ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
+                                                            : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
+                                                        }
                                                     </td>
                                                     <td className="px-4 py-2.5 text-right font-bold text-slate-700 dark:text-white/70">{row.local}</td>
                                                     <td className="px-4 py-2.5 text-right font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
