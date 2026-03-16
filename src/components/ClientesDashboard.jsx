@@ -580,7 +580,6 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             </select>
                                         </div>
                                     </div>
-                                </div>
 
                                 {/* ── 5. Distribución por Caja ──────────────────────────────────── */}
                                 <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
@@ -625,6 +624,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             })}
                                         </tbody>
                                     </table>
+                                </div>
                                 </div>
 
                                 {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
