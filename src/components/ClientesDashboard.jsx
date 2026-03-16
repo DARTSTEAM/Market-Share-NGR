@@ -182,11 +182,14 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             if (!monthSet[mk]) monthSet[mk] = { key: mk, label: `${MONTH_SHORT[mes - 1]}-${String(ano).slice(2)}` };
 
             if (!pivotMap[rowKey]) {
-                pivotMap[rowKey] = { local: r.local, caja: r.caja || '-', competidor: r.competidor, months: {}, counts: {}, total: 0 };
+                pivotMap[rowKey] = { local: r.local, caja: r.caja || '-', competidor: r.competidor, months: {}, promedios: {}, promCounts: {}, counts: {}, total: 0 };
             }
             const trx = parseFloat(r.transacciones) || 0;
+            const prom = parseFloat(r.promedio) || 0;
             pivotMap[rowKey].months[mk] = (pivotMap[rowKey].months[mk] || 0) + trx;
             pivotMap[rowKey].counts[mk] = (pivotMap[rowKey].counts[mk] || 0) + 1;
+            pivotMap[rowKey].promedios[mk] = (pivotMap[rowKey].promedios[mk] || 0) + prom;
+            pivotMap[rowKey].promCounts[mk] = (pivotMap[rowKey].promCounts[mk] || 0) + 1;
             pivotMap[rowKey].total += trx;
         });
 
@@ -481,13 +484,13 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                             {/* Toggle */}
                             <div className="flex items-center gap-2">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Evolución — mostrar:</span>
-                                {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Promedio Trx' }].map(opt => (
+                                {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }].map(opt => (
                                     <button
                                         key={opt.value}
                                         onClick={() => setEvolucionMetric(opt.value)}
                                         className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${evolucionMetric === opt.value
-                                                ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
                                             }`}
                                     >
                                         {opt.label}
@@ -499,7 +502,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                     <thead>
                                         <tr>
                                             <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
-                                                {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio de Trx por Caja y Local'}
+                                                {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio Diario por Caja y Local'}
                                             </th>
                                         </tr>
                                         <tr className="bg-slate-100 dark:bg-white/[0.04]">
@@ -525,17 +528,16 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                     <td className="px-4 py-2.5 font-mono text-slate-700 dark:text-white/70">{row.caja}</td>
                                                     {cajaMonths.map(m => {
                                                         const total = row.months[m.key];
-                                                        const count = row.counts?.[m.key] || 0;
+                                                        const promSum = row.promedios?.[m.key];
+                                                        const promCount = row.promCounts?.[m.key] || 1;
                                                         const v = evolucionMetric === 'trx_total'
                                                             ? total
-                                                            : (count > 0 && total !== undefined ? total / count : undefined);
+                                                            : (promSum !== undefined ? promSum / promCount : undefined);
                                                         return (
                                                             <td key={m.key} className="px-4 py-2.5 text-right font-mono">
                                                                 {v !== undefined
                                                                     ? <span className="font-black text-slate-900 dark:text-white">
-                                                                        {evolucionMetric === 'trx_avg'
-                                                                            ? v.toFixed(1)
-                                                                            : new Intl.NumberFormat('es-PE').format(Math.round(v))}
+                                                                        {v.toFixed(1)}
                                                                     </span>
                                                                     : <span className="text-slate-300 dark:text-white/15">-</span>
                                                                 }
