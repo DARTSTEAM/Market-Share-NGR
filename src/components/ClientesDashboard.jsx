@@ -121,25 +121,55 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         try {
             const isDark = document.documentElement.classList.contains('dark');
             const bg = isDark ? '#0f172a' : '#f8fafc';
+            const MARGIN = 8;   // mm margin on each side
+            const GAP = 4;      // mm between sections
             const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
             const pageW = pdf.internal.pageSize.getWidth();
             const pageH = pdf.internal.pageSize.getHeight();
-            let firstPage = true;
+            const contentW = pageW - MARGIN * 2;
+
+            let cursorY = MARGIN;      // current Y position on the page
+            let isFirstSection = true;
 
             for (const section of EXPORT_SECTIONS) {
                 if (!exportSelections[section.key] || !section.ref.current) continue;
+
                 const canvas = await html2canvas(section.ref.current, {
                     scale: 2, useCORS: true, backgroundColor: bg, logging: false,
                 });
                 const imgData = canvas.toDataURL('image/png');
-                const imgW = pageW;
-                const imgH = (canvas.height * imgW) / canvas.width;
-                let y = 0;
-                while (y < imgH) {
-                    if (!firstPage) pdf.addPage();
-                    firstPage = false;
-                    pdf.addImage(imgData, 'PNG', 0, -y, imgW, imgH);
-                    y += pageH;
+                // Scale image to fit content width
+                const imgH = (canvas.height * contentW) / canvas.width;
+
+                if (!isFirstSection) {
+                    // Check if section fits on remaining page space (with gap)
+                    const needed = GAP + Math.min(imgH, pageH - MARGIN * 2);
+                    if (cursorY + needed > pageH - MARGIN) {
+                        pdf.addPage();
+                        cursorY = MARGIN;
+                    } else {
+                        cursorY += GAP;
+                    }
+                }
+                isFirstSection = false;
+
+                // Draw the image, potentially spanning multiple pages
+                let remainingH = imgH;
+                let srcOffsetY = 0;
+                while (remainingH > 0) {
+                    const availableH = pageH - MARGIN - cursorY;
+                    const sliceH = Math.min(remainingH, availableH > 0 ? availableH : pageH - MARGIN * 2);
+                    // jsPDF clips drawing that goes outside the page, so we place the
+                    // full image shifted up by srcOffsetY and let the page clip it.
+                    pdf.addImage(imgData, 'PNG', MARGIN, cursorY - srcOffsetY, contentW, imgH);
+                    srcOffsetY += sliceH;
+                    remainingH -= sliceH;
+                    if (remainingH > 0) {
+                        pdf.addPage();
+                        cursorY = MARGIN;
+                    } else {
+                        cursorY += sliceH;
+                    }
                 }
             }
 
