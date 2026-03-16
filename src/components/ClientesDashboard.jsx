@@ -86,6 +86,7 @@ const SectionTable = ({ title, headerColor = '#1e3a5f', rows, months, renderCell
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [selectedCategory, setSelectedCategory] = useState('Hamburguesa');
+    const [filterCompetidor, setFilterCompetidor] = useState('all');
 
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
@@ -141,6 +142,64 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
 
         return { months, competitors, pivot };
     }, [records, selectedCategory, competitorToCategory]);
+
+    // ── Competitors in this category (for sub-filter) ─────────────────────────
+    const categoryCompetitors = useMemo(() => {
+        const set = new Set(
+            records
+                .filter(r => r.status_busqueda === 'OK' && r.mes && r.ano && competitorToCategory[r.competidor] === selectedCategory)
+                .map(r => r.competidor)
+                .filter(Boolean)
+        );
+        return Array.from(set).sort();
+    }, [records, selectedCategory, competitorToCategory]);
+
+    // Reset competitor filter when category changes
+    React.useEffect(() => { setFilterCompetidor('all'); }, [selectedCategory]);
+
+    // ── Caja pivot: (local, caja) × month ─────────────────────────────────────
+    const { cajaRows, cajaMonths } = useMemo(() => {
+        const filtered = records.filter(r =>
+            r.status_busqueda === 'OK' &&
+            r.mes && r.ano && r.local && r.caja &&
+            competitorToCategory[r.competidor] === selectedCategory &&
+            (filterCompetidor === 'all' || r.competidor === filterCompetidor)
+        );
+
+        const pivotMap = {};
+        const monthSet = {};
+
+        filtered.forEach(r => {
+            const ano = parseInt(r.ano);
+            const mes = parseInt(r.mes);
+            if (!ano || !mes || isNaN(ano) || isNaN(mes)) return;
+            const mk = `${ano}-${String(mes).padStart(2, '0')}`;
+            const rowKey = `${r.local}||${r.caja}`;
+
+            if (!monthSet[mk]) monthSet[mk] = { key: mk, label: `${MONTH_SHORT[mes - 1]}-${String(ano).slice(2)}` };
+
+            if (!pivotMap[rowKey]) {
+                pivotMap[rowKey] = { local: r.local, caja: r.caja || '-', competidor: r.competidor, months: {}, total: 0 };
+            }
+            const trx = parseFloat(r.transacciones) || 0;
+            pivotMap[rowKey].months[mk] = (pivotMap[rowKey].months[mk] || 0) + trx;
+            pivotMap[rowKey].total += trx;
+        });
+
+        const cajaMonths = Object.values(monthSet).sort((a, b) => a.key.localeCompare(b.key));
+        const cajaRows = Object.values(pivotMap).sort((a, b) =>
+            a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja))
+        );
+
+        // Compute local totals for % calculation
+        const localTotals = {};
+        cajaRows.forEach(r => {
+            localTotals[r.local] = (localTotals[r.local] || 0) + r.total;
+        });
+        cajaRows.forEach(r => { r.localTotal = localTotals[r.local] || 1; });
+
+        return { cajaRows, cajaMonths };
+    }, [records, selectedCategory, filterCompetidor, competitorToCategory]);
 
     // Build rows for each table (competitors + total)
     const rows = useMemo(() => {
@@ -206,20 +265,39 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 </div>
 
                 {/* Category Selector */}
-                <div className="flex gap-2 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
-                    {categories.map(cat => (
-                        <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
-                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${selectedCategory === cat
-                                ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
-                                : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'
-                                }`}
-                        >
-                            <span className="text-base leading-none">{CATEGORY_EMOJI[cat]}</span>
-                            {cat}
-                        </button>
-                    ))}
+                <div className="flex flex-col gap-3">
+                    <div className="flex gap-2 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
+                        {categories.map(cat => (
+                            <button
+                                key={cat}
+                                onClick={() => setSelectedCategory(cat)}
+                                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${selectedCategory === cat
+                                    ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
+                                    : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'
+                                    }`}
+                            >
+                                <span className="text-base leading-none">{CATEGORY_EMOJI[cat]}</span>
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+                    {/* Competitor sub-filter */}
+                    {categoryCompetitors.length > 1 && (
+                        <div className="flex gap-2 flex-wrap">
+                            {['all', ...categoryCompetitors].map(comp => (
+                                <button
+                                    key={comp}
+                                    onClick={() => setFilterCompetidor(comp)}
+                                    className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCompetidor === comp
+                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                        }`}
+                                >
+                                    {comp === 'all' ? 'Todos los competidores' : comp}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </header>
 
@@ -281,6 +359,105 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                         }}
                         footnote="Tiendas únicas (locales) con al menos una transacción registrada en el período."
                     />
+
+                    {/* ── Divider ─────────────────────────────────────────────────────── */}
+                    {cajaRows.length > 0 && (
+                        <>
+                            <div className="flex items-center gap-4 pt-2">
+                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-orange">Detalle por Caja</span>
+                                <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+                            </div>
+
+                            {/* ── 5. Distribución por Caja ──────────────────────────────────── */}
+                            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
+                                <table className="w-full text-left whitespace-nowrap text-[11px]">
+                                    <thead>
+                                        <tr>
+                                            <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={5}>
+                                                Distribución de Ventas por Caja
+                                            </th>
+                                        </tr>
+                                        <tr className="bg-slate-100 dark:bg-white/[0.04]">
+                                            {['Local', 'Competidor', 'Caja', 'Trx Totales', '% del Local'].map(h => (
+                                                <th key={h} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right first:text-left">{h}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                                        {cajaRows.map((row, i) => {
+                                            const pct = row.localTotal ? (row.total / row.localTotal) * 100 : 0;
+                                            const isFirstOfLocal = i === 0 || cajaRows[i - 1].local !== row.local;
+                                            return (
+                                                <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${isFirstOfLocal ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                    <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
+                                                        {isFirstOfLocal ? row.local : <span className="text-slate-300 dark:text-white/20">↳</span>}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-right text-slate-500 dark:text-white/40 font-bold">{row.competidor}</td>
+                                                    <td className="px-4 py-2.5 text-right font-mono text-slate-700 dark:text-white/70">{row.caja}</td>
+                                                    <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900 dark:text-white">
+                                                        {new Intl.NumberFormat('es-PE').format(Math.round(row.total))}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-right">
+                                                        <span className={`font-black ${pct > 50 ? 'text-accent-orange' : 'text-slate-600 dark:text-white/60'}`}>
+                                                            {pct.toFixed(1)}%
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
+                            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
+                                <table className="w-full text-left whitespace-nowrap text-[11px]">
+                                    <thead>
+                                        <tr>
+                                            <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
+                                                Evolución de Trx por Caja y Local
+                                            </th>
+                                        </tr>
+                                        <tr className="bg-slate-100 dark:bg-white/[0.04]">
+                                            <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Local</th>
+                                            <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 110 }}>Competidor</th>
+                                            <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 80 }}>Caja</th>
+                                            {cajaMonths.map(m => (
+                                                <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right" style={{ minWidth: 90 }}>
+                                                    {m.label}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                                        {cajaRows.map((row, i) => {
+                                            const isFirstOfLocal = i === 0 || cajaRows[i - 1].local !== row.local;
+                                            return (
+                                                <tr key={`ev-${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${isFirstOfLocal ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                    <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
+                                                        {isFirstOfLocal ? row.local : <span className="text-slate-300 dark:text-white/20">↳</span>}
+                                                    </td>
+                                                    <td className="px-4 py-2.5 text-slate-500 dark:text-white/40 font-bold">{row.competidor}</td>
+                                                    <td className="px-4 py-2.5 font-mono text-slate-700 dark:text-white/70">{row.caja}</td>
+                                                    {cajaMonths.map(m => {
+                                                        const v = row.months[m.key];
+                                                        return (
+                                                            <td key={m.key} className="px-4 py-2.5 text-right font-mono">
+                                                                {v !== undefined
+                                                                    ? <span className="font-black text-slate-900 dark:text-white">{new Intl.NumberFormat('es-PE').format(Math.round(v))}</span>
+                                                                    : <span className="text-slate-300 dark:text-white/15">-</span>
+                                                                }
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
         </motion.div>
