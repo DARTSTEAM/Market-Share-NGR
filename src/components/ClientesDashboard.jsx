@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Users, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Users, FileDown, Loader2 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const CATEGORY_EMOJI = {
     'Pollo Frito': '🍗',
@@ -91,6 +93,38 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [sortCaja, setSortCaja] = useState('competidor_asc');
     const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
+    const [exporting, setExporting] = useState(false);
+    const contentRef = useRef(null);
+
+    const exportPDF = useCallback(async () => {
+        if (!contentRef.current) return;
+        setExporting(true);
+        try {
+            const el = contentRef.current;
+            const canvas = await html2canvas(el, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: document.documentElement.classList.contains('dark') ? '#0f172a' : '#f8fafc',
+                logging: false,
+            });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            const pageW = pdf.internal.pageSize.getWidth();
+            const pageH = pdf.internal.pageSize.getHeight();
+            const imgW = pageW;
+            const imgH = (canvas.height * imgW) / canvas.width;
+            let y = 0;
+            while (y < imgH) {
+                if (y > 0) pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, -y, imgW, imgH);
+                y += pageH;
+            }
+            const catLabel = selectedCategory.replace(' ', '_');
+            pdf.save(`Clientes_${catLabel}_${new Date().toISOString().slice(0, 10)}.pdf`);
+        } finally {
+            setExporting(false);
+        }
+    }, [selectedCategory]);
 
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
@@ -296,8 +330,20 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                     </p>
                 </div>
 
-                {/* Category Selector */}
-                <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                    {/* Export PDF button */}
+                    <button
+                        onClick={exportPDF}
+                        disabled={exporting}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:border-accent-orange hover:text-accent-orange transition-all duration-200 disabled:opacity-50"
+                    >
+                        {exporting
+                            ? <><Loader2 className="w-4 h-4 animate-spin" /> Exportando...</>
+                            : <><FileDown className="w-4 h-4" /> Exportar PDF</>
+                        }
+                    </button>
+
+                    {/* Category Selector */}
                     <div className="flex gap-2 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
                         {categories.map(cat => (
                             <button
@@ -316,271 +362,273 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 </div>
             </header>
 
-            {!hasData ? (
-                <div className="pwa-card p-16 flex flex-col items-center justify-center gap-4 text-center">
-                    <span className="text-5xl">{CATEGORY_EMOJI[selectedCategory]}</span>
-                    <p className="text-slate-400 dark:text-white/30 font-black uppercase tracking-widest text-sm">
-                        Sin datos de rutina para {selectedCategory}
-                    </p>
-                    <p className="text-slate-300 dark:text-white/20 text-xs font-bold">
-                        Verificá que los competidores estén mapeados a esta categoría
-                    </p>
-                </div>
-            ) : (
-                <div className="space-y-6">
+            <div ref={contentRef} className="space-y-6">
+                {!hasData ? (
+                    <div className="pwa-card p-16 flex flex-col items-center justify-center gap-4 text-center">
+                        <span className="text-5xl">{CATEGORY_EMOJI[selectedCategory]}</span>
+                        <p className="text-slate-400 dark:text-white/30 font-black uppercase tracking-widest text-sm">
+                            Sin datos de rutina para {selectedCategory}
+                        </p>
+                        <p className="text-slate-300 dark:text-white/20 text-xs font-bold">
+                            Verificá que los competidores estén mapeados a esta categoría
+                        </p>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
 
-                    {/* ── 1. Trx Totales ──────────────────────────────────────────────── */}
-                    <SectionTable
-                        title="Trx Totales"
-                        headerColor="#1e3a5f"
-                        rows={rows}
-                        months={months}
-                        renderCell={(row, m) => formatTrx(getTrx(row.key, m.key))}
-                    />
+                        {/* ── 1. Trx Totales ──────────────────────────────────────────────── */}
+                        <SectionTable
+                            title="Trx Totales"
+                            headerColor="#1e3a5f"
+                            rows={rows}
+                            months={months}
+                            renderCell={(row, m) => formatTrx(getTrx(row.key, m.key))}
+                        />
 
-                    {/* ── 2. Crec % ───────────────────────────────────────────────────── */}
-                    <SectionTable
-                        title="Crec %"
-                        headerColor="#1e3a5f"
-                        rows={rows}
-                        months={months}
-                        renderCell={(row, m) => {
-                            const idx = months.findIndex(x => x.key === m.key);
-                            return renderCrec(row.key, m, idx);
-                        }}
-                        footnote="Crec% = variación respecto al mes anterior. #N/A = sin período previo."
-                    />
+                        {/* ── 2. Crec % ───────────────────────────────────────────────────── */}
+                        <SectionTable
+                            title="Crec %"
+                            headerColor="#1e3a5f"
+                            rows={rows}
+                            months={months}
+                            renderCell={(row, m) => {
+                                const idx = months.findIndex(x => x.key === m.key);
+                                return renderCrec(row.key, m, idx);
+                            }}
+                            footnote="Crec% = variación respecto al mes anterior. #N/A = sin período previo."
+                        />
 
-                    {/* ── 3. Share % ──────────────────────────────────────────────────── */}
-                    <SectionTable
-                        title="Share %"
-                        headerColor="#1e3a5f"
-                        rows={rows}
-                        months={months}
-                        renderCell={(row, m) => renderShare(row.key, m.key)}
-                    />
+                        {/* ── 3. Share % ──────────────────────────────────────────────────── */}
+                        <SectionTable
+                            title="Share %"
+                            headerColor="#1e3a5f"
+                            rows={rows}
+                            months={months}
+                            renderCell={(row, m) => renderShare(row.key, m.key)}
+                        />
 
-                    {/* ── 4. Número de Tiendas ────────────────────────────────────────── */}
-                    <SectionTable
-                        title="Número de Tiendas"
-                        headerColor="#1e3a5f"
-                        rows={rows}
-                        months={months}
-                        renderCell={(row, m) => {
-                            const v = getTiendas(row.key, m.key);
-                            return v === null
-                                ? <span className="text-slate-300 dark:text-white/15">-</span>
-                                : v;
-                        }}
-                        footnote="Tiendas únicas (locales) con al menos una transacción registrada en el período."
-                    />
+                        {/* ── 4. Número de Tiendas ────────────────────────────────────────── */}
+                        <SectionTable
+                            title="Número de Tiendas"
+                            headerColor="#1e3a5f"
+                            rows={rows}
+                            months={months}
+                            renderCell={(row, m) => {
+                                const v = getTiendas(row.key, m.key);
+                                return v === null
+                                    ? <span className="text-slate-300 dark:text-white/15">-</span>
+                                    : v;
+                            }}
+                            footnote="Tiendas únicas (locales) con al menos una transacción registrada en el período."
+                        />
 
-                    {/* ── Divider ─────────────────────────────────────────────────────── */}
-                    {cajaRows.length > 0 && (
-                        <>
-                            <div className="flex items-center gap-4 pt-2">
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-orange">Detalle por Caja</span>
-                                <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
-                            </div>
+                        {/* ── Divider ─────────────────────────────────────────────────────── */}
+                        {cajaRows.length > 0 && (
+                            <>
+                                <div className="flex items-center gap-4 pt-2">
+                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-orange">Detalle por Caja</span>
+                                    <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+                                </div>
 
-                            {/* Controls for Distribución table */}
-                            <div className="pwa-card p-4 flex flex-col gap-3">
-                                {/* Row 1: Competitor filter */}
-                                {categoryCompetitors.length > 1 && (
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Competidor:</span>
+                                {/* Controls for Distribución table */}
+                                <div className="pwa-card p-4 flex flex-col gap-3">
+                                    {/* Row 1: Competitor filter */}
+                                    {categoryCompetitors.length > 1 && (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Competidor:</span>
+                                            <div className="flex flex-wrap gap-1">
+                                                {['all', ...categoryCompetitors].map(comp => (
+                                                    <button
+                                                        key={comp}
+                                                        onClick={() => setFilterCompetidor(comp)}
+                                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCompetidor === comp
+                                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                                            }`}
+                                                    >
+                                                        {comp === 'all' ? 'Todos' : comp}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* Row 2: Month filter + Sort */}
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Mes:</span>
                                         <div className="flex flex-wrap gap-1">
-                                            {['all', ...categoryCompetitors].map(comp => (
+                                            {[{ key: 'all', label: 'Todos' }, ...cajaMonths].map(m => (
                                                 <button
-                                                    key={comp}
-                                                    onClick={() => setFilterCompetidor(comp)}
-                                                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCompetidor === comp
+                                                    key={m.key}
+                                                    onClick={() => setFilterCajaMes(m.key)}
+                                                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCajaMes === m.key
                                                         ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
                                                         : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
                                                         }`}
                                                 >
-                                                    {comp === 'all' ? 'Todos' : comp}
+                                                    {m.label || 'Todos'}
                                                 </button>
                                             ))}
                                         </div>
-                                    </div>
-                                )}
-                                {/* Row 2: Month filter + Sort */}
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Mes:</span>
-                                    <div className="flex flex-wrap gap-1">
-                                        {[{ key: 'all', label: 'Todos' }, ...cajaMonths].map(m => (
-                                            <button
-                                                key={m.key}
-                                                onClick={() => setFilterCajaMes(m.key)}
-                                                className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCajaMes === m.key
-                                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                                    }`}
+                                        <div className="ml-auto flex items-center gap-2">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
+                                            <select
+                                                value={sortCaja}
+                                                onChange={e => setSortCaja(e.target.value)}
+                                                className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
                                             >
-                                                {m.label || 'Todos'}
-                                            </button>
-                                        ))}
+                                                <option value="competidor_asc">Competidor (A-Z)</option>
+                                                <option value="local_asc">Local (A-Z)</option>
+                                                <option value="caja_asc">Caja (A-Z)</option>
+                                                <option value="trx_desc">Trx ↓ (Mayor)</option>
+                                                <option value="trx_asc">Trx ↑ (Menor)</option>
+                                                <option value="pct_desc">% Local ↓</option>
+                                            </select>
+                                        </div>
                                     </div>
+                                </div>
+
+                                {/* ── 5. Distribución por Caja ──────────────────────────────────── */}
+                                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
+                                    <table className="w-full text-left whitespace-nowrap text-[11px]">
+                                        <thead>
+                                            <tr>
+                                                <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={5}>
+                                                    Distribución de Ventas por Caja {filterCajaMes !== 'all' ? `— ${cajaMonths.find(m => m.key === filterCajaMes)?.label}` : ''}
+                                                </th>
+                                            </tr>
+                                            <tr className="bg-slate-100 dark:bg-white/[0.04]">
+                                                {['Competidor', 'Local', 'Caja', 'Trx Totales', '% del Local'].map(h => (
+                                                    <th key={h} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right first:text-left">{h}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                                            {distribRows.map((row, i) => {
+                                                const compChanged = i === 0 || distribRows[i - 1].competidor !== row.competidor;
+                                                const isFirstOfLocal = sortCaja === 'competidor_asc' && (compChanged || distribRows[i - 1].local !== row.local);
+                                                const isNewComp = sortCaja === 'competidor_asc' && compChanged;
+                                                return (
+                                                    <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                        <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
+                                                            {sortCaja === 'competidor_asc'
+                                                                ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
+                                                                : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
+                                                            }
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-right font-bold text-slate-700 dark:text-white/70">{row.local}</td>
+                                                        <td className="px-4 py-2.5 text-right font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
+                                                        <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900 dark:text-white">
+                                                            {new Intl.NumberFormat('es-PE').format(Math.round(row.displayTrx))}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-right">
+                                                            <span className={`font-black ${row.pct > 50 ? 'text-accent-orange' : 'text-slate-600 dark:text-white/60'}`}>
+                                                                {row.pct.toFixed(1)}%
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
+                                {/* Controls row */}
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Evolución — mostrar:</span>
+                                    {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }].map(opt => (
+                                        <button
+                                            key={opt.value}
+                                            onClick={() => setEvolucionMetric(opt.value)}
+                                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${evolucionMetric === opt.value
+                                                ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                                }`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
                                     <div className="ml-auto flex items-center gap-2">
                                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
                                         <select
-                                            value={sortCaja}
-                                            onChange={e => setSortCaja(e.target.value)}
+                                            value={sortEvol}
+                                            onChange={e => setSortEvol(e.target.value)}
                                             className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
                                         >
                                             <option value="competidor_asc">Competidor (A-Z)</option>
                                             <option value="local_asc">Local (A-Z)</option>
                                             <option value="caja_asc">Caja (A-Z)</option>
-                                            <option value="trx_desc">Trx ↓ (Mayor)</option>
-                                            <option value="trx_asc">Trx ↑ (Menor)</option>
-                                            <option value="pct_desc">% Local ↓</option>
                                         </select>
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* ── 5. Distribución por Caja ──────────────────────────────────── */}
-                            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
-                                <table className="w-full text-left whitespace-nowrap text-[11px]">
-                                    <thead>
-                                        <tr>
-                                            <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={5}>
-                                                Distribución de Ventas por Caja {filterCajaMes !== 'all' ? `— ${cajaMonths.find(m => m.key === filterCajaMes)?.label}` : ''}
-                                            </th>
-                                        </tr>
-                                        <tr className="bg-slate-100 dark:bg-white/[0.04]">
-                                            {['Competidor', 'Local', 'Caja', 'Trx Totales', '% del Local'].map(h => (
-                                                <th key={h} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right first:text-left">{h}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                                        {distribRows.map((row, i) => {
-                                            const compChanged = i === 0 || distribRows[i - 1].competidor !== row.competidor;
-                                            const isFirstOfLocal = sortCaja === 'competidor_asc' && (compChanged || distribRows[i - 1].local !== row.local);
-                                            const isNewComp = sortCaja === 'competidor_asc' && compChanged;
-                                            return (
-                                                <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
-                                                    <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                        {sortCaja === 'competidor_asc'
-                                                            ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
-                                                            : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
-                                                        }
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                    <td className="px-4 py-2.5 text-right font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
-                                                    <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900 dark:text-white">
-                                                        {new Intl.NumberFormat('es-PE').format(Math.round(row.displayTrx))}
-                                                    </td>
-                                                    <td className="px-4 py-2.5 text-right">
-                                                        <span className={`font-black ${row.pct > 50 ? 'text-accent-orange' : 'text-slate-600 dark:text-white/60'}`}>
-                                                            {row.pct.toFixed(1)}%
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
-                            {/* Controls row */}
-                            <div className="flex flex-wrap items-center gap-3">
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Evolución — mostrar:</span>
-                                {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }].map(opt => (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => setEvolucionMetric(opt.value)}
-                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${evolucionMetric === opt.value
-                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                            }`}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
-                                <div className="ml-auto flex items-center gap-2">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
-                                    <select
-                                        value={sortEvol}
-                                        onChange={e => setSortEvol(e.target.value)}
-                                        className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
-                                    >
-                                        <option value="competidor_asc">Competidor (A-Z)</option>
-                                        <option value="local_asc">Local (A-Z)</option>
-                                        <option value="caja_asc">Caja (A-Z)</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
-                                <table className="w-full text-left whitespace-nowrap text-[11px]">
-                                    <thead>
-                                        <tr>
-                                            <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
-                                                {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio Diario por Caja y Local'}
-                                            </th>
-                                        </tr>
-                                        <tr className="bg-slate-100 dark:bg-white/[0.04]">
-                                            <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Competidor</th>
-                                            <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Local</th>
-                                            <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 80 }}>Caja</th>
-                                            {cajaMonths.map(m => (
-                                                <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right" style={{ minWidth: 90 }}>
-                                                    {m.label}
+                                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
+                                    <table className="w-full text-left whitespace-nowrap text-[11px]">
+                                        <thead>
+                                            <tr>
+                                                <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
+                                                    {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio Diario por Caja y Local'}
                                                 </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                                        {[...cajaRows].sort((a, b) => {
-                                            if (sortEvol === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
-                                            if (sortEvol === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
-                                            if (sortEvol === 'caja_asc') return String(a.caja).localeCompare(String(b.caja));
-                                            return 0;
-                                        }).map((row, i, arr) => {
-                                            const compChanged = i === 0 || arr[i - 1].competidor !== row.competidor;
-                                            const isNewComp = sortEvol === 'competidor_asc' && compChanged;
-                                            const isNewLocal = sortEvol === 'competidor_asc' && (compChanged || arr[i - 1].local !== row.local);
-                                            return (
-                                                <tr key={`ev-${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
-                                                    <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                        {sortEvol === 'competidor_asc'
-                                                            ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isNewLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
-                                                            : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
-                                                        }
-                                                    </td>
-                                                    <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                    <td className="px-4 py-2.5 font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
-                                                    {cajaMonths.map(m => {
-                                                        const total = row.months[m.key];
-                                                        const promSum = row.promedios?.[m.key];
-                                                        const promCount = row.promCounts?.[m.key] || 1;
-                                                        const v = evolucionMetric === 'trx_total'
-                                                            ? total
-                                                            : (promSum !== undefined ? promSum / promCount : undefined);
-                                                        return (
-                                                            <td key={m.key} className="px-4 py-2.5 text-right font-mono">
-                                                                {v !== undefined
-                                                                    ? <span className="font-black text-slate-900 dark:text-white">
-                                                                        {v.toFixed(1)}
-                                                                    </span>
-                                                                    : <span className="text-slate-300 dark:text-white/15">-</span>
-                                                                }
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </>
-                    )}
-                </div>
-            )}
+                                            </tr>
+                                            <tr className="bg-slate-100 dark:bg-white/[0.04]">
+                                                <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Competidor</th>
+                                                <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Local</th>
+                                                <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 80 }}>Caja</th>
+                                                {cajaMonths.map(m => (
+                                                    <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right" style={{ minWidth: 90 }}>
+                                                        {m.label}
+                                                    </th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                                            {[...cajaRows].sort((a, b) => {
+                                                if (sortEvol === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
+                                                if (sortEvol === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
+                                                if (sortEvol === 'caja_asc') return String(a.caja).localeCompare(String(b.caja));
+                                                return 0;
+                                            }).map((row, i, arr) => {
+                                                const compChanged = i === 0 || arr[i - 1].competidor !== row.competidor;
+                                                const isNewComp = sortEvol === 'competidor_asc' && compChanged;
+                                                const isNewLocal = sortEvol === 'competidor_asc' && (compChanged || arr[i - 1].local !== row.local);
+                                                return (
+                                                    <tr key={`ev-${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                        <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
+                                                            {sortEvol === 'competidor_asc'
+                                                                ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isNewLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
+                                                                : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
+                                                            }
+                                                        </td>
+                                                        <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
+                                                        <td className="px-4 py-2.5 font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
+                                                        {cajaMonths.map(m => {
+                                                            const total = row.months[m.key];
+                                                            const promSum = row.promedios?.[m.key];
+                                                            const promCount = row.promCounts?.[m.key] || 1;
+                                                            const v = evolucionMetric === 'trx_total'
+                                                                ? total
+                                                                : (promSum !== undefined ? promSum / promCount : undefined);
+                                                            return (
+                                                                <td key={m.key} className="px-4 py-2.5 text-right font-mono">
+                                                                    {v !== undefined
+                                                                        ? <span className="font-black text-slate-900 dark:text-white">
+                                                                            {v.toFixed(1)}
+                                                                        </span>
+                                                                        : <span className="text-slate-300 dark:text-white/15">-</span>
+                                                                    }
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+            </div>
         </motion.div>
     );
 };
