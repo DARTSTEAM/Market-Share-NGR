@@ -89,6 +89,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [filterCompetidor, setFilterCompetidor] = useState('all');
     const [filterCajaMes, setFilterCajaMes] = useState('all');
     const [sortCaja, setSortCaja] = useState('competidor_asc');
+    const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
 
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
@@ -181,10 +182,11 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             if (!monthSet[mk]) monthSet[mk] = { key: mk, label: `${MONTH_SHORT[mes - 1]}-${String(ano).slice(2)}` };
 
             if (!pivotMap[rowKey]) {
-                pivotMap[rowKey] = { local: r.local, caja: r.caja || '-', competidor: r.competidor, months: {}, total: 0 };
+                pivotMap[rowKey] = { local: r.local, caja: r.caja || '-', competidor: r.competidor, months: {}, counts: {}, total: 0 };
             }
             const trx = parseFloat(r.transacciones) || 0;
             pivotMap[rowKey].months[mk] = (pivotMap[rowKey].months[mk] || 0) + trx;
+            pivotMap[rowKey].counts[mk] = (pivotMap[rowKey].counts[mk] || 0) + 1;
             pivotMap[rowKey].total += trx;
         });
 
@@ -389,8 +391,8 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                     key={comp}
                                                     onClick={() => setFilterCompetidor(comp)}
                                                     className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCompetidor === comp
-                                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                                        ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                        : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
                                                         }`}
                                                 >
                                                     {comp === 'all' ? 'Todos' : comp}
@@ -476,12 +478,28 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                             </div>
 
                             {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
+                            {/* Toggle */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Evolución — mostrar:</span>
+                                {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Promedio Trx' }].map(opt => (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => setEvolucionMetric(opt.value)}
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${evolucionMetric === opt.value
+                                                ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                            }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
                             <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
                                 <table className="w-full text-left whitespace-nowrap text-[11px]">
                                     <thead>
                                         <tr>
                                             <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
-                                                Evolución de Trx por Caja y Local
+                                                {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio de Trx por Caja y Local'}
                                             </th>
                                         </tr>
                                         <tr className="bg-slate-100 dark:bg-white/[0.04]">
@@ -506,11 +524,19 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                     <td className="px-4 py-2.5 text-slate-500 dark:text-white/40 font-bold">{row.competidor}</td>
                                                     <td className="px-4 py-2.5 font-mono text-slate-700 dark:text-white/70">{row.caja}</td>
                                                     {cajaMonths.map(m => {
-                                                        const v = row.months[m.key];
+                                                        const total = row.months[m.key];
+                                                        const count = row.counts?.[m.key] || 0;
+                                                        const v = evolucionMetric === 'trx_total'
+                                                            ? total
+                                                            : (count > 0 && total !== undefined ? total / count : undefined);
                                                         return (
                                                             <td key={m.key} className="px-4 py-2.5 text-right font-mono">
                                                                 {v !== undefined
-                                                                    ? <span className="font-black text-slate-900 dark:text-white">{new Intl.NumberFormat('es-PE').format(Math.round(v))}</span>
+                                                                    ? <span className="font-black text-slate-900 dark:text-white">
+                                                                        {evolucionMetric === 'trx_avg'
+                                                                            ? v.toFixed(1)
+                                                                            : new Intl.NumberFormat('es-PE').format(Math.round(v))}
+                                                                    </span>
                                                                     : <span className="text-slate-300 dark:text-white/15">-</span>
                                                                 }
                                                             </td>
