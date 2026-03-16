@@ -114,6 +114,25 @@ app.post('/api/update-ticket', async (req, res) => {
     }
 });
 
+// Endpoint to manually refresh data from BigQuery
+app.post('/api/refresh', (req, res) => {
+    console.log('Manual refresh triggered...');
+    exec('npm run fetch && node process_csv.cjs', { cwd: path.join(__dirname, '..') }, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error in refresh: ${error.message}`);
+            return res.status(500).json({ error: error.message });
+        }
+        console.log(`Refresh completed: ${stdout}`);
+        try {
+            const dataJsonPath = path.join(__dirname, '..', 'src', 'data.json');
+            const updatedData = JSON.parse(fs.readFileSync(dataJsonPath, 'utf8'));
+            res.json({ success: true, message: 'Data refreshed from BigQuery', data: updatedData });
+        } catch (readErr) {
+            res.status(500).json({ error: readErr.message });
+        }
+    });
+});
+
 app.listen(port, () => {
     console.log(`Local BQ Proxy server running at http://localhost:${port}`);
 });

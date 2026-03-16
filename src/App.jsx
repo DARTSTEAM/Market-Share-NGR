@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users } from 'lucide-react';
+import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import loadedData from './data.json';
 import MarketShareDashboard from './components/MarketShareDashboard';
@@ -12,8 +12,13 @@ import CustomSelect from './components/common/CustomSelect';
 import FilterBar from './components/filters/FilterBar';
 
 const COMPETITOR_TO_CATEGORY = {
+  'KFC': 'Pollo Frito',
+  'MCDONALD\'S': 'Hamburguesa',
+  'MCDONALDS': 'Hamburguesa',
+  'BEMBOS': 'Hamburguesa',
   'BURGER KING': 'Hamburguesa',
   'DOMINOS': 'Pizza',
+  'DOMINO\'S': 'Pizza',
   'LITTLE CAESARS': 'Pizza',
   'PIZZA HUT': 'Pizza',
 };
@@ -452,6 +457,7 @@ export default function App() {
   const [theme, setTheme] = useState('dark');
   const [notification, setNotification] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
 
   // Use state for data to make it reactive to updates
   const [records, setRecords] = useState(initialRecords);
@@ -476,6 +482,27 @@ export default function App() {
     };
     fetchInitialData();
   }, []);
+
+  const handleRefreshData = async () => {
+    try {
+      setIsRefreshingData(true);
+      setNotification({ type: 'info', message: 'Actualizando datos desde BigQuery...' });
+      const response = await fetch(`${API_BASE_URL}/api/refresh`, { method: 'POST' });
+      const result = await response.json();
+      if (result.success && result.data) {
+        if (result.data.facturas_audit) setRecords(result.data.facturas_audit);
+        if (result.data.facturas_v2) setTickets(result.data.facturas_v2);
+        setNotification({ type: 'success', message: `¡Datos actualizados correctamente!` });
+      } else {
+        throw new Error(result.error || 'Error al refrescar');
+      }
+    } catch (err) {
+      setNotification({ type: 'error', message: `Error: ${err.message}` });
+    } finally {
+      setIsRefreshingData(false);
+      setTimeout(() => setNotification(null), 5000);
+    }
+  };
 
   const handleUpdateTicket = async (ticketData) => {
     try {
@@ -1125,6 +1152,18 @@ export default function App() {
             </div>
 
             <div className="flex gap-4 items-center flex-wrap">
+              <button
+                onClick={handleRefreshData}
+                disabled={isRefreshingData}
+                title="Actualizar datos desde BigQuery"
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${isRefreshingData
+                  ? 'bg-slate-100 dark:bg-white/[0.02] border-slate-200 dark:border-white/5 text-slate-400 cursor-not-allowed'
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 hover:scale-105'
+                  }`}
+              >
+                <RefreshCw size={13} className={isRefreshingData ? 'animate-spin' : ''} />
+                {isRefreshingData ? 'Actualizando...' : 'Actualizar BQ'}
+              </button>
               <button
                 onClick={toggleTheme}
                 className="p-3 bg-white/50 dark:bg-white/[0.02] rounded-2xl border border-slate-300 dark:border-white/5 backdrop-blur-md shadow-sm hover:scale-105 transition-all text-slate-600 dark:text-white/80 hover:text-accent-orange dark:hover:text-accent-lemon"
