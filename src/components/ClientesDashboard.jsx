@@ -87,6 +87,8 @@ const SectionTable = ({ title, headerColor = '#1e3a5f', rows, months, renderCell
 const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [selectedCategory, setSelectedCategory] = useState('Hamburguesa');
     const [filterCompetidor, setFilterCompetidor] = useState('all');
+    const [filterCajaMes, setFilterCajaMes] = useState('all');
+    const [sortCaja, setSortCaja] = useState('local_asc');
 
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
@@ -155,7 +157,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     }, [records, selectedCategory, competitorToCategory]);
 
     // Reset competitor filter when category changes
-    React.useEffect(() => { setFilterCompetidor('all'); }, [selectedCategory]);
+    React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); }, [selectedCategory]);
 
     // ── Caja pivot: (local, caja) × month ─────────────────────────────────────
     const { cajaRows, cajaMonths } = useMemo(() => {
@@ -200,6 +202,29 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
 
         return { cajaRows, cajaMonths };
     }, [records, selectedCategory, filterCompetidor, competitorToCategory]);
+
+    // ── Display rows for Distribución table (filtered by month + sorted) ────────
+    const distribRows = useMemo(() => {
+        const withTrx = cajaRows.map(row => {
+            const trx = filterCajaMes === 'all' ? row.total : (row.months[filterCajaMes] || 0);
+            return { ...row, displayTrx: trx };
+        });
+        // Recompute local totals for the selected period
+        const localTotals = {};
+        withTrx.forEach(r => { localTotals[r.local] = (localTotals[r.local] || 0) + r.displayTrx; });
+        const withPct = withTrx.map(r => ({
+            ...r,
+            pct: localTotals[r.local] ? (r.displayTrx / localTotals[r.local]) * 100 : 0,
+        }));
+        return [...withPct].sort((a, b) => {
+            if (sortCaja === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
+            if (sortCaja === 'trx_desc') return b.displayTrx - a.displayTrx;
+            if (sortCaja === 'trx_asc') return a.displayTrx - b.displayTrx;
+            if (sortCaja === 'pct_desc') return b.pct - a.pct;
+            if (sortCaja === 'caja_asc') return String(a.caja).localeCompare(String(b.caja));
+            return 0;
+        });
+    }, [cajaRows, filterCajaMes, sortCaja]);
 
     // Build rows for each table (competitors + total)
     const rows = useMemo(() => {
@@ -289,8 +314,8 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                     key={comp}
                                     onClick={() => setFilterCompetidor(comp)}
                                     className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCompetidor === comp
-                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                        ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                        : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
                                         }`}
                                 >
                                     {comp === 'all' ? 'Todos los competidores' : comp}
@@ -368,13 +393,46 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                 <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
                             </div>
 
+                            {/* Controls for Distribución table */}
+                            <div className="flex flex-wrap items-center gap-3 px-1">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Filtrar por mes:</span>
+                                <div className="flex flex-wrap gap-1">
+                                    {[{ key: 'all', label: 'Todos' }, ...cajaMonths].map(m => (
+                                        <button
+                                            key={m.key}
+                                            onClick={() => setFilterCajaMes(m.key)}
+                                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCajaMes === m.key
+                                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                                }`}
+                                        >
+                                            {m.label || 'Todos'}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="ml-auto flex items-center gap-2">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
+                                    <select
+                                        value={sortCaja}
+                                        onChange={e => setSortCaja(e.target.value)}
+                                        className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
+                                    >
+                                        <option value="local_asc">Local (A-Z)</option>
+                                        <option value="caja_asc">Caja (A-Z)</option>
+                                        <option value="trx_desc">Trx &darr; (Mayor)</option>
+                                        <option value="trx_asc">Trx &uarr; (Menor)</option>
+                                        <option value="pct_desc">% Local &darr;</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             {/* ── 5. Distribución por Caja ──────────────────────────────────── */}
                             <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
                                 <table className="w-full text-left whitespace-nowrap text-[11px]">
                                     <thead>
                                         <tr>
                                             <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={5}>
-                                                Distribución de Ventas por Caja
+                                                Distribución de Ventas por Caja {filterCajaMes !== 'all' ? `— ${cajaMonths.find(m => m.key === filterCajaMes)?.label}` : ''}
                                             </th>
                                         </tr>
                                         <tr className="bg-slate-100 dark:bg-white/[0.04]">
@@ -384,9 +442,8 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                                        {cajaRows.map((row, i) => {
-                                            const pct = row.localTotal ? (row.total / row.localTotal) * 100 : 0;
-                                            const isFirstOfLocal = i === 0 || cajaRows[i - 1].local !== row.local;
+                                        {distribRows.map((row, i) => {
+                                            const isFirstOfLocal = sortCaja === 'local_asc' && (i === 0 || distribRows[i - 1].local !== row.local);
                                             return (
                                                 <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${isFirstOfLocal ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
                                                     <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
@@ -395,11 +452,11 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                     <td className="px-4 py-2.5 text-right text-slate-500 dark:text-white/40 font-bold">{row.competidor}</td>
                                                     <td className="px-4 py-2.5 text-right font-mono text-slate-700 dark:text-white/70">{row.caja}</td>
                                                     <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900 dark:text-white">
-                                                        {new Intl.NumberFormat('es-PE').format(Math.round(row.total))}
+                                                        {new Intl.NumberFormat('es-PE').format(Math.round(row.displayTrx))}
                                                     </td>
                                                     <td className="px-4 py-2.5 text-right">
-                                                        <span className={`font-black ${pct > 50 ? 'text-accent-orange' : 'text-slate-600 dark:text-white/60'}`}>
-                                                            {pct.toFixed(1)}%
+                                                        <span className={`font-black ${row.pct > 50 ? 'text-accent-orange' : 'text-slate-600 dark:text-white/60'}`}>
+                                                            {row.pct.toFixed(1)}%
                                                         </span>
                                                     </td>
                                                 </tr>
