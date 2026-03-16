@@ -94,37 +94,61 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
     const [exporting, setExporting] = useState(false);
-    const contentRef = useRef(null);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [exportSelections, setExportSelections] = useState({
+        trx: true, crec: true, share: true, tiendas: true, distribucion: true, evolucion: true,
+    });
+
+    const refTrx = useRef(null);
+    const refCrec = useRef(null);
+    const refShare = useRef(null);
+    const refTiendas = useRef(null);
+    const refDistribucion = useRef(null);
+    const refEvolucion = useRef(null);
+
+    const EXPORT_SECTIONS = [
+        { key: 'trx', label: 'Trx Totales', ref: refTrx },
+        { key: 'crec', label: 'Crec %', ref: refCrec },
+        { key: 'share', label: 'Share %', ref: refShare },
+        { key: 'tiendas', label: 'Número de Tiendas', ref: refTiendas },
+        { key: 'distribucion', label: 'Distribución por Caja', ref: refDistribucion },
+        { key: 'evolucion', label: 'Evolución por Caja', ref: refEvolucion },
+    ];
 
     const exportPDF = useCallback(async () => {
-        if (!contentRef.current) return;
+        setShowExportModal(false);
         setExporting(true);
         try {
-            const el = contentRef.current;
-            const canvas = await html2canvas(el, {
-                scale: 2,
-                useCORS: true,
-                backgroundColor: document.documentElement.classList.contains('dark') ? '#0f172a' : '#f8fafc',
-                logging: false,
-            });
-            const imgData = canvas.toDataURL('image/png');
+            const isDark = document.documentElement.classList.contains('dark');
+            const bg = isDark ? '#0f172a' : '#f8fafc';
             const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
             const pageW = pdf.internal.pageSize.getWidth();
             const pageH = pdf.internal.pageSize.getHeight();
-            const imgW = pageW;
-            const imgH = (canvas.height * imgW) / canvas.width;
-            let y = 0;
-            while (y < imgH) {
-                if (y > 0) pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, -y, imgW, imgH);
-                y += pageH;
+            let firstPage = true;
+
+            for (const section of EXPORT_SECTIONS) {
+                if (!exportSelections[section.key] || !section.ref.current) continue;
+                const canvas = await html2canvas(section.ref.current, {
+                    scale: 2, useCORS: true, backgroundColor: bg, logging: false,
+                });
+                const imgData = canvas.toDataURL('image/png');
+                const imgW = pageW;
+                const imgH = (canvas.height * imgW) / canvas.width;
+                let y = 0;
+                while (y < imgH) {
+                    if (!firstPage) pdf.addPage();
+                    firstPage = false;
+                    pdf.addImage(imgData, 'PNG', 0, -y, imgW, imgH);
+                    y += pageH;
+                }
             }
-            const catLabel = selectedCategory.replace(' ', '_');
+
+            const catLabel = selectedCategory.replace(/ /g, '_');
             pdf.save(`Clientes_${catLabel}_${new Date().toISOString().slice(0, 10)}.pdf`);
         } finally {
             setExporting(false);
         }
-    }, [selectedCategory]);
+    }, [exportSelections, selectedCategory, EXPORT_SECTIONS]);
 
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
@@ -333,7 +357,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 <div className="flex items-center gap-3">
                     {/* Export PDF button */}
                     <button
-                        onClick={exportPDF}
+                        onClick={() => setShowExportModal(true)}
                         disabled={exporting}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:border-accent-orange hover:text-accent-orange transition-all duration-200 disabled:opacity-50"
                     >
@@ -342,6 +366,47 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                             : <><FileDown className="w-4 h-4" /> Exportar PDF</>
                         }
                     </button>
+
+                    {/* Export Selection Modal */}
+                    {showExportModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowExportModal(false)}>
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 p-6 w-80 space-y-4" onClick={e => e.stopPropagation()}>
+                                <div>
+                                    <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 dark:text-white">Seleccionar secciones</h3>
+                                    <p className="text-[10px] text-slate-400 dark:text-white/30 font-bold mt-0.5">Elegí qué tablas incluir en el PDF</p>
+                                </div>
+                                <div className="space-y-2">
+                                    {EXPORT_SECTIONS.map(s => (
+                                        <label key={s.key} className="flex items-center gap-3 cursor-pointer group">
+                                            <div
+                                                onClick={() => setExportSelections(prev => ({ ...prev, [s.key]: !prev[s.key] }))}
+                                                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${exportSelections[s.key]
+                                                    ? 'bg-accent-orange border-accent-orange'
+                                                    : 'border-slate-300 dark:border-white/20 group-hover:border-accent-orange/50'
+                                                    }`}
+                                            >
+                                                {exportSelections[s.key] && (
+                                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                                                )}
+                                            </div>
+                                            <span className="text-[11px] font-bold text-slate-700 dark:text-white/70 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{s.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2 pt-2">
+                                    <button
+                                        onClick={() => setShowExportModal(false)}
+                                        className="flex-1 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors"
+                                    >Cancelar</button>
+                                    <button
+                                        onClick={exportPDF}
+                                        disabled={!Object.values(exportSelections).some(Boolean)}
+                                        className="flex-1 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-accent-orange text-white shadow-lg shadow-accent-orange/20 hover:bg-orange-600 transition-colors disabled:opacity-40"
+                                    >Generar Reporte</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Category Selector */}
                     <div className="flex gap-2 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
@@ -377,16 +442,16 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                     <div className="space-y-6">
 
                         {/* ── 1. Trx Totales ──────────────────────────────────────────────── */}
-                        <SectionTable
+                        <div ref={refTrx}><SectionTable
                             title="Trx Totales"
                             headerColor="#1e3a5f"
                             rows={rows}
                             months={months}
                             renderCell={(row, m) => formatTrx(getTrx(row.key, m.key))}
-                        />
+                        /></div>
 
                         {/* ── 2. Crec % ───────────────────────────────────────────────────── */}
-                        <SectionTable
+                        <div ref={refCrec}><SectionTable
                             title="Crec %"
                             headerColor="#1e3a5f"
                             rows={rows}
@@ -396,19 +461,19 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                 return renderCrec(row.key, m, idx);
                             }}
                             footnote="Crec% = variación respecto al mes anterior. #N/A = sin período previo."
-                        />
+                        /></div>
 
                         {/* ── 3. Share % ──────────────────────────────────────────────────── */}
-                        <SectionTable
+                        <div ref={refShare}><SectionTable
                             title="Share %"
                             headerColor="#1e3a5f"
                             rows={rows}
                             months={months}
                             renderCell={(row, m) => renderShare(row.key, m.key)}
-                        />
+                        /></div>
 
                         {/* ── 4. Número de Tiendas ────────────────────────────────────────── */}
-                        <SectionTable
+                        <div ref={refTiendas}><SectionTable
                             title="Número de Tiendas"
                             headerColor="#1e3a5f"
                             rows={rows}
@@ -420,7 +485,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                     : v;
                             }}
                             footnote="Tiendas únicas (locales) con al menos una transacción registrada en el período."
-                        />
+                        /></div>
 
                         {/* ── Divider ─────────────────────────────────────────────────────── */}
                         {cajaRows.length > 0 && (
@@ -431,7 +496,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                 </div>
 
                                 {/* Controls for Distribución table */}
-                                <div className="pwa-card p-4 flex flex-col gap-3">
+                                <div ref={refDistribucion} className="space-y-3">
                                     {/* Row 1: Competitor filter */}
                                     {categoryCompetitors.length > 1 && (
                                         <div className="flex flex-wrap items-center gap-2">
@@ -534,101 +599,103 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
 
                                 {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
                                 {/* Controls row */}
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Evolución — mostrar:</span>
-                                    {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }].map(opt => (
-                                        <button
-                                            key={opt.value}
-                                            onClick={() => setEvolucionMetric(opt.value)}
-                                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${evolucionMetric === opt.value
-                                                ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                                }`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                    <div className="ml-auto flex items-center gap-2">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
-                                        <select
-                                            value={sortEvol}
-                                            onChange={e => setSortEvol(e.target.value)}
-                                            className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
-                                        >
-                                            <option value="competidor_asc">Competidor (A-Z)</option>
-                                            <option value="local_asc">Local (A-Z)</option>
-                                            <option value="caja_asc">Caja (A-Z)</option>
-                                        </select>
+                                <div ref={refEvolucion} className="space-y-3">
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Evolución — mostrar:</span>
+                                        {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }].map(opt => (
+                                            <button
+                                                key={opt.value}
+                                                onClick={() => setEvolucionMetric(opt.value)}
+                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${evolucionMetric === opt.value
+                                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                                    }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                        <div className="ml-auto flex items-center gap-2">
+                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
+                                            <select
+                                                value={sortEvol}
+                                                onChange={e => setSortEvol(e.target.value)}
+                                                className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
+                                            >
+                                                <option value="competidor_asc">Competidor (A-Z)</option>
+                                                <option value="local_asc">Local (A-Z)</option>
+                                                <option value="caja_asc">Caja (A-Z)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
+                                        <table className="w-full text-left whitespace-nowrap text-[11px]">
+                                            <thead>
+                                                <tr>
+                                                    <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
+                                                        {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio Diario por Caja y Local'}
+                                                    </th>
+                                                </tr>
+                                                <tr className="bg-slate-100 dark:bg-white/[0.04]">
+                                                    <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Competidor</th>
+                                                    <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Local</th>
+                                                    <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 80 }}>Caja</th>
+                                                    {cajaMonths.map(m => (
+                                                        <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right" style={{ minWidth: 90 }}>
+                                                            {m.label}
+                                                        </th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
+                                                {[...cajaRows].sort((a, b) => {
+                                                    if (sortEvol === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
+                                                    if (sortEvol === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
+                                                    if (sortEvol === 'caja_asc') return String(a.caja).localeCompare(String(b.caja));
+                                                    return 0;
+                                                }).map((row, i, arr) => {
+                                                    const compChanged = i === 0 || arr[i - 1].competidor !== row.competidor;
+                                                    const isNewComp = sortEvol === 'competidor_asc' && compChanged;
+                                                    const isNewLocal = sortEvol === 'competidor_asc' && (compChanged || arr[i - 1].local !== row.local);
+                                                    return (
+                                                        <tr key={`ev-${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                            <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
+                                                                {sortEvol === 'competidor_asc'
+                                                                    ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isNewLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
+                                                                    : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
+                                                                }
+                                                            </td>
+                                                            <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
+                                                            <td className="px-4 py-2.5 font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
+                                                            {cajaMonths.map(m => {
+                                                                const total = row.months[m.key];
+                                                                const promSum = row.promedios?.[m.key];
+                                                                const promCount = row.promCounts?.[m.key] || 1;
+                                                                const v = evolucionMetric === 'trx_total'
+                                                                    ? total
+                                                                    : (promSum !== undefined ? promSum / promCount : undefined);
+                                                                return (
+                                                                    <td key={m.key} className="px-4 py-2.5 text-right font-mono">
+                                                                        {v !== undefined
+                                                                            ? <span className="font-black text-slate-900 dark:text-white">
+                                                                                {v.toFixed(1)}
+                                                                            </span>
+                                                                            : <span className="text-slate-300 dark:text-white/15">-</span>
+                                                                        }
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
-                                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
-                                    <table className="w-full text-left whitespace-nowrap text-[11px]">
-                                        <thead>
-                                            <tr>
-                                                <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
-                                                    {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio Diario por Caja y Local'}
-                                                </th>
-                                            </tr>
-                                            <tr className="bg-slate-100 dark:bg-white/[0.04]">
-                                                <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Competidor</th>
-                                                <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Local</th>
-                                                <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 80 }}>Caja</th>
-                                                {cajaMonths.map(m => (
-                                                    <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right" style={{ minWidth: 90 }}>
-                                                        {m.label}
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                                            {[...cajaRows].sort((a, b) => {
-                                                if (sortEvol === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
-                                                if (sortEvol === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
-                                                if (sortEvol === 'caja_asc') return String(a.caja).localeCompare(String(b.caja));
-                                                return 0;
-                                            }).map((row, i, arr) => {
-                                                const compChanged = i === 0 || arr[i - 1].competidor !== row.competidor;
-                                                const isNewComp = sortEvol === 'competidor_asc' && compChanged;
-                                                const isNewLocal = sortEvol === 'competidor_asc' && (compChanged || arr[i - 1].local !== row.local);
-                                                return (
-                                                    <tr key={`ev-${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
-                                                        <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                            {sortEvol === 'competidor_asc'
-                                                                ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isNewLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
-                                                                : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
-                                                            }
-                                                        </td>
-                                                        <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                        <td className="px-4 py-2.5 font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
-                                                        {cajaMonths.map(m => {
-                                                            const total = row.months[m.key];
-                                                            const promSum = row.promedios?.[m.key];
-                                                            const promCount = row.promCounts?.[m.key] || 1;
-                                                            const v = evolucionMetric === 'trx_total'
-                                                                ? total
-                                                                : (promSum !== undefined ? promSum / promCount : undefined);
-                                                            return (
-                                                                <td key={m.key} className="px-4 py-2.5 text-right font-mono">
-                                                                    {v !== undefined
-                                                                        ? <span className="font-black text-slate-900 dark:text-white">
-                                                                            {v.toFixed(1)}
-                                                                        </span>
-                                                                        : <span className="text-slate-300 dark:text-white/15">-</span>
-                                                                    }
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </>
+                                </>
                         )}
-                    </div>
+                            </div>
                 )}
-            </div>
+                    </div>
         </motion.div>
     );
 };
