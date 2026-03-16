@@ -247,7 +247,8 @@ const CompetitorAnalysis = ({
             return entry;
           });
           const bars = sorted.map(comp => ({
-            key: comp.name === "McDonald's" ? "McD's" : comp.name === 'Burger King' ? 'BK' : comp.name === 'Little Caesars' ? 'L. CAE' : comp.name.substring(0, 8),
+            key: comp.name,
+            label: comp.name === "McDonald's" ? "McD's" : comp.name === 'Burger King' ? 'BK' : comp.name === 'Little Caesars' ? 'L. CAE' : comp.name.substring(0, 8),
             color: comp.color,
           }));
           return (
