@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle } from 'lucide-react';
+import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import loadedData from './data.json';
 import MarketShareDashboard from './components/MarketShareDashboard';
 import ComparativosDashboard from './components/ComparativosDashboard';
 import TicketsDashboard from './components/TicketsDashboard';
 import AlarmasDashboard from './components/AlarmasDashboard';
+import ClientesDashboard from './components/ClientesDashboard';
 import CustomSelect from './components/common/CustomSelect';
 import FilterBar from './components/filters/FilterBar';
 
@@ -1117,7 +1118,8 @@ export default function App() {
                   {activeCategory === 'competitor' ? 'Análisis Competencias' :
                     activeCategory === 'marketshare' ? (activeSubTab === 'comparativos' ? 'Comparativos' : 'Market Share') :
                       activeCategory === 'tickets' ? (activeSubTab === 'alarmas' ? 'Alarmas' : 'Tickets') :
-                        'Dashboard'} <span className="text-accent-orange">LIVE</span>
+                        activeCategory === 'clientes' ? 'Evolución por Categoría' :
+                          'Dashboard'} <span className="text-accent-orange">LIVE</span>
                 </h1>
               </div>
             </div>
@@ -1139,7 +1141,8 @@ export default function App() {
             <div className="flex gap-2 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
               {[
                 { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
-                { id: 'tickets', icon: Ticket, label: 'Tickets' }
+                { id: 'tickets', icon: Ticket, label: 'Tickets' },
+                { id: 'clientes', icon: Users, label: 'Clientes' },
               ].map(cat => (
                 <button
                   key={cat.id}
@@ -1147,6 +1150,7 @@ export default function App() {
                     setActiveCategory(cat.id);
                     if (cat.id === 'marketshare') setActiveSubTab('marketshare');
                     else if (cat.id === 'tickets') setActiveSubTab('tickets');
+                    else setActiveSubTab('');
                   }}
                   className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeCategory === cat.id ? 'bg-accent-orange text-white shadow-lg' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'}`}
                 >
@@ -1203,7 +1207,13 @@ export default function App() {
 
 
         <AnimatePresence mode="wait">
-          {activeCategory === 'competitor' ? (
+          {activeCategory === 'clientes' ? (
+            <ClientesDashboard
+              key="clientes"
+              records={records}
+              competitorToCategory={COMPETITOR_TO_CATEGORY}
+            />
+          ) : activeCategory === 'competitor' ? (
             <CompetitorAnalysis
               key="competitor"
               theme={theme}
