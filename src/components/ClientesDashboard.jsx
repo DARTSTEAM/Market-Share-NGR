@@ -427,7 +427,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 </div>
             </header>
 
-            <div ref={contentRef} className="space-y-6">
+            <div className="space-y-6">
                 {!hasData ? (
                     <div className="pwa-card p-16 flex flex-col items-center justify-center gap-4 text-center">
                         <span className="text-5xl">{CATEGORY_EMOJI[selectedCategory]}</span>
@@ -691,11 +691,11 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                         </table>
                                     </div>
                                 </div>
-                                </>
+                            </>
                         )}
-                            </div>
-                )}
                     </div>
+                )}
+            </div>
         </motion.div>
     );
 };
