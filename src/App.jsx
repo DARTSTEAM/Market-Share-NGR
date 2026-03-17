@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
-import loadedData from './data.json';
 import MarketShareDashboard from './components/MarketShareDashboard';
 import ComparativosDashboard from './components/ComparativosDashboard';
 import TicketsDashboard from './components/TicketsDashboard';
@@ -441,7 +440,7 @@ const CompetitorAnalysis = ({
   </motion.div>
 );
 
-const { records: initialRecords = [], tickets: initialTickets = [] } = loadedData;
+// Records and tickets start empty — loaded from the BQ server on mount
 
 const kFormatter = (num) => {
   if (Math.abs(num) > 999999) return Math.sign(num) * ((Math.abs(num) / 1000000).toFixed(1)) + 'M';
@@ -461,8 +460,8 @@ export default function App() {
   const [isRefreshingData, setIsRefreshingData] = useState(false);
 
   // Use state for data to make it reactive to updates
-  const [records, setRecords] = useState(initialRecords);
-  const [tickets, setTickets] = useState(initialTickets);
+  const [records, setRecords] = useState([]);
+  const [tickets, setTickets] = useState([]);
 
   // Initial data fetch to sync with BigQuery on load
   useEffect(() => {
@@ -471,13 +470,12 @@ export default function App() {
         const response = await fetch(`${API_BASE_URL}/api/data`);
         if (response.ok) {
           const data = await response.json();
-          if (data.facturas_audit) setRecords(data.facturas_audit);
-          if (data.facturas_v2) setTickets(data.facturas_v2);
-          setIsLoaded(true);
+          if (data.records) setRecords(data.records);
+          if (data.tickets) setTickets(data.tickets);
         }
       } catch (error) {
         console.error('Error fetching initial data:', error);
-        // Fallback to static data is already set
+      } finally {
         setIsLoaded(true);
       }
     };
@@ -490,9 +488,14 @@ export default function App() {
       setNotification({ type: 'info', message: 'Actualizando datos desde BigQuery...' });
       const response = await fetch(`${API_BASE_URL}/api/refresh`, { method: 'POST' });
       const result = await response.json();
-      if (result.success && result.data) {
-        if (result.data.facturas_audit) setRecords(result.data.facturas_audit);
-        if (result.data.facturas_v2) setTickets(result.data.facturas_v2);
+      if (result.success) {
+        // After refresh the data is in the server cache; re-fetch /api/data to get it
+        const dr = await fetch(`${API_BASE_URL}/api/data`);
+        if (dr.ok) {
+          const fresh = await dr.json();
+          if (fresh.records) setRecords(fresh.records);
+          if (fresh.tickets) setTickets(fresh.tickets);
+        }
         setNotification({ type: 'success', message: `¡Datos actualizados correctamente!` });
       } else {
         throw new Error(result.error || 'Error al refrescar');
