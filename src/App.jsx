@@ -697,6 +697,22 @@ export default function App() {
     return [...baseOptions, ...filteredLocs.map(l => ({ value: l, label: l }))];
   }, [filters.competitor, filters.category, records]);
 
+  const codigoTiendaOptions = useMemo(() => {
+    const base = [{ value: 'all', label: 'Todos los Códigos' }];
+    let filtered = records;
+    if (filters.category !== 'all') {
+      filtered = filtered.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
+    }
+    if (filters.competitor !== 'all') {
+      filtered = filtered.filter(r => r.competidor === filters.competitor);
+    }
+    if (filters.local !== 'all') {
+      filtered = filtered.filter(r => r.local === filters.local);
+    }
+    const codes = Array.from(new Set(filtered.map(r => r.codigo_tienda).filter(Boolean))).sort();
+    return [...base, ...codes.map(c => ({ value: c, label: c }))];
+  }, [records, filters.category, filters.competitor, filters.local]);
+
   const channelOptions = [
     { value: 'all', label: 'Todos los Canales' },
     { value: 'delivery', label: 'Delivery' },
@@ -717,9 +733,14 @@ export default function App() {
       if (key === 'category' && value !== prev.category) {
         newFilters.competitor = 'all';
         newFilters.local = 'all';
+        newFilters.codigoTienda = 'all';
       }
       if (key === 'competitor' && value !== prev.competitor) {
         newFilters.local = 'all';
+        newFilters.codigoTienda = 'all';
+      }
+      if (key === 'local' && value !== prev.local) {
+        newFilters.codigoTienda = 'all';
       }
       return newFilters;
     });
@@ -731,6 +752,7 @@ export default function App() {
       year: latestYear,
       competitor: "all",
       local: "all",
+      codigoTienda: "all",
       category: "all",
       channel: "all"
     });
@@ -761,9 +783,10 @@ export default function App() {
 
       const cMatch = filters.competitor === 'all' || rec.competidor === filters.competitor;
       const lMatch = filters.local === 'all' || rec.local === filters.local;
+      const ctMatch = filters.codigoTienda === 'all' || rec.codigo_tienda === filters.codigoTienda;
       const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[rec.competidor] === filters.category;
 
-      return mMatch && yMatch && cMatch && lMatch && catMatch;
+      return mMatch && yMatch && cMatch && lMatch && ctMatch && catMatch;
     });
   }, [records, filters]);
 
@@ -777,9 +800,10 @@ export default function App() {
     return tickets.filter(t => {
       const cMatch = filters.competitor === 'all' || t.competidor === filters.competitor;
       const lMatch = filters.local === 'all' || t.local === filters.local;
+      const ctMatch = filters.codigoTienda === 'all' || t.codigo_tienda === filters.codigoTienda;
       const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[t.competidor] === filters.category;
 
-      return cMatch && lMatch && catMatch;
+      return cMatch && lMatch && ctMatch && catMatch;
     });
   }, [tickets, filters]);
 
@@ -1086,6 +1110,7 @@ export default function App() {
       yearOptions={yearOptions}
       competitorOptions={competitorOptions}
       locationOptions={locationOptions}
+      codigoTiendaOptions={codigoTiendaOptions}
       channelOptions={channelOptions}
       categoryOptions={categoryOptions}
     />

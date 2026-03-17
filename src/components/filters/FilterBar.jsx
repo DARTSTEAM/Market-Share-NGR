@@ -9,6 +9,7 @@ const FilterBar = ({
     yearOptions = [],
     competitorOptions = [],
     locationOptions = [],
+    codigoTiendaOptions = [],
     channelOptions = [],
     categoryOptions = [],
     onReset
@@ -60,6 +61,16 @@ const FilterBar = ({
                 width="w-48"
                 searchable
             />
+            {codigoTiendaOptions.length > 1 && (
+                <CustomSelect
+                    label="Cód. Tienda"
+                    options={codigoTiendaOptions}
+                    selected={filters.codigoTienda || 'all'}
+                    onChange={(val) => onFilterChange('codigoTienda', val)}
+                    width="w-40"
+                    searchable
+                />
+            )}
             <button
                 onClick={onReset}
                 className="flex items-center gap-2 px-4 py-2 bg-white/50 dark:bg-white/[0.02] hover:bg-white/80 dark:hover:bg-white/[0.05] border border-slate-300 dark:border-white/10 rounded-2xl transition-all group shrink-0"
