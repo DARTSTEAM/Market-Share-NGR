@@ -885,11 +885,13 @@ export default function App() {
   const aggregatedTableDataRoutine = useMemo(() => {
     const localMap = {};
     marketShareRecords.forEach(r => {
-      if (!localMap[r.local]) {
-        localMap[r.local] = {
+      const rowKey = `${r.local}||${r.caja ?? ''}`;
+      if (!localMap[rowKey]) {
+        localMap[rowKey] = {
           competidor: r.competidor,
           codigo_tienda: r.codigo_tienda || '',
           local: r.local,
+          caja: r.caja || '-',
           ventas: 0,
           uniqueTicketsCount: 0,
           cajasTotal: new Set(),
@@ -903,11 +905,11 @@ export default function App() {
         };
       }
       const trans = parseFloat(r.transacciones) || 0;
-      localMap[r.local].ventas += trans;
-      localMap[r.local].uniqueTicketsCount += 1;
-      localMap[r.local].cajasTotal.add(r.caja);
-      localMap[r.local].ticketsReg += 1;
-      localMap[r.local].promedioDiario += (parseFloat(r.promedio) || 0);
+      localMap[rowKey].ventas += trans;
+      localMap[rowKey].uniqueTicketsCount += 1;
+      localMap[rowKey].cajasTotal.add(r.caja);
+      localMap[rowKey].ticketsReg += 1;
+      localMap[rowKey].promedioDiario += (parseFloat(r.promedio) || 0);
     });
 
     return Object.values(localMap).map(l => ({
@@ -920,11 +922,13 @@ export default function App() {
   const aggregatedTableDataFull = useMemo(() => {
     const localMap = {};
     filteredRecords.forEach(r => {
-      if (!localMap[r.local]) {
-        localMap[r.local] = {
+      const rowKey = `${r.local}||${r.caja ?? ''}`;
+      if (!localMap[rowKey]) {
+        localMap[rowKey] = {
           competidor: r.competidor,
           codigo_tienda: r.codigo_tienda || '',
           local: r.local,
+          caja: r.caja || '-',
           ventas: 0,
           uniqueTicketsCount: 0,
           cajasTotal: new Set(),
@@ -938,11 +942,11 @@ export default function App() {
         };
       }
       const trans = parseFloat(r.transacciones) || 0;
-      localMap[r.local].ventas += trans;
-      localMap[r.local].uniqueTicketsCount += 1;
-      localMap[r.local].cajasTotal.add(r.caja);
-      localMap[r.local].ticketsReg += 1;
-      localMap[r.local].promedioDiario += (parseFloat(r.promedio) || 0);
+      localMap[rowKey].ventas += trans;
+      localMap[rowKey].uniqueTicketsCount += 1;
+      localMap[rowKey].cajasTotal.add(r.caja);
+      localMap[rowKey].ticketsReg += 1;
+      localMap[rowKey].promedioDiario += (parseFloat(r.promedio) || 0);
     });
 
     return Object.values(localMap).map(l => ({

@@ -321,7 +321,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[11px] text-slate-700 dark:text-white/70">
                             {paginatedData.map((row) => (
-                                <tr key={row.competidor + row.local} className="hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
+                                <tr key={row.competidor + row.local + String(row.caja)} className="hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
                                     <td className="px-6 py-5">
                                         {(() => {
                                             const color = shareData.find(s => s.name === row.competidor)?.color || '#94a3b8';
@@ -342,7 +342,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                             {row.canal}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-5 text-center font-bold text-slate-500 dark:text-white/40">{row.cajasTotal || '-'}</td>
+                                    <td className="px-6 py-5 text-center font-bold text-slate-500 dark:text-white/40">{row.caja || '-'}</td>
                                     <td className="px-6 py-5 text-center font-black text-slate-900 dark:text-white font-mono">{row.transacciones}</td>
                                     <td className="px-6 py-5 text-center text-emerald-600 dark:text-accent-lemon font-black font-mono">{row.promDiario}</td>
                                     <td className="px-6 py-5 text-center">
@@ -429,7 +429,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
 
     // Matrix data generation logic (Real Monthly data from allRecords)
     const matrixData = useMemo(() => {
-        // Group allRecords by Local and Month
+        // Group allRecords by Local+Caja and Month
         const localMonthMap = {};
 
         allRecords.forEach(rec => {
@@ -444,18 +444,20 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                 m = date.getMonth();
             }
 
-            const key = `${rec.local}_${y}_${m}`;
+            const key = `${rec.local}||${rec.caja ?? ''}_${y}_${m}`;
             if (!localMonthMap[key]) localMonthMap[key] = 0;
             localMonthMap[key] += parseInt(rec.transacciones_diferencial || rec.transacciones) || 0;
         });
 
-        // Get unique locals and their metadata
+        // Get unique local+caja combinations and their metadata
         const localsMetadata = {};
         allRecords.forEach(rec => {
-            if (!localsMetadata[rec.local]) {
-                localsMetadata[rec.local] = {
+            const rowKey = `${rec.local}||${rec.caja ?? ''}`;
+            if (!localsMetadata[rowKey]) {
+                localsMetadata[rowKey] = {
                     competidor: rec.competidor,
                     local: rec.local,
+                    caja: rec.caja || '-',
                     cajasTotal: rec.caja || 1
                 };
             }
@@ -463,7 +465,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
 
         return Object.values(localsMetadata).map(meta => {
             const monthly = months.map(m => {
-                const key = `${meta.local}_${m.year}_${m.month}`;
+                const key = `${meta.local}||${meta.caja ?? ''}_${m.year}_${m.month}`;
                 return localMonthMap[key] || 0;
             });
             return {
@@ -478,7 +480,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
         return matrixData.filter(row => {
             const mComp = localFilters.competidor === 'all' || row.competidor === localFilters.competidor;
             const mLoc = localFilters.local === 'all' || row.local === localFilters.local;
-            const mCaj = localFilters.caja === 'all' || String(row.cajasTotal) === localFilters.caja;
+            const mCaj = localFilters.caja === 'all' || String(row.caja) === localFilters.caja;
             return mComp && mLoc && mCaj;
         });
     }, [matrixData, localFilters]);
@@ -523,7 +525,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
             const mLoc = localFilters.local === 'all' || d.local === localFilters.local;
             return mComp && mLoc;
         });
-        return [...base, ...new Set(filtered.map(d => String(d.cajasTotal)))];
+        return [...base, ...new Set(filtered.map(d => String(d.caja)))];
     }, [matrixData, localFilters.competidor, localFilters.local]);
 
     const handleLocalFilterChange = (key, value) => {
@@ -621,7 +623,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                                     </div>
                                 </td>
                                 <td className="px-4 py-3 sticky left-[120px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] font-medium text-slate-500 truncate">{row.local}</td>
-                                <td className="px-4 py-3 sticky left-[280px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] text-center font-bold opacity-50">{row.cajasTotal}</td>
+                                <td className="px-4 py-3 sticky left-[280px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] text-center font-bold opacity-50">{row.caja}</td>
                                 {row.monthly.map((val, i) => (
                                     <td key={i} className={`px-3 py-3 text-center font-mono border-l border-slate-100 dark:border-white/[0.02] ${val > 2500 ? 'text-emerald-500 font-bold' : val === 0 ? 'opacity-20' : ''}`}>
                                         {new Intl.NumberFormat('es-ES').format(val)}
