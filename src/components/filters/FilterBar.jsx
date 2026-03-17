@@ -12,6 +12,8 @@ const FilterBar = ({
     codigoTiendaOptions = [],
     channelOptions = [],
     categoryOptions = [],
+    regionOptions = [],
+    distritoOptions = [],
     onReset
 }) => {
     return (
@@ -44,6 +46,27 @@ const FilterBar = ({
                 onChange={(val) => onFilterChange('category', val)}
                 width="w-44"
             />
+
+            <div className="h-8 w-[1px] bg-slate-300 dark:bg-white/10 hidden md:block" />
+
+            {/* Geography Filters */}
+            <CustomSelect
+                label="Región"
+                options={regionOptions}
+                selected={filters.region || 'all'}
+                onChange={(val) => onFilterChange('region', val)}
+                width="w-40"
+            />
+            <CustomSelect
+                label="Distrito"
+                options={distritoOptions}
+                selected={filters.distrito || 'all'}
+                onChange={(val) => onFilterChange('distrito', val)}
+                width="w-48"
+                searchable
+            />
+
+            <div className="h-8 w-[1px] bg-slate-300 dark:bg-white/10 hidden md:block" />
 
             {/* Logic Filters Group */}
             <CustomSelect

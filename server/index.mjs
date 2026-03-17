@@ -40,7 +40,8 @@ const QUERY_RECORDS = `
     competidor, codigo_tienda, local, caja, status_busqueda,
     transacciones_diferencial, ticket_actual, ticket_anterior,
     fecha_y_hora_registro, fecha_anterior, filename_actual, filename_anterior,
-    delta_dias, ac, promedio_transacciones_diarias, mes, ano
+    delta_dias, ac, promedio_transacciones_diarias, mes, ano,
+    region, distrito
   FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
 `;
 
@@ -85,6 +86,8 @@ async function fetchFromBigQuery() {
         ac: r.ac ?? 0,
         mes: r.mes ?? '',
         ano: r.ano ?? '',
+        region: r.region || '',
+        distrito: r.distrito || '',
     }));
 
     const tickets = rowsTickets.map(t => ({

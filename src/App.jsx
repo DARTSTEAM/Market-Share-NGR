@@ -646,7 +646,9 @@ export default function App() {
     local: 'all',
     codigoTienda: 'all',
     category: 'all',
-    channel: 'all'
+    channel: 'all',
+    region: 'all',
+    distrito: 'all'
   });
 
   // Derived Options for FilterBar
@@ -717,6 +719,25 @@ export default function App() {
     return [...base, ...codes.map(c => ({ value: c, label: c }))];
   }, [records, filters.category, filters.competitor, filters.local]);
 
+  const regionOptions = useMemo(() => {
+    const base = [{ value: 'all', label: 'Todas las Regiones' }];
+    let filtered = records;
+    if (filters.category !== 'all') filtered = filtered.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
+    if (filters.competitor !== 'all') filtered = filtered.filter(r => r.competidor === filters.competitor);
+    const vals = Array.from(new Set(filtered.map(r => r.region).filter(Boolean))).sort();
+    return [...base, ...vals.map(v => ({ value: v, label: v }))];
+  }, [records, filters.category, filters.competitor]);
+
+  const distritoOptions = useMemo(() => {
+    const base = [{ value: 'all', label: 'Todos los Distritos' }];
+    let filtered = records;
+    if (filters.category !== 'all') filtered = filtered.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
+    if (filters.competitor !== 'all') filtered = filtered.filter(r => r.competidor === filters.competitor);
+    if (filters.region !== 'all') filtered = filtered.filter(r => r.region === filters.region);
+    const vals = Array.from(new Set(filtered.map(r => r.distrito).filter(Boolean))).sort();
+    return [...base, ...vals.map(v => ({ value: v, label: v }))];
+  }, [records, filters.category, filters.competitor, filters.region]);
+
   const channelOptions = [
     { value: 'all', label: 'Todos los Canales' },
     { value: 'delivery', label: 'Delivery' },
@@ -738,13 +759,20 @@ export default function App() {
         newFilters.competitor = 'all';
         newFilters.local = 'all';
         newFilters.codigoTienda = 'all';
+        newFilters.region = 'all';
+        newFilters.distrito = 'all';
       }
       if (key === 'competitor' && value !== prev.competitor) {
         newFilters.local = 'all';
         newFilters.codigoTienda = 'all';
+        newFilters.region = 'all';
+        newFilters.distrito = 'all';
       }
       if (key === 'local' && value !== prev.local) {
         newFilters.codigoTienda = 'all';
+      }
+      if (key === 'region' && value !== prev.region) {
+        newFilters.distrito = 'all';
       }
       return newFilters;
     });
@@ -758,7 +786,9 @@ export default function App() {
       local: "all",
       codigoTienda: "all",
       category: "all",
-      channel: "all"
+      channel: "all",
+      region: "all",
+      distrito: "all"
     });
   };
 
@@ -789,8 +819,10 @@ export default function App() {
       const lMatch = filters.local === 'all' || rec.local === filters.local;
       const ctMatch = filters.codigoTienda === 'all' || rec.codigo_tienda === filters.codigoTienda;
       const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[rec.competidor] === filters.category;
+      const rMatch = filters.region === 'all' || rec.region === filters.region;
+      const dMatch = filters.distrito === 'all' || rec.distrito === filters.distrito;
 
-      return mMatch && yMatch && cMatch && lMatch && ctMatch && catMatch;
+      return mMatch && yMatch && cMatch && lMatch && ctMatch && catMatch && rMatch && dMatch;
     });
   }, [records, filters]);
 
@@ -806,8 +838,10 @@ export default function App() {
       const lMatch = filters.local === 'all' || t.local === filters.local;
       const ctMatch = filters.codigoTienda === 'all' || t.codigo_tienda === filters.codigoTienda;
       const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[t.competidor] === filters.category;
+      const rMatch = filters.region === 'all' || t.region === filters.region;
+      const dMatch = filters.distrito === 'all' || t.distrito === filters.distrito;
 
-      return cMatch && lMatch && ctMatch && catMatch;
+      return cMatch && lMatch && ctMatch && catMatch && rMatch && dMatch;
     });
   }, [tickets, filters]);
 
@@ -1117,6 +1151,8 @@ export default function App() {
       codigoTiendaOptions={codigoTiendaOptions}
       channelOptions={channelOptions}
       categoryOptions={categoryOptions}
+      regionOptions={regionOptions}
+      distritoOptions={distritoOptions}
     />
   );
 
