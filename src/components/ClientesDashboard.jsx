@@ -93,6 +93,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [sortCaja, setSortCaja] = useState('competidor_asc');
     const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
+    const [topMetric, setTopMetric] = useState('trx'); // 'trx' | 'prom_diario'
     const [exporting, setExporting] = useState(false);
     const [expandDistribucion, setExpandDistribucion] = useState(false);
     const [expandEvolucion, setExpandEvolucion] = useState(false);
@@ -223,11 +224,15 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             const comp = r.competidor;
             if (!comp || !pivot[comp]) return;
 
-            if (!pivot[comp][mk]) pivot[comp][mk] = { trx: 0, locals: new Set() };
+            if (!pivot[comp][mk]) pivot[comp][mk] = { trx: 0, promSum: 0, locals: new Set() };
             const trx = parseFloat(r.transacciones) || 0;
+            const prom = parseFloat(r.promedio) || 0;
             pivot[comp][mk].trx += trx;
+            pivot[comp][mk].promSum += prom;
             pivot[comp][mk].locals.add(r.local);
+            if (!pivotTotal[mk]) pivotTotal[mk] = { trx: 0, promSum: 0, locals: new Set() };
             pivotTotal[mk].trx += trx;
+            pivotTotal[mk].promSum += prom;
             pivotTotal[mk].locals.add(r.local);
         });
 
@@ -334,6 +339,8 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const getTrx = (compKey, monthKey) => pivot[compKey]?.[monthKey]?.trx ?? null;
     const getTiendas = (compKey, monthKey) => pivot[compKey]?.[monthKey]?.locals?.size ?? null;
     const getTotalTrx = (monthKey) => pivot['__total__']?.[monthKey]?.trx ?? null;
+
+    const getProm = (compKey, monthKey) => pivot[compKey]?.[monthKey]?.promSum ?? null;
 
     const formatTrx = (v) => v === null ? <span className="text-slate-300 dark:text-white/15">-</span> : new Intl.NumberFormat('es-PE').format(Math.round(v));
 
@@ -566,14 +573,34 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 ) : (
                     <div className="space-y-6">
 
-                        {/* ── 1. Trx Totales ──────────────────────────────────────────────── */}
-                        <div ref={refTrx}><SectionTable
-                            title="Trx Totales"
-                            headerColor="#1e3a5f"
-                            rows={rows}
-                            months={months}
-                            renderCell={(row, m) => formatTrx(getTrx(row.key, m.key))}
-                        /></div>
+                        {/* ── 1. Trx Totales / Prom. Diario ───────────────────────────────── */}
+                        <div ref={refTrx} className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                {[{ value: 'trx', label: 'Trx Totales' }, { value: 'prom_diario', label: 'Prom. Diario ∑' }].map(opt => (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => setTopMetric(opt.value)}
+                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${topMetric === opt.value
+                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                            }`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <SectionTable
+                                title={topMetric === 'trx' ? 'Trx Totales' : 'Suma Promedio Diario por Competidor'}
+                                headerColor="#1e3a5f"
+                                rows={rows}
+                                months={months}
+                                renderCell={(row, m) => topMetric === 'trx'
+                                    ? formatTrx(getTrx(row.key, m.key))
+                                    : formatTrx(getProm(row.key, m.key))
+                                }
+                                footnote={topMetric === 'prom_diario' ? 'Suma del campo promedio de transacciones diarias de todos los locales del competidor en el período.' : undefined}
+                            />
+                        </div>
 
                         {/* ── 2. Crec % ───────────────────────────────────────────────────── */}
                         <div ref={refCrec}><SectionTable
