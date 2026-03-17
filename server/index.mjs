@@ -72,6 +72,9 @@ async function fetchFromBigQuery() {
         caja: r.caja || '',
         status_busqueda: r.status_busqueda || '',
         transacciones_diferencial: r.transacciones_diferencial ?? 0,
+        transacciones: r.transacciones_diferencial ?? 0,
+        promedio_transacciones_diarias: r.promedio_transacciones_diarias ?? 0,
+        promedio: r.promedio_transacciones_diarias ?? 0,
         ticket_actual: r.ticket_actual ?? 0,
         ticket_anterior: r.ticket_anterior ?? 0,
         fecha: r.fecha_y_hora_registro?.value || '',
@@ -80,7 +83,6 @@ async function fetchFromBigQuery() {
         filename_anterior: r.filename_anterior || '',
         delta_dias: r.delta_dias ?? 0,
         ac: r.ac ?? 0,
-        promedio_transacciones_diarias: r.promedio_transacciones_diarias ?? 0,
         mes: r.mes ?? '',
         ano: r.ano ?? '',
     }));

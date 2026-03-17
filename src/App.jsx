@@ -451,7 +451,7 @@ const kFormatter = (num) => {
 // Removed redundant COMPETITOR_TO_CATEGORY redeclaration if any
 
 export default function App() {
-  const [activeCategory, setActiveCategory] = useState('competitor');
+  const [activeCategory, setActiveCategory] = useState('marketshare');
   const [activeSubTab, setActiveSubTab] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
   const [theme, setTheme] = useState('dark');
