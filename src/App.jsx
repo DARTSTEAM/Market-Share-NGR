@@ -644,6 +644,7 @@ export default function App() {
     year: 'all',
     competitor: 'all',
     local: 'all',
+    codigoTienda: 'all',
     category: 'all',
     channel: 'all'
   });
