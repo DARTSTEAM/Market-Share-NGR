@@ -181,94 +181,6 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             setExporting(false);
         }
     }, [exportSelections, selectedCategory, EXPORT_SECTIONS]);
-
-    const exportCSV = useCallback(() => {
-        const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-        const sections = [];
-
-        // Helper: raw number from renderCrec
-        const getCrecRaw = (compKey, i) => {
-            if (i === 0) return '#N/A';
-            const curr = getTrx(compKey, months[i].key);
-            const prev = getTrx(compKey, months[i - 1].key);
-            if (curr === null && prev === null) return '-';
-            if (prev === null || prev === 0) return '#N/A';
-            return (((curr - prev) / prev) * 100).toFixed(1) + '%';
-        };
-        const getShareRaw = (compKey, monthKey) => {
-            if (compKey === '__total__') return '100%';
-            const ct = getTrx(compKey, monthKey);
-            const tt = getTotalTrx(monthKey);
-            if (ct === null || !tt) return '-';
-            return ((ct / tt) * 100).toFixed(1) + '%';
-        };
-
-        // Trx Totales
-        sections.push('Trx Totales');
-        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
-        rows.forEach(row => {
-            const vals = months.map(m => { const v = getTrx(row.key, m.key); return v === null ? '-' : Math.round(v); });
-            sections.push([row.label, ...vals].map(esc).join(','));
-        });
-        sections.push('');
-
-        // Crec %
-        sections.push('Crec %');
-        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
-        rows.forEach(row => {
-            const vals = months.map((m, idx) => getCrecRaw(row.key, idx));
-            sections.push([row.label, ...vals].map(esc).join(','));
-        });
-        sections.push('');
-
-        // Share %
-        sections.push('Share %');
-        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
-        rows.forEach(row => {
-            const vals = months.map(m => getShareRaw(row.key, m.key));
-            sections.push([row.label, ...vals].map(esc).join(','));
-        });
-        sections.push('');
-
-        // Tiendas
-        sections.push('Número de Tiendas');
-        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
-        rows.forEach(row => {
-            const vals = months.map(m => { const v = getTiendas(row.key, m.key); return v === null ? '-' : v; });
-            sections.push([row.label, ...vals].map(esc).join(','));
-        });
-        sections.push('');
-
-        // Distribución por Caja
-        sections.push('Distribución de Ventas por Caja');
-        sections.push(['Competidor', 'Local', 'Caja', 'Trx Totales', '% del Local'].map(esc).join(','));
-        distribRows.forEach(row => {
-            sections.push([row.competidor, row.local, row.caja, Math.round(row.displayTrx), row.pct.toFixed(1) + '%'].map(esc).join(','));
-        });
-        sections.push('');
-
-        // Evolución por Caja
-        sections.push('Evolución por Caja');
-        sections.push(['Competidor', 'Local', 'Caja', ...cajaMonths.map(m => m.label)].map(esc).join(','));
-        cajaRows.forEach(row => {
-            const vals = cajaMonths.map(m => {
-                const v = evolucionMetric === 'trx_total'
-                    ? row.months[m.key]
-                    : (row.promedios?.[m.key] !== undefined ? (row.promedios[m.key] / (row.promCounts?.[m.key] || 1)) : undefined);
-                return v !== undefined ? v.toFixed(1) : '-';
-            });
-            sections.push([row.competidor, row.local, row.caja, ...vals].map(esc).join(','));
-        });
-
-        const blob = new Blob([sections.join('\n')], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Clientes_${selectedCategory.replace(/ /g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    }, [rows, months, distribRows, cajaRows, cajaMonths, evolucionMetric, selectedCategory, getTrx, getTotalTrx, getTiendas]);
-
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
     // Build pivot: for each competitor x month → { trx, tiendas (distinct locals) }
@@ -452,6 +364,94 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     };
 
     const hasData = months.length > 0 && competitors.length > 0;
+
+    const exportCSV = useCallback(() => {
+        const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const sections = [];
+
+        // Helper: raw number from renderCrec
+        const getCrecRaw = (compKey, i) => {
+            if (i === 0) return '#N/A';
+            const curr = getTrx(compKey, months[i].key);
+            const prev = getTrx(compKey, months[i - 1].key);
+            if (curr === null && prev === null) return '-';
+            if (prev === null || prev === 0) return '#N/A';
+            return (((curr - prev) / prev) * 100).toFixed(1) + '%';
+        };
+        const getShareRaw = (compKey, monthKey) => {
+            if (compKey === '__total__') return '100%';
+            const ct = getTrx(compKey, monthKey);
+            const tt = getTotalTrx(monthKey);
+            if (ct === null || !tt) return '-';
+            return ((ct / tt) * 100).toFixed(1) + '%';
+        };
+
+        // Trx Totales
+        sections.push('Trx Totales');
+        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
+        rows.forEach(row => {
+            const vals = months.map(m => { const v = getTrx(row.key, m.key); return v === null ? '-' : Math.round(v); });
+            sections.push([row.label, ...vals].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Crec %
+        sections.push('Crec %');
+        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
+        rows.forEach(row => {
+            const vals = months.map((m, idx) => getCrecRaw(row.key, idx));
+            sections.push([row.label, ...vals].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Share %
+        sections.push('Share %');
+        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
+        rows.forEach(row => {
+            const vals = months.map(m => getShareRaw(row.key, m.key));
+            sections.push([row.label, ...vals].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Tiendas
+        sections.push('Número de Tiendas');
+        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
+        rows.forEach(row => {
+            const vals = months.map(m => { const v = getTiendas(row.key, m.key); return v === null ? '-' : v; });
+            sections.push([row.label, ...vals].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Distribución por Caja
+        sections.push('Distribución de Ventas por Caja');
+        sections.push(['Competidor', 'Local', 'Caja', 'Trx Totales', '% del Local'].map(esc).join(','));
+        distribRows.forEach(row => {
+            sections.push([row.competidor, row.local, row.caja, Math.round(row.displayTrx), row.pct.toFixed(1) + '%'].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Evolución por Caja
+        sections.push('Evolución por Caja');
+        sections.push(['Competidor', 'Local', 'Caja', ...cajaMonths.map(m => m.label)].map(esc).join(','));
+        cajaRows.forEach(row => {
+            const vals = cajaMonths.map(m => {
+                const v = evolucionMetric === 'trx_total'
+                    ? row.months[m.key]
+                    : (row.promedios?.[m.key] !== undefined ? (row.promedios[m.key] / (row.promCounts?.[m.key] || 1)) : undefined);
+                return v !== undefined ? v.toFixed(1) : '-';
+            });
+            sections.push([row.competidor, row.local, row.caja, ...vals].map(esc).join(','));
+        });
+
+        const blob = new Blob([sections.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Clientes_${selectedCategory.replace(/ /g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [rows, months, distribRows, cajaRows, cajaMonths, evolucionMetric, selectedCategory, getTrx, getTotalTrx, getTiendas]);
+
 
     return (
         <motion.div
