@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Users, FileDown, Loader2 } from 'lucide-react';
+import { Users, FileDown, Loader2, Maximize2, Minimize2, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -94,6 +94,8 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
     const [exporting, setExporting] = useState(false);
+    const [expandDistribucion, setExpandDistribucion] = useState(false);
+    const [expandEvolucion, setExpandEvolucion] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
     const [exportSelections, setExportSelections] = useState({
         trx: true, crec: true, share: true, tiendas: true, distribucion: true, evolucion: true,
@@ -179,6 +181,93 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             setExporting(false);
         }
     }, [exportSelections, selectedCategory, EXPORT_SECTIONS]);
+
+    const exportCSV = useCallback(() => {
+        const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+        const sections = [];
+
+        // Helper: raw number from renderCrec
+        const getCrecRaw = (compKey, i) => {
+            if (i === 0) return '#N/A';
+            const curr = getTrx(compKey, months[i].key);
+            const prev = getTrx(compKey, months[i - 1].key);
+            if (curr === null && prev === null) return '-';
+            if (prev === null || prev === 0) return '#N/A';
+            return (((curr - prev) / prev) * 100).toFixed(1) + '%';
+        };
+        const getShareRaw = (compKey, monthKey) => {
+            if (compKey === '__total__') return '100%';
+            const ct = getTrx(compKey, monthKey);
+            const tt = getTotalTrx(monthKey);
+            if (ct === null || !tt) return '-';
+            return ((ct / tt) * 100).toFixed(1) + '%';
+        };
+
+        // Trx Totales
+        sections.push('Trx Totales');
+        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
+        rows.forEach(row => {
+            const vals = months.map(m => { const v = getTrx(row.key, m.key); return v === null ? '-' : Math.round(v); });
+            sections.push([row.label, ...vals].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Crec %
+        sections.push('Crec %');
+        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
+        rows.forEach(row => {
+            const vals = months.map((m, idx) => getCrecRaw(row.key, idx));
+            sections.push([row.label, ...vals].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Share %
+        sections.push('Share %');
+        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
+        rows.forEach(row => {
+            const vals = months.map(m => getShareRaw(row.key, m.key));
+            sections.push([row.label, ...vals].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Tiendas
+        sections.push('Número de Tiendas');
+        sections.push(['Competidor', ...months.map(m => m.label)].map(esc).join(','));
+        rows.forEach(row => {
+            const vals = months.map(m => { const v = getTiendas(row.key, m.key); return v === null ? '-' : v; });
+            sections.push([row.label, ...vals].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Distribución por Caja
+        sections.push('Distribución de Ventas por Caja');
+        sections.push(['Competidor', 'Local', 'Caja', 'Trx Totales', '% del Local'].map(esc).join(','));
+        distribRows.forEach(row => {
+            sections.push([row.competidor, row.local, row.caja, Math.round(row.displayTrx), row.pct.toFixed(1) + '%'].map(esc).join(','));
+        });
+        sections.push('');
+
+        // Evolución por Caja
+        sections.push('Evolución por Caja');
+        sections.push(['Competidor', 'Local', 'Caja', ...cajaMonths.map(m => m.label)].map(esc).join(','));
+        cajaRows.forEach(row => {
+            const vals = cajaMonths.map(m => {
+                const v = evolucionMetric === 'trx_total'
+                    ? row.months[m.key]
+                    : (row.promedios?.[m.key] !== undefined ? (row.promedios[m.key] / (row.promCounts?.[m.key] || 1)) : undefined);
+                return v !== undefined ? v.toFixed(1) : '-';
+            });
+            sections.push([row.competidor, row.local, row.caja, ...vals].map(esc).join(','));
+        });
+
+        const blob = new Blob([sections.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Clientes_${selectedCategory.replace(/ /g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [rows, months, distribRows, cajaRows, cajaMonths, evolucionMetric, selectedCategory, getTrx, getTotalTrx, getTiendas]);
 
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
 
@@ -385,7 +474,13 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {/* Export PDF button */}
+                    {/* Export buttons */}
+                    <button
+                        onClick={exportCSV}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:border-emerald-500 hover:text-emerald-500 transition-all duration-200"
+                    >
+                        <FileText className="w-4 h-4" /> Exportar CSV
+                    </button>
                     <button
                         onClick={() => setShowExportModal(true)}
                         disabled={exporting}
@@ -582,9 +677,10 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                     </div>
 
                                 {/* ── 5. Distribución por Caja ──────────────────────────────────── */}
-                                <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
+                                <div className="relative rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg overflow-hidden">
+                                    <div className={expandDistribucion ? 'overflow-x-auto' : 'overflow-auto max-h-96'}>
                                     <table className="w-full text-left whitespace-nowrap text-[11px]">
-                                        <thead>
+                                        <thead className="sticky top-0 z-10">
                                             <tr>
                                                 <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={5}>
                                                     Distribución de Ventas por Caja {filterCajaMes !== 'all' ? `— ${cajaMonths.find(m => m.key === filterCajaMes)?.label}` : ''}
@@ -624,6 +720,14 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             })}
                                         </tbody>
                                     </table>
+                                    </div>
+                                    <button
+                                        onClick={() => setExpandDistribucion(v => !v)}
+                                        title={expandDistribucion ? 'Contraer' : 'Expandir'}
+                                        className="absolute bottom-2 right-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg p-1.5 shadow-md text-slate-400 dark:text-white/40 hover:text-accent-orange hover:border-accent-orange transition-all z-20"
+                                    >
+                                        {expandDistribucion ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                                    </button>
                                 </div>
                                 </div>
 
@@ -657,9 +761,10 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             </select>
                                         </div>
                                     </div>
-                                    <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
+                                    <div className="relative rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg overflow-hidden">
+                                    <div className={expandEvolucion ? 'overflow-x-auto' : 'overflow-auto max-h-96'}>
                                         <table className="w-full text-left whitespace-nowrap text-[11px]">
-                                            <thead>
+                                            <thead className="sticky top-0 z-10">
                                                 <tr>
                                                     <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
                                                         {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio Diario por Caja y Local'}
@@ -719,6 +824,14 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                 })}
                                             </tbody>
                                         </table>
+                                    </div>
+                                    <button
+                                        onClick={() => setExpandEvolucion(v => !v)}
+                                        title={expandEvolucion ? 'Contraer' : 'Expandir'}
+                                        className="absolute bottom-2 right-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg p-1.5 shadow-md text-slate-400 dark:text-white/40 hover:text-accent-orange hover:border-accent-orange transition-all z-20"
+                                    >
+                                        {expandEvolucion ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                                    </button>
                                     </div>
                                 </div>
                             </>
