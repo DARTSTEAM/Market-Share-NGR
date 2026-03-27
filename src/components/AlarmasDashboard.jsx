@@ -153,18 +153,20 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
         const foundActual = tickets.find(t => t.filename === record.filename_actual);
         const actualData = foundActual ? {
             ...foundActual,
+            competidor: foundActual.competidor || record.competidor || '',
+            local: foundActual.local || record.local || '',
             codigoTienda: foundActual.codigo_tienda || foundActual.codigoTienda || record.codigo_tienda || '',
-            caja: foundActual.numero_de_caja || foundActual.caja || record.caja || '',
-            ticket: foundActual.ticket,
-            importe: foundActual.importe,
-            fecha: foundActual.fecha,
+            caja: foundActual.caja || foundActual.numero_de_caja || record.caja || '',
+            ticket: foundActual.ticket || foundActual.numero_de_ticket || record.ticket_actual?.toString() || '',
+            importe: foundActual.importe ?? foundActual.importe_total ?? 0,
+            fecha: foundActual.fecha ? foundActual.fecha.split('T')[0] : (record.fecha ? record.fecha.split('T')[0] : ''),
             originalFilename: foundActual.filename
         } : {
             competidor: record.competidor,
             local: record.local,
             caja: record.caja || '',
             codigoTienda: record.codigo_tienda || '',
-            ticket: record.ticket_actual,
+            ticket: record.ticket_actual?.toString() || '',
             filename: record.filename_actual,
             originalFilename: record.filename_actual,
             importe: 0,
@@ -176,18 +178,20 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
             const foundAnterior = tickets.find(t => t.filename === record.filename_anterior);
             anteriorData = foundAnterior ? {
                 ...foundAnterior,
+                competidor: foundAnterior.competidor || record.competidor || '',
+                local: foundAnterior.local || record.local || '',
                 codigoTienda: foundAnterior.codigo_tienda || foundAnterior.codigoTienda || record.codigo_tienda || '',
-                caja: foundAnterior.numero_de_caja || foundAnterior.caja || record.caja || '',
-                ticket: foundAnterior.ticket,
-                importe: foundAnterior.importe,
-                fecha: foundAnterior.fecha,
+                caja: foundAnterior.caja || foundAnterior.numero_de_caja || record.caja || '',
+                ticket: foundAnterior.ticket || foundAnterior.numero_de_ticket || record.ticket_anterior?.toString() || '',
+                importe: foundAnterior.importe ?? foundAnterior.importe_total ?? 0,
+                fecha: foundAnterior.fecha ? foundAnterior.fecha.split('T')[0] : (record.fecha_anterior ? record.fecha_anterior.split('T')[0] : ''),
                 originalFilename: foundAnterior.filename
             } : {
                 competidor: record.competidor,
                 local: record.local,
                 caja: record.caja || '',
                 codigoTienda: record.codigo_tienda || '',
-                ticket: record.ticket_anterior,
+                ticket: record.ticket_anterior?.toString() || '',
                 filename: record.filename_anterior,
                 originalFilename: record.filename_anterior,
                 importe: 0,
