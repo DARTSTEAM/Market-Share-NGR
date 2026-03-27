@@ -47,7 +47,7 @@ const QUERY_RECORDS = `
 
 const QUERY_TICKETS = `
   SELECT
-    competidor, codigo_tienda, local, canal_de_venta, importe_total,
+    competidor, codigo_tienda, local, region, distrito, canal_de_venta, importe_total,
     numero_de_ticket, numero_de_caja, fecha, hora,
     recargo_consumo, monto_tarifario, filename, fecha_carga
   FROM \`${PROJECT_ID}.${DATASET_ID}.facturas_v2\`
@@ -94,10 +94,17 @@ async function fetchFromBigQuery() {
         competidor: t.competidor || '',
         codigo_tienda: t.codigo_tienda || '',
         local: t.local || '',
+        region: t.region || '',
+        distrito: t.distrito || '',
         canal_de_venta: t.canal_de_venta || '',
+        // Aliases normalizados para el frontend
+        ticket: t.numero_de_ticket || '',
+        importe: t.importe_total ?? 0,
+        // Campos originales también disponibles
         importe_total: t.importe_total ?? 0,
         numero_de_ticket: t.numero_de_ticket || '',
         numero_de_caja: t.numero_de_caja || '',
+        caja: t.numero_de_caja || '',
         fecha: t.fecha?.value || t.fecha || '',
         hora: (typeof t.hora === 'object' && t.hora !== null) ? (t.hora.value || '') : (t.hora || ''),
         recargo_consumo: t.recargo_consumo ?? 0,
