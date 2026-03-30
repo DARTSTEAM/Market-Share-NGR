@@ -114,7 +114,7 @@ const PCCard = ({ pc, shareData, onClick, isSelected }) => {
         <motion.div
             whileHover={{ y: -4, scale: 1.01 }}
             onClick={() => onClick(pc)}
-            className={`pwa-card p-5 flex flex-col gap-4 cursor-pointer transition-all duration-200 relative overflow-hidden border-2 ${isSelected
+            className={`pwa-card p-5 flex flex-col cursor-pointer transition-all duration-200 relative overflow-hidden border-2 h-[400px] ${isSelected
                 ? 'border-accent-orange shadow-[0_0_30px_rgba(255,94,0,0.2)]'
                 : 'border-transparent hover:border-white/10 dark:hover:border-white/10'
                 }`}
@@ -123,7 +123,7 @@ const PCCard = ({ pc, shareData, onClick, isSelected }) => {
             <div className="absolute inset-0 opacity-[0.03] rounded-2xl" style={{ background: `radial-gradient(circle at 70% 30%, ${leaderColor}, transparent 60%)` }} />
 
             {/* Header */}
-            <div className="flex justify-between items-start gap-2">
+            <div className="flex justify-between items-start gap-2 flex-shrink-0 mb-2">
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-1">
                         {isCC
@@ -149,24 +149,35 @@ const PCCard = ({ pc, shareData, onClick, isSelected }) => {
                 </div>
             </div>
 
-            {/* Mini donut */}
-            <MiniDonut data={pc.byComp} shareData={shareData} />
+            {/* Mini donut — fixed size */}
+            <div className="flex-shrink-0">
+                <MiniDonut data={pc.byComp} shareData={shareData} />
+            </div>
 
-            {/* Leader badge */}
-            {leader && (
-                <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-white/5">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Líder</span>
-                    <span
-                        className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-tight"
-                        style={{ backgroundColor: `${leaderColor}20`, color: leaderColor }}
-                    >
-                        {leader.name} · {((leader.value / total) * 100).toFixed(0)}%
-                    </span>
-                </div>
-            )}
+            {/* All competitors with % bar — fills remaining space */}
+            <div className="flex-1 flex flex-col justify-center gap-2 mt-1 min-h-0">
+                {pc.byComp.map((comp, i) => {
+                    const color = colorForCompetidor(comp.name, shareData);
+                    const pct = total > 0 ? (comp.value / total) * 100 : 0;
+                    return (
+                        <div key={i} className="flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                            <span className="text-[8px] font-black uppercase tracking-tighter truncate flex-1" style={{ color }}>
+                                {comp.name}
+                            </span>
+                            <div className="w-16 h-1.5 bg-slate-100 dark:bg-white/5 rounded-full flex-shrink-0 overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                            </div>
+                            <span className="text-[9px] font-mono font-black w-8 text-right flex-shrink-0" style={{ color }}>
+                                {pct.toFixed(0)}%
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
 
             {/* Total */}
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100 dark:border-white/5 flex-shrink-0">
                 <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Transacciones</span>
                 <span className="text-sm font-black font-mono text-slate-900 dark:text-white">
                     {new Intl.NumberFormat('es-ES').format(total)}
