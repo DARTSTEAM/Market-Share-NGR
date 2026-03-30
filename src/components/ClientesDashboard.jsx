@@ -17,6 +17,36 @@ const COMPETITOR_COLORS = [
     '#ff3366', '#00ccff', '#ffcc00', '#33ff99', '#cc00ff',
 ];
 
+// ─── Brand color palette ───────────────────────────────────────────────
+const BRAND_COLORS = {
+    // — Hamburguesa —
+    'mcdonald':    '#DA291C',   // rojo icónico + arcos dorados
+    'burger king': '#D62300',   // llama naranja-roja
+    'bembos':      '#E31837',   // rojo peruano
+    'hermanos':    '#C0392B',
+    // — Pollo Frito —
+    'kfc':         '#F40027',   // rojo KFC
+    'popeyes':     '#F26522',   // naranja Popeyes
+    "church":      '#C8102E',   // Church's Chicken
+    'norkys':      '#E8890C',   // dorado Norky's
+    "pardos":      '#B8860B',   // Pardo's Chicken
+    // — Pizza —
+    'pizza hut':   '#EE3224',   // rojo Pizza Hut
+    'domino':      '#006AAD',   // azul Domino's
+    "papa john":   '#007743',   // verde Papa John's
+    'telepizza':   '#E30613',
+};
+
+// Find best brand color by partial-matching the competitor name
+const getBrandColor = (name, fallbackIdx = 0) => {
+    if (!name) return COMPETITOR_COLORS[fallbackIdx % COMPETITOR_COLORS.length];
+    const lower = name.toLowerCase().trim();
+    for (const [brand, color] of Object.entries(BRAND_COLORS)) {
+        if (lower.includes(brand)) return color;
+    }
+    return COMPETITOR_COLORS[fallbackIdx % COMPETITOR_COLORS.length];
+};
+
 // ─── Table section ────────────────────────────────────────────────────────────
 const SectionTable = ({ title, headerColor = '#1e3a5f', rows, months, renderCell, footnote }) => (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg">
@@ -342,7 +372,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     // Build rows for each table (competitors + total)
     const rows = useMemo(() => {
         return [
-            ...competitors.map((c, i) => ({ label: c, key: c, isTotal: false, color: COMPETITOR_COLORS[i % COMPETITOR_COLORS.length] })),
+            ...competitors.map((c, i) => ({ label: c, key: c, isTotal: false, color: getBrandColor(c, i) })),
             { label: 'Total', key: '__total__', isTotal: true, color: '#94a3b8' },
         ];
     }, [competitors]);
@@ -603,21 +633,30 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                         >
                             Todos
                         </button>
-                        {categoryCompetitors.map(comp => (
-                            <button
-                                key={comp}
-                                onClick={() => setSelectedCompetitors(prev =>
-                                    prev.includes(comp) ? prev.filter(c => c !== comp) : [...prev, comp]
-                                )}
-                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
-                                    selectedCompetitors.includes(comp)
-                                        ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                        : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                }`}
-                            >
-                                {comp}
-                            </button>
-                        ))}
+                        {categoryCompetitors.map(comp => {
+                            const bColor = getBrandColor(comp, categoryCompetitors.indexOf(comp));
+                            const isSelected = selectedCompetitors.includes(comp);
+                            return (
+                                <button
+                                    key={comp}
+                                    onClick={() => setSelectedCompetitors(prev =>
+                                        prev.includes(comp) ? prev.filter(c => c !== comp) : [...prev, comp]
+                                    )}
+                                    className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                        isSelected
+                                            ? 'border-current text-white'
+                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                    }`}
+                                    style={isSelected ? { backgroundColor: bColor, borderColor: bColor } : {}}
+                                >
+                                    <span
+                                        className="w-2 h-2 rounded-full flex-shrink-0"
+                                        style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.6)' : bColor }}
+                                    />
+                                    {comp}
+                                </button>
+                            );
+                        })}
                     </div>
                     {selectedCompetitors.length > 0 && (
                         <span className="text-[9px] font-black uppercase tracking-widest text-accent-orange ml-auto">
