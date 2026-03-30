@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MapPin, Building2, Store, Users, TrendingUp, BarChart3,
-    ChevronRight, ChevronDown, X, Layers
+    ChevronRight, ChevronLeft, ChevronDown, X, Layers
 } from 'lucide-react';
 import {
     ResponsiveContainer, PieChart, Pie, Cell, Tooltip as ReTooltip,
@@ -177,10 +177,23 @@ const PCCard = ({ pc, shareData, onClick, isSelected }) => {
 };
 
 // ─── Expanded detail panel (modal) ─────────────────────────────────────────
-const PCDetailPanel = ({ pc, shareData, onClose }) => {
+const PCDetailPanel = ({ pc, shareData, onClose, allPCs, currentIndex, onNavigate }) => {
     if (!pc) return null;
     const total = pc.byComp.reduce((s, d) => s + d.value, 0);
     const isCC = !!pc.cc_nombre;
+    const hasPrev = currentIndex > 0;
+    const hasNext = currentIndex < allPCs.length - 1;
+
+    // Keyboard navigation
+    React.useEffect(() => {
+        const handler = (e) => {
+            if (e.key === 'ArrowLeft' && hasPrev) onNavigate(currentIndex - 1);
+            if (e.key === 'ArrowRight' && hasNext) onNavigate(currentIndex + 1);
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [currentIndex, hasPrev, hasNext]);
 
     return (
         <motion.div
@@ -201,13 +214,15 @@ const PCDetailPanel = ({ pc, shareData, onClose }) => {
                 className="pwa-card p-6 space-y-6 w-full max-w-4xl max-h-[88vh] overflow-y-auto"
                 onClick={e => e.stopPropagation()}
             >
-                {/* Header */}
                 <div className="flex justify-between items-start border-b border-slate-200 dark:border-white/10 pb-5">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
                             {isCC ? <Building2 className="w-4 h-4 text-accent-blue" /> : <MapPin className="w-4 h-4 text-accent-orange" />}
                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
                                 {isCC ? (pc.grupos_cc || 'Centro Comercial') : 'Punto Compartido'}
+                            </span>
+                            <span className="text-[9px] font-black text-slate-300 dark:text-white/15 ml-1">
+                                {currentIndex + 1} / {allPCs.length}
                             </span>
                         </div>
                         <h3 className="text-xl font-black italic uppercase text-slate-900 dark:text-white">{pc.nombre}</h3>
@@ -216,9 +231,29 @@ const PCDetailPanel = ({ pc, shareData, onClose }) => {
                             {pc.byComp.length} competidores · {pc.locales.length} locales registrados · {new Intl.NumberFormat('es-ES').format(total)} transacciones
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors flex-shrink-0">
-                        <X className="w-4 h-4" />
-                    </button>
+                    {/* Navigation + close */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                            onClick={() => hasPrev && onNavigate(currentIndex - 1)}
+                            disabled={!hasPrev}
+                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                            title="Anterior (←)"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => hasNext && onNavigate(currentIndex + 1)}
+                            disabled={!hasNext}
+                            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                            title="Siguiente (→)"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                        <div className="w-px h-5 bg-slate-200 dark:bg-white/10 mx-1" />
+                        <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -528,6 +563,9 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
                     pc={selectedPC}
                     shareData={shareData}
                     onClose={() => setSelectedPC(null)}
+                    allPCs={filteredPCs}
+                    currentIndex={filteredPCs.findIndex(p => p.nombre === selectedPC.nombre)}
+                    onNavigate={(idx) => setSelectedPC(filteredPCs[idx])}
                 />
             )}
         </AnimatePresence>
