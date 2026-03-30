@@ -28,13 +28,9 @@ const MiniDonut = ({ data, shareData }) => {
         <ResponsiveContainer width="100%" height={120}>
             <PieChart>
                 <Pie data={chartData} cx="50%" cy="50%" innerRadius={28} outerRadius={48}
-                    paddingAngle={3} dataKey="value" stroke="none">
+                    paddingAngle={3} dataKey="value" stroke="none" isAnimationActive={false}>
                     {chartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
-                <ReTooltip
-                    contentStyle={{ backgroundColor: 'rgba(0,0,0,0.85)', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: 900 }}
-                    formatter={(val, name) => [`${((val / data.reduce((a, b) => a + b.value, 0)) * 100).toFixed(0)}%`, name]}
-                />
             </PieChart>
         </ResponsiveContainer>
     );
