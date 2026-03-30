@@ -183,7 +183,7 @@ const PCCard = ({ pc, shareData, onClick, isSelected }) => {
     );
 };
 
-// ─── Expanded detail panel ──────────────────────────────────────────────────
+// ─── Expanded detail panel (modal) ─────────────────────────────────────────
 const PCDetailPanel = ({ pc, shareData, onClose }) => {
     if (!pc) return null;
     const total = pc.byComp.reduce((s, d) => s + d.value, 0);
@@ -191,67 +191,79 @@ const PCDetailPanel = ({ pc, shareData, onClose }) => {
 
     return (
         <motion.div
-            key={pc.nombre}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="pwa-card p-6 space-y-6"
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8"
+            style={{ backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)' }}
+            onClick={onClose}
         >
-            {/* Header */}
-            <div className="flex justify-between items-start border-b border-slate-200 dark:border-white/10 pb-5">
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        {isCC ? <Building2 className="w-4 h-4 text-accent-blue" /> : <MapPin className="w-4 h-4 text-accent-orange" />}
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
-                            {isCC ? (pc.grupos_cc || 'Centro Comercial') : 'Punto Compartido'}
-                        </span>
+            <motion.div
+                key={pc.nombre}
+                initial={{ opacity: 0, scale: 0.96, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 10 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className="pwa-card p-6 space-y-6 w-full max-w-4xl max-h-[88vh] overflow-y-auto"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="flex justify-between items-start border-b border-slate-200 dark:border-white/10 pb-5">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            {isCC ? <Building2 className="w-4 h-4 text-accent-blue" /> : <MapPin className="w-4 h-4 text-accent-orange" />}
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
+                                {isCC ? (pc.grupos_cc || 'Centro Comercial') : 'Punto Compartido'}
+                            </span>
+                        </div>
+                        <h3 className="text-xl font-black italic uppercase text-slate-900 dark:text-white">{pc.nombre}</h3>
+                        {isCC && <p className="text-xs text-accent-blue font-bold mt-0.5">{pc.cc_nombre}</p>}
+                        <p className="text-[10px] text-slate-400 dark:text-white/30 mt-2 font-bold">
+                            {pc.byComp.length} competidores · {pc.locales.length} locales registrados · {new Intl.NumberFormat('es-ES').format(total)} transacciones
+                        </p>
                     </div>
-                    <h3 className="text-xl font-black italic uppercase text-slate-900 dark:text-white">{pc.nombre}</h3>
-                    {isCC && <p className="text-xs text-accent-blue font-bold mt-0.5">{pc.cc_nombre}</p>}
-                    <p className="text-[10px] text-slate-400 dark:text-white/30 mt-2 font-bold">
-                        {pc.byComp.length} competidores · {pc.locales.length} locales registrados · {new Intl.NumberFormat('es-ES').format(total)} transacciones
-                    </p>
-                </div>
-                <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors">
-                    <X className="w-4 h-4" />
-                </button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Left: Big donut */}
-                <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 mb-4">Distribución de ventas</p>
-                    <BigDonut data={pc.byComp} shareData={shareData} total={total} />
+                    <button onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 transition-colors flex-shrink-0">
+                        <X className="w-4 h-4" />
+                    </button>
                 </div>
 
-                {/* Right: Bar share */}
-                <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 mb-4">Market share por marca</p>
-                    <StackedBar data={pc.byComp} shareData={shareData} total={total} />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Left: Big donut */}
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 mb-4">Distribución de ventas</p>
+                        <BigDonut data={pc.byComp} shareData={shareData} total={total} />
+                    </div>
 
-                    {/* Locales table */}
-                    <div className="mt-6">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 mb-3">Locales en este punto</p>
-                        <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-                            {pc.locales.map((loc, i) => {
-                                const color = colorForCompetidor(loc.competidor, shareData);
-                                return (
-                                    <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                                            <span className="text-[9px] font-black uppercase tracking-widest truncate" style={{ color }}>{loc.competidor}</span>
-                                            <span className="text-[9px] text-slate-500 dark:text-white/40 font-bold truncate">{loc.local}</span>
+                    {/* Right: Bar share */}
+                    <div>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 mb-4">Market share por marca</p>
+                        <StackedBar data={pc.byComp} shareData={shareData} total={total} />
+
+                        {/* Locales table */}
+                        <div className="mt-6">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 mb-3">Locales en este punto</p>
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                                {pc.locales.map((loc, i) => {
+                                    const color = colorForCompetidor(loc.competidor, shareData);
+                                    return (
+                                        <div key={i} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/5">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                                                <span className="text-[9px] font-black uppercase tracking-widest truncate" style={{ color }}>{loc.competidor}</span>
+                                                <span className="text-[9px] text-slate-500 dark:text-white/40 font-bold truncate">{loc.local}</span>
+                                            </div>
+                                            <span className="text-[9px] font-mono font-black text-slate-700 dark:text-white/70 flex-shrink-0 ml-2">
+                                                {new Intl.NumberFormat('es-ES').format(loc.transacciones)}
+                                            </span>
                                         </div>
-                                        <span className="text-[9px] font-mono font-black text-slate-700 dark:text-white/70 flex-shrink-0 ml-2">
-                                            {new Intl.NumberFormat('es-ES').format(loc.transacciones)}
-                                        </span>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </motion.div>
         </motion.div>
     );
 };
@@ -343,6 +355,7 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
     };
 
     return (
+        <>
         <div className="space-y-8 animate-in fade-in duration-700">
 
             {/* KPIs */}
@@ -415,18 +428,6 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
                     </span>
                 </div>
             </section>
-
-            {/* Expanded detail panel */}
-            <AnimatePresence>
-                {selectedPC && (
-                    <PCDetailPanel
-                        key={selectedPC.nombre}
-                        pc={selectedPC}
-                        shareData={shareData}
-                        onClose={() => setSelectedPC(null)}
-                    />
-                )}
-            </AnimatePresence>
 
             {/* PC Cards Grid */}
             {filteredPCs.length === 0 ? (
@@ -518,5 +519,18 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
                 </section>
             )}
         </div>
+
+        {/* Modal — fixed overlay over the whole viewport */}
+        <AnimatePresence>
+            {selectedPC && (
+                <PCDetailPanel
+                    key={selectedPC.nombre}
+                    pc={selectedPC}
+                    shareData={shareData}
+                    onClose={() => setSelectedPC(null)}
+                />
+            )}
+        </AnimatePresence>
+        </>
     );
 }
