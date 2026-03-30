@@ -268,6 +268,7 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
     const [filterCadena, setFilterCadena] = useState('all');
     const [filterComp, setFilterComp] = useState('all');
     const [sortMode, setSortMode] = useState('transacciones'); // transacciones | marcas | nombre
+    const [visibleCount, setVisibleCount] = useState(8);
 
     // Build PC index from allRecords
     const pcData = useMemo(() => {
@@ -332,6 +333,9 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
 
         return data;
     }, [pcData, filterTipo, filterCadena, filterComp, sortMode]);
+
+    // Reset visible cards when filters change
+    React.useEffect(() => { setVisibleCount(8); }, [filterTipo, filterCadena, filterComp, sortMode]);
 
     // KPIs
     const kpis = useMemo(() => {
@@ -435,12 +439,12 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
             ) : (
                 <>
                     <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {filteredPCs.slice(0, 8).map((pc, i) => (
+                        {filteredPCs.slice(0, visibleCount).map((pc, i) => (
                             <motion.div
                                 key={pc.nombre}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: Math.min(i * 0.04, 0.6) }}
+                                transition={{ delay: Math.min((i % 4) * 0.06, 0.3) }}
                             >
                                 <PCCard
                                     pc={pc}
@@ -451,19 +455,22 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
                             </motion.div>
                         ))}
                     </section>
-                    {filteredPCs.length > 8 && (
+                    {filteredPCs.length > visibleCount && (
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             className="flex items-center justify-center gap-3 py-4"
                         >
                             <div className="flex-1 h-px bg-slate-200 dark:bg-white/5" />
-                            <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02]">
-                                <Layers className="w-3 h-3 text-slate-400 dark:text-white/30" />
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
-                                    Hay {filteredPCs.length - 8} puntos compartidos más · Aplicá filtros para ver más
+                            <button
+                                onClick={() => setVisibleCount(v => v + 4)}
+                                className="flex items-center gap-2 px-5 py-2 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] hover:bg-slate-100 dark:hover:bg-white/5 hover:border-accent-orange/40 transition-all duration-200 group"
+                            >
+                                <Layers className="w-3 h-3 text-slate-400 dark:text-white/30 group-hover:text-accent-orange transition-colors" />
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 group-hover:text-accent-orange transition-colors">
+                                    Ver 4 más &nbsp;·&nbsp; quedan {filteredPCs.length - visibleCount}
                                 </span>
-                            </div>
+                            </button>
                             <div className="flex-1 h-px bg-slate-200 dark:bg-white/5" />
                         </motion.div>
                     )}
