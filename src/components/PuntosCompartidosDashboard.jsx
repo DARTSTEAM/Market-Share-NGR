@@ -46,13 +46,6 @@ const BigDonut = ({ data, shareData, total }) => {
                     paddingAngle={3} dataKey="value" stroke="none" label={false}>
                     {chartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
-                <ReTooltip
-                    contentStyle={{ backgroundColor: 'rgba(0,0,0,0.85)', border: 'none', borderRadius: '10px', fontSize: '11px', fontWeight: 900 }}
-                    formatter={(val, name) => [
-                        `${new Intl.NumberFormat('es-ES').format(val)} (${((val / total) * 100).toFixed(1)}%)`,
-                        name
-                    ]}
-                />
                 <Legend
                     iconType="circle" iconSize={7}
                     formatter={(value, entry) => (
