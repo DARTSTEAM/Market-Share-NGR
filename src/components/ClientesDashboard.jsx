@@ -87,12 +87,22 @@ const SectionTable = ({ title, headerColor = '#1e3a5f', rows, months, renderCell
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ClientesDashboard = ({ records, competitorToCategory }) => {
-    const [selectedCategory, setSelectedCategory] = useState('Hamburguesa');
+    const [selectedCategories, setSelectedCategories] = useState(['Hamburguesa']);
+    const [selectedCompetitors, setSelectedCompetitors] = useState([]);
     const [filterCompetidor, setFilterCompetidor] = useState('all');
     const [filterCajaMes, setFilterCajaMes] = useState('all');
     const [sortCaja, setSortCaja] = useState('competidor_asc');
     const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
+
+    const toggleCategory = (cat) => {
+        setSelectedCategories(prev =>
+            prev.includes(cat)
+                ? prev.length > 1 ? prev.filter(c => c !== cat) : prev
+                : [...prev, cat]
+        );
+        setSelectedCompetitors([]);
+    };
     const [topMetric, setTopMetric] = useState('trx'); // 'trx' | 'prom_diario'
     const [exporting, setExporting] = useState(false);
     const [expandDistribucion, setExpandDistribucion] = useState(false);
@@ -176,13 +186,14 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 }
             }
 
-            const catLabel = selectedCategory.replace(/ /g, '_');
+            const catLabel = selectedCategories.join('+').replace(/ /g, '_');
             pdf.save(`Clientes_${catLabel}_${new Date().toISOString().slice(0, 10)}.pdf`);
         } finally {
             setExporting(false);
         }
-    }, [exportSelections, selectedCategory, EXPORT_SECTIONS]);
+    }, [exportSelections, selectedCategories, EXPORT_SECTIONS]);
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
+    const allCatsSelected = selectedCategories.length === categories.length;
 
     // Build pivot: for each competitor x month → { trx, tiendas (distinct locals) }
     const { months, competitors, pivot } = useMemo(() => {
@@ -190,7 +201,8 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         const filtered = records.filter(r =>
             r.status_busqueda === 'OK' &&
             r.mes && r.ano &&
-            (competitorToCategory[r.competidor] === selectedCategory)
+            selectedCategories.includes(competitorToCategory[r.competidor]) &&
+            (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor))
         );
 
         // Derive sorted months
@@ -239,28 +251,29 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         pivot['__total__'] = pivotTotal;
 
         return { months, competitors, pivot };
-    }, [records, selectedCategory, competitorToCategory]);
+    }, [records, selectedCategories, selectedCompetitors, competitorToCategory]);
 
     // ── Competitors in this category (for sub-filter) ─────────────────────────
     const categoryCompetitors = useMemo(() => {
         const set = new Set(
             records
-                .filter(r => r.status_busqueda === 'OK' && r.mes && r.ano && competitorToCategory[r.competidor] === selectedCategory)
+                .filter(r => r.status_busqueda === 'OK' && r.mes && r.ano && selectedCategories.includes(competitorToCategory[r.competidor]))
                 .map(r => r.competidor)
                 .filter(Boolean)
         );
         return Array.from(set).sort();
-    }, [records, selectedCategory, competitorToCategory]);
+    }, [records, selectedCategories, competitorToCategory]);
 
     // Reset competitor filter when category changes
-    React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); }, [selectedCategory]);
+    React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); }, [selectedCategories]);
 
     // ── Caja pivot: (local, caja) × month ─────────────────────────────────────
     const { cajaRows, cajaMonths } = useMemo(() => {
         const filtered = records.filter(r =>
             r.status_busqueda === 'OK' &&
             r.mes && r.ano && r.local && r.caja &&
-            competitorToCategory[r.competidor] === selectedCategory &&
+            selectedCategories.includes(competitorToCategory[r.competidor]) &&
+            (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor)) &&
             (filterCompetidor === 'all' || r.competidor === filterCompetidor)
         );
 
@@ -301,7 +314,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         cajaRows.forEach(r => { r.localTotal = localTotals[r.local] || 1; });
 
         return { cajaRows, cajaMonths };
-    }, [records, selectedCategory, filterCompetidor, competitorToCategory]);
+    }, [records, selectedCategories, selectedCompetitors, filterCompetidor, competitorToCategory]);
 
     // ── Display rows for Distribución table (filtered by month + sorted) ────────
     const distribRows = useMemo(() => {
@@ -334,6 +347,12 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             { label: 'Total', key: '__total__', isTotal: true, color: '#94a3b8' },
         ];
     }, [competitors]);
+
+    // Apply competitor multi-filter to rows (removes Total when specific ones are selected)
+    const filteredRows = useMemo(() => {
+        if (selectedCompetitors.length === 0) return rows;
+        return rows.filter(r => !r.isTotal && selectedCompetitors.includes(r.key));
+    }, [rows, selectedCompetitors]);
 
     // Helpers
     const getTrx = (compKey, monthKey) => pivot[compKey]?.[monthKey]?.trx ?? null;
@@ -454,10 +473,10 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `Clientes_${selectedCategory.replace(/ /g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
+        a.download = `Clientes_${selectedCategories.join('+').replace(/ /g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
         a.click();
         URL.revokeObjectURL(url);
-    }, [rows, months, distribRows, cajaRows, cajaMonths, evolucionMetric, selectedCategory, getTrx, getTotalTrx, getTiendas]);
+    }, [filteredRows, rows, months, distribRows, cajaRows, cajaMonths, evolucionMetric, selectedCategories, getTrx, getTotalTrx, getTiendas]);
 
 
     return (
@@ -540,16 +559,27 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                         </div>
                     )}
 
-                    {/* Category Selector */}
-                    <div className="flex gap-2 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
+                    {/* Category Selector — multi-toggle */}
+                    <div className="flex gap-1 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
+                        <button
+                            onClick={() => { setSelectedCategories([...categories]); setSelectedCompetitors([]); }}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all duration-300 ${
+                                allCatsSelected
+                                    ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
+                                    : 'text-slate-400 dark:text-white/30 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'
+                            }`}
+                        >
+                            Todas
+                        </button>
                         {categories.map(cat => (
                             <button
                                 key={cat}
-                                onClick={() => setSelectedCategory(cat)}
-                                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${selectedCategory === cat
-                                    ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
-                                    : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'
-                                    }`}
+                                onClick={() => toggleCategory(cat)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
+                                    selectedCategories.includes(cat)
+                                        ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
+                                        : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'
+                                }`}
                             >
                                 <span className="text-base leading-none">{CATEGORY_EMOJI[cat]}</span>
                                 {cat}
@@ -559,12 +589,51 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 </div>
             </header>
 
+            {/* ── Competitor multi-select filter bar ─────────────────────────── */}
+            {categoryCompetitors.length > 1 && (
+                <div className="pwa-card p-4 flex flex-wrap items-center gap-3">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Filtrar competidores:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                        <button
+                            onClick={() => setSelectedCompetitors([])}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                selectedCompetitors.length === 0
+                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                            }`}
+                        >
+                            Todos
+                        </button>
+                        {categoryCompetitors.map(comp => (
+                            <button
+                                key={comp}
+                                onClick={() => setSelectedCompetitors(prev =>
+                                    prev.includes(comp) ? prev.filter(c => c !== comp) : [...prev, comp]
+                                )}
+                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                    selectedCompetitors.includes(comp)
+                                        ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                        : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                }`}
+                            >
+                                {comp}
+                            </button>
+                        ))}
+                    </div>
+                    {selectedCompetitors.length > 0 && (
+                        <span className="text-[9px] font-black uppercase tracking-widest text-accent-orange ml-auto">
+                            {selectedCompetitors.length} seleccionado{selectedCompetitors.length !== 1 ? 's' : ''}
+                        </span>
+                    )}
+                </div>
+            )}
+
             <div className="space-y-6">
                 {!hasData ? (
                     <div className="pwa-card p-16 flex flex-col items-center justify-center gap-4 text-center">
-                        <span className="text-5xl">{CATEGORY_EMOJI[selectedCategory]}</span>
+                        <span className="text-5xl">{selectedCategories.map(c => CATEGORY_EMOJI[c] || '🍽️').join(' ')}</span>
                         <p className="text-slate-400 dark:text-white/30 font-black uppercase tracking-widest text-sm">
-                            Sin datos de rutina para {selectedCategory}
+                            Sin datos de rutina para {selectedCategories.join(', ')}
                         </p>
                         <p className="text-slate-300 dark:text-white/20 text-xs font-bold">
                             Verificá que los competidores estén mapeados a esta categoría
@@ -592,7 +661,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                             <SectionTable
                                 title={topMetric === 'trx' ? 'Trx Totales' : 'Suma Promedio Diario por Competidor'}
                                 headerColor="#1e3a5f"
-                                rows={rows}
+                                rows={filteredRows}
                                 months={months}
                                 renderCell={(row, m) => topMetric === 'trx'
                                     ? formatTrx(getTrx(row.key, m.key))
@@ -606,7 +675,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                         <div ref={refCrec}><SectionTable
                             title="Crec %"
                             headerColor="#1e3a5f"
-                            rows={rows}
+                            rows={filteredRows}
                             months={months}
                             renderCell={(row, m) => {
                                 const idx = months.findIndex(x => x.key === m.key);
@@ -619,7 +688,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                         <div ref={refShare}><SectionTable
                             title="Share %"
                             headerColor="#1e3a5f"
-                            rows={rows}
+                            rows={filteredRows}
                             months={months}
                             renderCell={(row, m) => renderShare(row.key, m.key)}
                         /></div>
@@ -628,7 +697,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                         <div ref={refTiendas}><SectionTable
                             title="Número de Tiendas"
                             headerColor="#1e3a5f"
-                            rows={rows}
+                            rows={filteredRows}
                             months={months}
                             renderCell={(row, m) => {
                                 const v = getTiendas(row.key, m.key);
