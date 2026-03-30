@@ -10,14 +10,42 @@ import {
 } from 'recharts';
 import CustomSelect from './common/CustomSelect';
 
-// ─── Color palette (shared with App) ───────────────────────────────────────
+// ─── Brand color palette ────────────────────────────────────────────────────
 const PALETTE = ['#ff5e00', '#0070f3', '#ccff00', '#7000f3', '#00f3a0', '#f30070', '#f3a000', '#00d4f3'];
 
+const BRAND_COLORS = {
+    // — Hamburguesa —
+    'mcdonald':    '#DA291C',   // rojo icónico
+    'burger king': '#D62300',   // naranja-roja llama
+    'bembos':      '#E31837',   // rojo Bembos
+    'hermanos':    '#C0392B',
+    // — Pollo Frito —
+    'kfc':         '#F40027',   // rojo KFC
+    'popeyes':     '#F26522',   // naranja Popeyes
+    'church':      '#C8102E',
+    'norkys':      '#E8890C',   // dorado Norky's
+    'pardos':      '#B8860B',   // dorado Pardo's
+    // — Pizza —
+    'pizza hut':   '#EE3224',   // rojo Pizza Hut
+    'domino':      '#006AAD',   // azul Domino's
+    'papa john':   '#007743',   // verde Papa John's
+    'telepizza':   '#E30613',
+};
+
 function colorForCompetidor(name, shareData) {
+    // 1) If shareData already has a pre-assigned color, use it
     const found = shareData?.find(s => s.name === name);
-    if (found) return found.color;
+    if (found?.color && !PALETTE.includes(found.color)) return found.color;
+    // 2) Brand match by partial name
+    if (name) {
+        const lower = name.toLowerCase().trim();
+        for (const [brand, color] of Object.entries(BRAND_COLORS)) {
+            if (lower.includes(brand)) return color;
+        }
+    }
+    // 3) Fallback: deterministic hash
     let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < (name?.length || 0); i++) hash = (name.charCodeAt(i) + ((hash << 5) - hash));
     return PALETTE[Math.abs(hash) % PALETTE.length];
 }
 
