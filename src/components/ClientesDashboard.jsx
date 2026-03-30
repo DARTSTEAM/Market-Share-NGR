@@ -267,11 +267,11 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     // Reset competitor filter when category changes
     React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); }, [selectedCategories]);
 
-    // ── Caja pivot: (local, caja) × month ─────────────────────────────────────
+    // ── Local pivot: (competidor, local) × month ──────────────────────
     const { cajaRows, cajaMonths } = useMemo(() => {
         const filtered = records.filter(r =>
             r.status_busqueda === 'OK' &&
-            r.mes && r.ano && r.local && r.caja &&
+            r.mes && r.ano && r.local &&
             selectedCategories.includes(competitorToCategory[r.competidor]) &&
             (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor)) &&
             (filterCompetidor === 'all' || r.competidor === filterCompetidor)
@@ -285,12 +285,12 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             const mes = parseInt(r.mes);
             if (!ano || !mes || isNaN(ano) || isNaN(mes)) return;
             const mk = `${ano}-${String(mes).padStart(2, '0')}`;
-            const rowKey = `${r.local}||${r.caja}`;
+            const rowKey = `${r.competidor}||${r.local}`;
 
             if (!monthSet[mk]) monthSet[mk] = { key: mk, label: `${MONTH_SHORT[mes - 1]}-${String(ano).slice(2)}` };
 
             if (!pivotMap[rowKey]) {
-                pivotMap[rowKey] = { local: r.local, caja: r.caja || '-', competidor: r.competidor, months: {}, promedios: {}, promCounts: {}, counts: {}, total: 0 };
+                pivotMap[rowKey] = { local: r.local, competidor: r.competidor, months: {}, promedios: {}, promCounts: {}, counts: {}, total: 0 };
             }
             const trx = parseFloat(r.transacciones) || 0;
             const prom = parseFloat(r.promedio) || 0;
@@ -303,7 +303,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
 
         const cajaMonths = Object.values(monthSet).sort((a, b) => a.key.localeCompare(b.key));
         const cajaRows = Object.values(pivotMap).sort((a, b) =>
-            a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja))
+            a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local)
         );
 
         // Compute local totals for % calculation
@@ -330,12 +330,11 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             pct: localTotals[r.local] ? (r.displayTrx / localTotals[r.local]) * 100 : 0,
         }));
         return [...withPct].sort((a, b) => {
-            if (sortCaja === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
-            if (sortCaja === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
+            if (sortCaja === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local);
+            if (sortCaja === 'local_asc') return a.local.localeCompare(b.local);
             if (sortCaja === 'trx_desc') return b.displayTrx - a.displayTrx;
             if (sortCaja === 'trx_asc') return a.displayTrx - b.displayTrx;
             if (sortCaja === 'pct_desc') return b.pct - a.pct;
-            if (sortCaja === 'caja_asc') return String(a.caja).localeCompare(String(b.caja));
             return 0;
         });
     }, [cajaRows, filterCajaMes, sortCaja]);
@@ -448,17 +447,17 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         });
         sections.push('');
 
-        // Distribución por Caja
-        sections.push('Distribución de Ventas por Caja');
-        sections.push(['Competidor', 'Local', 'Caja', 'Trx Totales', '% del Local'].map(esc).join(','));
+        // Distribución por Local
+        sections.push('Distribución de Ventas por Local');
+        sections.push(['Competidor', 'Local', 'Trx Totales', '% del Local'].map(esc).join(','));
         distribRows.forEach(row => {
-            sections.push([row.competidor, row.local, row.caja, Math.round(row.displayTrx), row.pct.toFixed(1) + '%'].map(esc).join(','));
+            sections.push([row.competidor, row.local, Math.round(row.displayTrx), row.pct.toFixed(1) + '%'].map(esc).join(','));
         });
         sections.push('');
 
-        // Evolución por Caja
-        sections.push('Evolución por Caja');
-        sections.push(['Competidor', 'Local', 'Caja', ...cajaMonths.map(m => m.label)].map(esc).join(','));
+        // Evolución por Local
+        sections.push('Evolución por Local');
+        sections.push(['Competidor', 'Local', ...cajaMonths.map(m => m.label)].map(esc).join(','));
         cajaRows.forEach(row => {
             const vals = cajaMonths.map(m => {
                 const v = evolucionMetric === 'trx_total'
@@ -466,7 +465,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                     : (row.promedios?.[m.key] !== undefined ? (row.promedios[m.key] / (row.promCounts?.[m.key] || 1)) : undefined);
                 return v !== undefined ? v.toFixed(1) : '-';
             });
-            sections.push([row.competidor, row.local, row.caja, ...vals].map(esc).join(','));
+            sections.push([row.competidor, row.local, ...vals].map(esc).join(','));
         });
 
         const blob = new Blob([sections.join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -712,7 +711,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                         {cajaRows.length > 0 && (
                             <>
                                 <div className="flex items-center gap-4 pt-2">
-                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-orange">Detalle por Caja</span>
+                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-orange">Detalle por Local</span>
                                     <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
                                 </div>
 
@@ -764,7 +763,6 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             >
                                                 <option value="competidor_asc">Competidor (A-Z)</option>
                                                 <option value="local_asc">Local (A-Z)</option>
-                                                <option value="caja_asc">Caja (A-Z)</option>
                                                 <option value="trx_desc">Trx ↓ (Mayor)</option>
                                                 <option value="trx_asc">Trx ↑ (Menor)</option>
                                                 <option value="pct_desc">% Local ↓</option>
@@ -778,12 +776,12 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                     <table className="w-full text-left whitespace-nowrap text-[11px]">
                                         <thead className="sticky top-0 z-10">
                                             <tr>
-                                                <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={5}>
-                                                    Distribución de Ventas por Caja {filterCajaMes !== 'all' ? `— ${cajaMonths.find(m => m.key === filterCajaMes)?.label}` : ''}
+                                                <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={4}>
+                                                    Distribución de Ventas por Local {filterCajaMes !== 'all' ? `— ${cajaMonths.find(m => m.key === filterCajaMes)?.label}` : ''}
                                                 </th>
                                             </tr>
                                             <tr className="bg-slate-100 dark:bg-white/[0.04]">
-                                                {['Competidor', 'Local', 'Caja', 'Trx Totales', '% del Local'].map(h => (
+                                                {['Competidor', 'Local', 'Trx Totales', '% del Local'].map(h => (
                                                     <th key={h} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right first:text-left">{h}</th>
                                                 ))}
                                             </tr>
@@ -794,15 +792,14 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                 const isFirstOfLocal = sortCaja === 'competidor_asc' && (compChanged || distribRows[i - 1].local !== row.local);
                                                 const isNewComp = sortCaja === 'competidor_asc' && compChanged;
                                                 return (
-                                                    <tr key={`${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                    <tr key={`${row.competidor}-${row.local}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
                                                         <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
                                                             {sortCaja === 'competidor_asc'
-                                                                ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
+                                                                ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↓</span>)
                                                                 : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
                                                             }
                                                         </td>
                                                         <td className="px-4 py-2.5 text-right font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                        <td className="px-4 py-2.5 text-right font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
                                                         <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900 dark:text-white">
                                                             {new Intl.NumberFormat('es-PE').format(Math.round(row.displayTrx))}
                                                         </td>
@@ -853,7 +850,6 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             >
                                                 <option value="competidor_asc">Competidor (A-Z)</option>
                                                 <option value="local_asc">Local (A-Z)</option>
-                                                <option value="caja_asc">Caja (A-Z)</option>
                                             </select>
                                         </div>
                                     </div>
@@ -862,14 +858,13 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                         <table className="w-full text-left whitespace-nowrap text-[11px]">
                                             <thead className="sticky top-0 z-10">
                                                 <tr>
-                                                    <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 3}>
-                                                        {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Caja y Local' : 'Evolución de Promedio Diario por Caja y Local'}
+                                                    <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 2}>
+                                                        {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Local' : 'Evolución de Promedio Diario por Local'}
                                                     </th>
                                                 </tr>
                                                 <tr className="bg-slate-100 dark:bg-white/[0.04]">
                                                     <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Competidor</th>
                                                     <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Local</th>
-                                                    <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 80 }}>Caja</th>
                                                     {cajaMonths.map(m => (
                                                         <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right" style={{ minWidth: 90 }}>
                                                             {m.label}
@@ -879,24 +874,21 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
                                                 {[...cajaRows].sort((a, b) => {
-                                                    if (sortEvol === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
-                                                    if (sortEvol === 'local_asc') return a.local.localeCompare(b.local) || String(a.caja).localeCompare(String(b.caja));
-                                                    if (sortEvol === 'caja_asc') return String(a.caja).localeCompare(String(b.caja));
+                                                    if (sortEvol === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local);
+                                                    if (sortEvol === 'local_asc') return a.local.localeCompare(b.local);
                                                     return 0;
                                                 }).map((row, i, arr) => {
                                                     const compChanged = i === 0 || arr[i - 1].competidor !== row.competidor;
                                                     const isNewComp = sortEvol === 'competidor_asc' && compChanged;
-                                                    const isNewLocal = sortEvol === 'competidor_asc' && (compChanged || arr[i - 1].local !== row.local);
                                                     return (
-                                                        <tr key={`ev-${row.local}-${row.caja}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                        <tr key={`ev-${row.competidor}-${row.local}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
                                                             <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
                                                                 {sortEvol === 'competidor_asc'
-                                                                    ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isNewLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↳</span>)
+                                                                    ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : <span className="text-slate-500 dark:text-white/40 font-bold">{row.competidor}</span>)
                                                                     : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
                                                                 }
                                                             </td>
                                                             <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                            <td className="px-4 py-2.5 font-mono text-slate-500 dark:text-white/40">{row.caja}</td>
                                                             {cajaMonths.map(m => {
                                                                 const total = row.months[m.key];
                                                                 const promSum = row.promedios?.[m.key];
