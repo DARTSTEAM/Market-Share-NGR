@@ -290,7 +290,8 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
                 .map(([name, value]) => ({ name, value: Math.round(value) }))
                 .sort((a, b) => b.value - a.value),
             locales: Object.values(pc.locales).sort((a, b) => b.transacciones - a.transacciones),
-        }));
+        // Only keep PCs with 2+ distinct competitors (otherwise it's not truly "shared")
+        })).filter(pc => pc.byComp.length >= 2);
     }, [allRecords]);
 
     // Derived filter options
@@ -431,23 +432,41 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
                     </p>
                 </div>
             ) : (
-                <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredPCs.map((pc, i) => (
+                <>
+                    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {filteredPCs.slice(0, 8).map((pc, i) => (
+                            <motion.div
+                                key={pc.nombre}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: Math.min(i * 0.04, 0.6) }}
+                            >
+                                <PCCard
+                                    pc={pc}
+                                    shareData={shareData}
+                                    onClick={handleCardClick}
+                                    isSelected={selectedPC?.nombre === pc.nombre}
+                                />
+                            </motion.div>
+                        ))}
+                    </section>
+                    {filteredPCs.length > 8 && (
                         <motion.div
-                            key={pc.nombre}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: Math.min(i * 0.04, 0.6) }}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex items-center justify-center gap-3 py-4"
                         >
-                            <PCCard
-                                pc={pc}
-                                shareData={shareData}
-                                onClick={handleCardClick}
-                                isSelected={selectedPC?.nombre === pc.nombre}
-                            />
+                            <div className="flex-1 h-px bg-slate-200 dark:bg-white/5" />
+                            <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02]">
+                                <Layers className="w-3 h-3 text-slate-400 dark:text-white/30" />
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
+                                    Hay {filteredPCs.length - 8} puntos compartidos más · Aplicá filtros para ver más
+                                </span>
+                            </div>
+                            <div className="flex-1 h-px bg-slate-200 dark:bg-white/5" />
                         </motion.div>
-                    ))}
-                </section>
+                    )}
+                </>
             )}
 
             {/* Global bar chart comparison across all PCs */}
