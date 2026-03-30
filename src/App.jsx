@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw } from 'lucide-react';
+import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw, MapPin } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import MarketShareDashboard from './components/MarketShareDashboard';
 import ComparativosDashboard from './components/ComparativosDashboard';
 import TicketsDashboard from './components/TicketsDashboard';
 import AlarmasDashboard from './components/AlarmasDashboard';
 import ClientesDashboard from './components/ClientesDashboard';
+import PuntosCompartidosDashboard from './components/PuntosCompartidosDashboard';
 import CustomSelect from './components/common/CustomSelect';
 import FilterBar from './components/filters/FilterBar';
 
@@ -1207,10 +1208,14 @@ export default function App() {
                 <span className="text-[10px] text-accent-orange font-black uppercase tracking-[0.3em] mb-1">NGR Intelligence Suite</span>
                 <h1 className="pwa-title !text-4xl md:!text-5xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
                   {activeCategory === 'competitor' ? 'Análisis Competencias' :
-                    activeCategory === 'marketshare' ? (activeSubTab === 'comparativos' ? 'Comparativos' : 'Market Share') :
-                      activeCategory === 'tickets' ? (activeSubTab === 'alarmas' ? 'Alarmas' : 'Tickets') :
-                        activeCategory === 'clientes' ? 'Evolución por Categoría' :
-                          'Dashboard'} <span className="text-accent-orange">LIVE</span>
+                    activeCategory === 'marketshare' ? (
+                      activeSubTab === 'comparativos' ? 'Comparativos' :
+                      activeSubTab === 'puntos_compartidos' ? 'Puntos Compartidos' :
+                      'Market Share'
+                    ) :
+                    activeCategory === 'tickets' ? (activeSubTab === 'alarmas' ? 'Alarmas' : 'Tickets') :
+                      activeCategory === 'clientes' ? 'Evolución por Categoría' :
+                        'Dashboard'} <span className="text-accent-orange">LIVE</span>
                 </h1>
               </div>
             </div>
@@ -1289,7 +1294,8 @@ export default function App() {
               <div className="bg-white/40 dark:bg-white/[0.02] backdrop-blur-xl border border-slate-200 dark:border-white/5 p-1 rounded-xl flex gap-1 shadow-sm">
                 {(activeCategory === 'marketshare' ? [
                   { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
-                  { id: 'comparativos', icon: GitCompare, label: 'Comparativos' }
+                  { id: 'comparativos', icon: GitCompare, label: 'Comparativos' },
+                  { id: 'puntos_compartidos', icon: MapPin, label: 'Puntos Compartidos' },
                 ] : [
                   { id: 'tickets', icon: Ticket, label: 'Tickets' },
                   { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' }
@@ -1340,6 +1346,12 @@ export default function App() {
                 tableData={sortedTableDataRoutine}
                 metrics={reactiveMetrics}
                 theme={theme}
+              />
+            ) : activeSubTab === 'puntos_compartidos' ? (
+              <PuntosCompartidosDashboard
+                key="puntos_compartidos"
+                allRecords={marketShareRecords}
+                shareData={reactiveShareDataRoutine}
               />
             ) : (
               <MarketShareDashboard
