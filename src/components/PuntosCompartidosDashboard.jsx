@@ -162,13 +162,13 @@ const PCCard = ({ pc, shareData, onClick, isSelected }) => {
                     return (
                         <div key={i} className="flex items-center gap-2">
                             <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                            <span className="text-[8px] font-black uppercase tracking-tighter truncate flex-1" style={{ color }}>
+                            <span className="text-[10px] font-black uppercase tracking-tight truncate flex-1" style={{ color }}>
                                 {comp.name}
                             </span>
                             <div className="w-16 h-1.5 bg-slate-100 dark:bg-white/5 rounded-full flex-shrink-0 overflow-hidden">
                                 <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
                             </div>
-                            <span className="text-[9px] font-mono font-black w-8 text-right flex-shrink-0" style={{ color }}>
+                            <span className="text-[10px] font-mono font-black w-8 text-right flex-shrink-0" style={{ color }}>
                                 {pct.toFixed(0)}%
                             </span>
                         </div>
