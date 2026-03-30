@@ -20,21 +20,21 @@ const COMPETITOR_COLORS = [
 // ─── Brand color palette ───────────────────────────────────────────────
 const BRAND_COLORS = {
     // — Hamburguesa —
-    'mcdonald':    '#DA291C',   // rojo icónico + arcos dorados
-    'burger king': '#D62300',   // llama naranja-roja
-    'bembos':      '#E31837',   // rojo peruano
-    'hermanos':    '#C0392B',
+    'mcdonald':    '#FFC72C',   // dorado - Golden Arches (distinto al rojo de KFC/BK)
+    'burger king': '#FF7A00',   // naranja llama
+    'bembos':      '#CC1F1F',
+    'hermanos':    '#A52020',
     // — Pollo Frito —
-    'kfc':         '#F40027',   // rojo KFC
-    'popeyes':     '#F26522',   // naranja Popeyes
-    "church":      '#C8102E',   // Church's Chicken
-    'norkys':      '#E8890C',   // dorado Norky's
-    "pardos":      '#B8860B',   // Pardo's Chicken
+    'kfc':         '#F40027',   // rojo primario
+    'popeyes':     '#0055A5',   // azul
+    'church':      '#8B0000',
+    'norkys':      '#F0A500',   // ámbar
+    'pardos':      '#7B3F00',   // marrón tostado
     // — Pizza —
-    'pizza hut':   '#EE3224',   // rojo Pizza Hut
+    'pizza hut':   '#8B1A1A',   // granate oscuro
     'domino':      '#006AAD',   // azul Domino's
-    "papa john":   '#007743',   // verde Papa John's
-    'telepizza':   '#E30613',
+    'papa john':   '#007743',   // verde
+    'telepizza':   '#C00D0D',
 };
 
 // Find best brand color by partial-matching the competitor name

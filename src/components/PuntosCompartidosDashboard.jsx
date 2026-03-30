@@ -15,21 +15,30 @@ const PALETTE = ['#ff5e00', '#0070f3', '#ccff00', '#7000f3', '#00f3a0', '#f30070
 
 const BRAND_COLORS = {
     // — Hamburguesa —
-    'mcdonald':    '#DA291C',   // rojo icónico
-    'burger king': '#D62300',   // naranja-roja llama
-    'bembos':      '#E31837',   // rojo Bembos
-    'hermanos':    '#C0392B',
+    //   McDonald's → AMARILLO DORADO (Golden Arches), no rojo, para distinguirse de KFC/BK
+    'mcdonald':    '#FFC72C',
+    //   Burger King → naranja llama, diferente al rojo KFC y al dorado McDo
+    'burger king': '#FF7A00',
+    'bembos':      '#CC1F1F',
+    'hermanos':    '#A52020',
     // — Pollo Frito —
-    'kfc':         '#F40027',   // rojo KFC
-    'popeyes':     '#F26522',   // naranja Popeyes
-    'church':      '#C8102E',
-    'norkys':      '#E8890C',   // dorado Norky's
-    'pardos':      '#B8860B',   // dorado Pardo's
+    //   KFC → rojo primario (único que puede usar rojo puro)
+    'kfc':         '#F40027',
+    //   Popeyes → azul (usan azul en su identidad global)
+    'popeyes':     '#0055A5',
+    'church':      '#8B0000',
+    //   Norky's → ámbar cálido
+    'norkys':      '#F0A500',
+    //   Pardo's → marrón tostado
+    'pardos':      '#7B3F00',
     // — Pizza —
-    'pizza hut':   '#EE3224',   // rojo Pizza Hut
-    'domino':      '#006AAD',   // azul Domino's
-    'papa john':   '#007743',   // verde Papa John's
-    'telepizza':   '#E30613',
+    //   Pizza Hut → granate oscuro (el techo rojo oscuro), distinto al rojo KFC
+    'pizza hut':   '#8B1A1A',
+    //   Domino's → azul (ya era correcto)
+    'domino':      '#006AAD',
+    //   Papa John's → verde
+    'papa john':   '#007743',
+    'telepizza':   '#C00D0D',
 };
 
 function colorForCompetidor(name, shareData) {
