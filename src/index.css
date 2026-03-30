@@ -92,6 +92,12 @@ body {
     @apply border-slate-400/[0.4] dark:border-white/20 bg-slate-400/[0.12] dark:bg-white/[0.06] -translate-y-1 shadow-md dark:shadow-none;
   }
 
+  /* Cards that should NOT react to hover (modal panels, static sections) */
+  .pwa-card.no-hover:hover {
+    @apply border-slate-200 dark:border-white/[0.1] bg-white dark:bg-black/40 translate-y-0 shadow-xl shadow-slate-200/50 dark:shadow-none;
+    transform: none;
+  }
+
   .pwa-btn {
     @apply bg-slate-900 dark:bg-white/[0.05] text-white font-black uppercase tracking-widest text-[10px] px-8 py-4 rounded-full transition-all duration-300 hover:scale-105 active:scale-95 flex items-center justify-center gap-2 border border-slate-700 dark:border-white/10 shadow-[0_4px_10px_rgba(0, 0, 0, 0.1)];
   }

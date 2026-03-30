@@ -248,7 +248,7 @@ const PCDetailPanel = ({ pc, shareData, onClose, allPCs, currentIndex, onNavigat
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 10 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                className="pwa-card p-6 space-y-6 w-full max-w-4xl max-h-[88vh] overflow-y-auto"
+                className="pwa-card no-hover p-6 space-y-6 w-full max-w-4xl max-h-[88vh] overflow-y-auto"
                 onClick={e => e.stopPropagation()}
             >
                 <div className="flex justify-between items-start border-b border-slate-200 dark:border-white/10 pb-5">
@@ -441,7 +441,7 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.07 }}
                         whileHover={{ y: -3 }}
-                        className="pwa-card p-5 flex flex-col gap-3"
+                        className="pwa-card no-hover p-5 flex flex-col gap-3"
                     >
                         <div className={`w-8 h-8 rounded-xl ${kpi.bg} flex items-center justify-center`}>
                             <kpi.icon className={`w-4 h-4 ${kpi.color}`} />
@@ -455,7 +455,7 @@ export default function PuntosCompartidosDashboard({ allRecords, shareData }) {
             </section>
 
             {/* Filters + Sort */}
-            <section className="pwa-card p-4 flex flex-wrap gap-4 items-end border-slate-200 dark:border-white/5">
+            <section className="pwa-card no-hover p-4 flex flex-wrap gap-4 items-end border-slate-200 dark:border-white/5">
                 <div className="space-y-1">
                     <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Tipo</span>
                     <CustomSelect
