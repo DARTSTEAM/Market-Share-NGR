@@ -14,6 +14,7 @@ async function fetchBigQueryData() {
   const bigquery = new BigQuery(bqOptions);
 
   const queryRecords = `
+    -- Registros de rutina Gemini (status = OK / ERROR / etc.)
     SELECT
       competidor,
       codigo_tienda,
@@ -30,9 +31,32 @@ async function fetchBigQueryData() {
       delta_dias,
       ac,
       promedio_transacciones_diarias,
-      mes,
-      ano
+      CAST(mes AS STRING) AS mes,
+      CAST(ano AS STRING) AS ano
     FROM \`${process.env.BIGQUERY_PROJECT_ID}.${process.env.BIGQUERY_DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
+
+    UNION ALL
+
+    -- Registros históricos de cajas (2022-2026)
+    SELECT
+      UPPER(competidor)                    AS competidor,
+      codigo_tienda,
+      UPPER(local)                         AS local,
+      caja,
+      'HISTORIAL'                          AS status_busqueda,
+      trx_promedio                         AS transacciones_diferencial,
+      0                                    AS ticket_actual,
+      0                                    AS ticket_anterior,
+      DATE(ano, mes, 1)                    AS fecha_y_hora_registro,
+      NULL                                 AS fecha_anterior,
+      ''                                   AS filename_actual,
+      ''                                   AS filename_anterior,
+      0                                    AS delta_dias,
+      0                                    AS ac,
+      trx_promedio                         AS promedio_transacciones_diarias,
+      CAST(mes AS STRING)                  AS mes,
+      CAST(ano AS STRING)                  AS ano
+    FROM \`${process.env.BIGQUERY_PROJECT_ID}.${process.env.BIGQUERY_DATASET_ID}.historial_tasas\`
   `;
 
   const queryTickets = `

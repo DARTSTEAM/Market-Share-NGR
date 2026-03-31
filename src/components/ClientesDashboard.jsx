@@ -121,9 +121,26 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [selectedCompetitors, setSelectedCompetitors] = useState([]);
     const [filterCompetidor, setFilterCompetidor] = useState('all');
     const [filterCajaMes, setFilterCajaMes] = useState('all');
+    const [filterYear, setFilterYear] = useState('all');
     const [sortCaja, setSortCaja] = useState('competidor_asc');
     const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
+
+    // Available years from all valid records (OK + HISTORIAL in scope)
+    const availableYears = useMemo(() => {
+        const CUTOFF = 202511;
+        const years = new Set(
+            records
+                .filter(r => {
+                    const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
+                    if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF) return false;
+                    if (r.status_busqueda === 'OK' && key <= CUTOFF) return false;
+                    return (r.status_busqueda === 'OK' || r.status_busqueda === 'HISTORIAL') && r.ano;
+                })
+                .map(r => parseInt(r.ano))
+        );
+        return [...years].sort((a, b) => b - a);
+    }, [records]);
 
     const toggleCategory = (cat) => {
         setSelectedCategories(prev =>
@@ -228,12 +245,17 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     // Build pivot: for each competitor x month → { trx, tiendas (distinct locals) }
     const { months, competitors, pivot } = useMemo(() => {
         // Filter to OK records in selected category
-        const filtered = records.filter(r =>
-            r.status_busqueda === 'OK' &&
-            r.mes && r.ano &&
-            selectedCategories.includes(competitorToCategory[r.competidor]) &&
-            (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor))
-        );
+        const CUTOFF = 2025 * 100 + 11; // Nov 2025 inclusive para historico
+        const filtered = records.filter(r => {
+            const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
+            if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF) return false;
+            if (r.status_busqueda === 'OK'        && key <= CUTOFF) return false;
+            if (r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL') return false;
+            if (filterYear !== 'all' && parseInt(r.ano) !== parseInt(filterYear)) return false;
+            return r.mes && r.ano &&
+                selectedCategories.includes(competitorToCategory[r.competidor]) &&
+                (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor));
+        });
 
         // Derive sorted months
         const monthSet = {};
@@ -281,31 +303,44 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         pivot['__total__'] = pivotTotal;
 
         return { months, competitors, pivot };
-    }, [records, selectedCategories, selectedCompetitors, competitorToCategory]);
+    }, [records, selectedCategories, selectedCompetitors, filterYear, competitorToCategory]);
 
     // ── Competitors in this category (for sub-filter) ─────────────────────────
     const categoryCompetitors = useMemo(() => {
         const set = new Set(
             records
-                .filter(r => r.status_busqueda === 'OK' && r.mes && r.ano && selectedCategories.includes(competitorToCategory[r.competidor]))
+                .filter(r => {
+                    const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
+                    const CUTOFF = 202511;
+                    if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF) return false;
+                    if (r.status_busqueda === 'OK'        && key <= CUTOFF) return false;
+                    if (filterYear !== 'all' && parseInt(r.ano) !== parseInt(filterYear)) return false;
+                    return (r.status_busqueda === 'OK' || r.status_busqueda === 'HISTORIAL')
+                        && r.mes && r.ano && selectedCategories.includes(competitorToCategory[r.competidor]);
+                })
                 .map(r => r.competidor)
                 .filter(Boolean)
         );
         return Array.from(set).sort();
-    }, [records, selectedCategories, competitorToCategory]);
+    }, [records, selectedCategories, filterYear, competitorToCategory]);
 
     // Reset competitor filter when category changes
-    React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); }, [selectedCategories]);
+    React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); setFilterYear('all'); }, [selectedCategories]);
 
     // ── Local pivot: (competidor, local) × month ──────────────────────
     const { cajaRows, cajaMonths } = useMemo(() => {
-        const filtered = records.filter(r =>
-            r.status_busqueda === 'OK' &&
-            r.mes && r.ano && r.local &&
-            selectedCategories.includes(competitorToCategory[r.competidor]) &&
-            (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor)) &&
-            (filterCompetidor === 'all' || r.competidor === filterCompetidor)
-        );
+        const CUTOFF2 = 202511;
+        const filtered = records.filter(r => {
+            const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
+            if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF2) return false;
+            if (r.status_busqueda === 'OK'        && key <= CUTOFF2) return false;
+            if (r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL') return false;
+            if (filterYear !== 'all' && parseInt(r.ano) !== parseInt(filterYear)) return false;
+            return r.mes && r.ano && r.local &&
+                selectedCategories.includes(competitorToCategory[r.competidor]) &&
+                (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor)) &&
+                (filterCompetidor === 'all' || r.competidor === filterCompetidor);
+        });
 
         const pivotMap = {};
         const monthSet = {};
@@ -344,7 +379,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         cajaRows.forEach(r => { r.localTotal = localTotals[r.local] || 1; });
 
         return { cajaRows, cajaMonths };
-    }, [records, selectedCategories, selectedCompetitors, filterCompetidor, competitorToCategory]);
+    }, [records, selectedCategories, selectedCompetitors, filterCompetidor, filterYear, competitorToCategory]);
 
     // ── Display rows for Distribución table (filtered by month + sorted) ────────
     const distribRows = useMemo(() => {
@@ -618,10 +653,38 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 </div>
             </header>
 
-            {/* ── Competitor multi-select filter bar ─────────────────────────── */}
+            {/* ── Year filter — siempre visible ──────────────────────── */}
+            {availableYears.length > 0 && (
+                <div className="pwa-card p-4 flex flex-wrap items-center gap-3">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Año:</span>
+                    <div className="flex flex-wrap gap-1">
+                        <button
+                            onClick={() => setFilterYear('all')}
+                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                filterYear === 'all'
+                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                            }`}
+                        >Todos</button>
+                        {availableYears.map(y => (
+                            <button
+                                key={y}
+                                onClick={() => setFilterYear(String(y))}
+                                className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
+                                    filterYear === String(y)
+                                        ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
+                                        : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                }`}
+                            >{y}</button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ── Competitor filter — solo cuando hay más de uno ──────── */}
             {categoryCompetitors.length > 1 && (
                 <div className="pwa-card p-4 flex flex-wrap items-center gap-3">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Filtrar competidores:</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Competidores:</span>
                     <div className="flex flex-wrap gap-1.5">
                         <button
                             onClick={() => setSelectedCompetitors([])}
@@ -630,9 +693,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                     ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
                                     : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
                             }`}
-                        >
-                            Todos
-                        </button>
+                        >Todos</button>
                         {categoryCompetitors.map(comp => {
                             const bColor = getBrandColor(comp, categoryCompetitors.indexOf(comp));
                             const isSelected = selectedCompetitors.includes(comp);
@@ -683,7 +744,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                         {/* ── 1. Trx Totales / Prom. Diario ───────────────────────────────── */}
                         <div ref={refTrx} className="space-y-2">
                             <div className="flex items-center gap-2">
-                                {[{ value: 'trx', label: 'Trx Totales' }, { value: 'prom_diario', label: 'Prom. Diario ∑' }].map(opt => (
+                                {[{ value: 'trx', label: 'Trx Totales' }, { value: 'prom_diario', label: 'Prom. Diario ∑' }, { value: 'ambos', label: 'Ambos' }].map(opt => (
                                     <button
                                         key={opt.value}
                                         onClick={() => setTopMetric(opt.value)}
@@ -696,17 +757,37 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                     </button>
                                 ))}
                             </div>
-                            <SectionTable
-                                title={topMetric === 'trx' ? 'Trx Totales' : 'Suma Promedio Diario por Competidor'}
-                                headerColor="#1e3a5f"
-                                rows={filteredRows}
-                                months={months}
-                                renderCell={(row, m) => topMetric === 'trx'
-                                    ? formatTrx(getTrx(row.key, m.key))
-                                    : formatTrx(getProm(row.key, m.key))
-                                }
-                                footnote={topMetric === 'prom_diario' ? 'Suma del campo promedio de transacciones diarias de todos los locales del competidor en el período.' : undefined}
-                            />
+                            {topMetric === 'ambos' ? (
+                                <div className="space-y-4">
+                                    <SectionTable
+                                        title="Trx Totales"
+                                        headerColor="#1e3a5f"
+                                        rows={filteredRows}
+                                        months={months}
+                                        renderCell={(row, m) => formatTrx(getTrx(row.key, m.key))}
+                                    />
+                                    <SectionTable
+                                        title="Prom. Transacciones Diarias"
+                                        headerColor="#4c1d95"
+                                        rows={filteredRows}
+                                        months={months}
+                                        renderCell={(row, m) => formatTrx(getProm(row.key, m.key))}
+                                        footnote="Suma del campo promedio de transacciones diarias de todos los locales del competidor en el período."
+                                    />
+                                </div>
+                            ) : (
+                                <SectionTable
+                                    title={topMetric === 'trx' ? 'Trx Totales' : 'Suma Promedio Diario por Competidor'}
+                                    headerColor="#1e3a5f"
+                                    rows={filteredRows}
+                                    months={months}
+                                    renderCell={(row, m) => topMetric === 'trx'
+                                        ? formatTrx(getTrx(row.key, m.key))
+                                        : formatTrx(getProm(row.key, m.key))
+                                    }
+                                    footnote={topMetric === 'prom_diario' ? 'Suma del campo promedio de transacciones diarias de todos los locales del competidor en el período.' : undefined}
+                                />
+                            )}
                         </div>
 
                         {/* ── 2. Crec % ───────────────────────────────────────────────────── */}
@@ -868,7 +949,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                 <div ref={refEvolucion} className="space-y-3">
                                     <div className="flex flex-wrap items-center gap-3">
                                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Evolución — mostrar:</span>
-                                        {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }].map(opt => (
+                                        {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }, { value: 'ambos', label: 'Ambos' }].map(opt => (
                                             <button
                                                 key={opt.value}
                                                 onClick={() => setEvolucionMetric(opt.value)}
@@ -898,7 +979,9 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                             <thead className="sticky top-0 z-10">
                                                 <tr>
                                                     <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 2}>
-                                                        {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Local' : 'Evolución de Promedio Diario por Local'}
+                                                        {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Local'
+                                                            : evolucionMetric === 'trx_avg' ? 'Evolución de Promedio Diario por Local'
+                                                            : 'Evolución Trx Totales + Prom. Diario por Local'}
                                                     </th>
                                                 </tr>
                                                 <tr className="bg-slate-100 dark:bg-white/[0.04]">
@@ -932,9 +1015,24 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                                 const total = row.months[m.key];
                                                                 const promSum = row.promedios?.[m.key];
                                                                 const promCount = row.promCounts?.[m.key] || 1;
+                                                                const promVal = promSum !== undefined ? promSum / promCount : undefined;
+
+                                                                if (evolucionMetric === 'ambos') {
+                                                                    return (
+                                                                        <td key={m.key} className="px-4 py-2.5 text-right font-mono">
+                                                                            {total !== undefined ? (
+                                                                                <div className="flex flex-col items-end gap-0.5">
+                                                                                    <span className="font-black text-slate-900 dark:text-white text-[11px]">{Math.round(total).toLocaleString('es-PE')}</span>
+                                                                                    <span className="text-[9px] text-violet-400 font-bold">{promVal !== undefined ? promVal.toFixed(1) : '-'}</span>
+                                                                                </div>
+                                                                            ) : <span className="text-slate-300 dark:text-white/15">-</span>}
+                                                                        </td>
+                                                                    );
+                                                                }
+
                                                                 const v = evolucionMetric === 'trx_total'
                                                                     ? total
-                                                                    : (promSum !== undefined ? promSum / promCount : undefined);
+                                                                    : promVal;
                                                                 return (
                                                                     <td key={m.key} className="px-4 py-2.5 text-right font-mono">
                                                                         {v !== undefined

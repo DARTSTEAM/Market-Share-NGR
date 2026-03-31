@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Moon, Sun, TrendingUp, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw, MapPin } from 'lucide-react';
+import { Moon, Sun, TrendingUp, TrendingDown, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw, MapPin } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import MarketShareDashboard from './components/MarketShareDashboard';
 import ComparativosDashboard from './components/ComparativosDashboard';
 import TicketsDashboard from './components/TicketsDashboard';
 import AlarmasDashboard from './components/AlarmasDashboard';
+import GapsDashboard from './components/GapsDashboard';
 import ClientesDashboard from './components/ClientesDashboard';
 import PuntosCompartidosDashboard from './components/PuntosCompartidosDashboard';
 import CustomSelect from './components/common/CustomSelect';
@@ -26,6 +27,19 @@ const COMPETITOR_TO_CATEGORY = {
 const API_BASE_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
   : 'https://ngr-proxy-server-gvxb4rjzvq-uc.a.run.app';
+
+// Corte temporal: HISTORIAL cubre hasta este mes inclusive; OK rutina desde el mes siguiente
+// Formato: { ano: number, mes: number }  → Nov 2025 (HISTORIAL: 2022–Nov 2025 | OK: Dic 2025+)
+const HISTORIAL_CUTOFF = { ano: 2025, mes: 11 };
+const CUTOFF_KEY = HISTORIAL_CUTOFF.ano * 100 + HISTORIAL_CUTOFF.mes; // 202511
+
+// Helper de filtro para evitar solapamiento entre HISTORIAL y OK
+const recordInScope = (r) => {
+  const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
+  if (r.status_busqueda === 'HISTORIAL') return key <= CUTOFF_KEY; // historico <= Nov 2024
+  if (r.status_busqueda === 'OK')        return key >  CUTOFF_KEY; // rutina   >= Dic 2024
+  return false;
+};
 
 const MetricCard = ({ title, value, previousPeriodValue = 0, delay = 0, icon: Icon }) => (
   <motion.div
@@ -463,6 +477,8 @@ export default function App() {
   // Use state for data to make it reactive to updates
   const [records, setRecords] = useState([]);
   const [tickets, setTickets] = useState([]);
+  const [gaps, setGaps]       = useState([]);
+  const [gapsLoading, setGapsLoading] = useState(false);
 
   // Initial data fetch to sync with BigQuery on load
   useEffect(() => {
@@ -482,6 +498,27 @@ export default function App() {
     };
     fetchInitialData();
   }, []);
+
+  // Lazy fetch gaps only when the sub-tab is opened
+  useEffect(() => {
+    if (activeSubTab !== 'gaps' || gaps.length > 0) return;
+    setGapsLoading(true);
+    fetch(`${API_BASE_URL}/api/gaps`)
+      .then(r => r.json())
+      .then(d => { if (d.gaps) setGaps(d.gaps); })
+      .catch(e => console.error('[gaps] fetch error:', e))
+      .finally(() => setGapsLoading(false));
+  }, [activeSubTab]);
+
+  const handleRefreshGaps = () => {
+    setGaps([]);
+    setGapsLoading(true);
+    fetch(`${API_BASE_URL}/api/gaps`)
+      .then(r => r.json())
+      .then(d => { if (d.gaps) setGaps(d.gaps); })
+      .catch(e => console.error('[gaps] fetch error:', e))
+      .finally(() => setGapsLoading(false));
+  };
 
   const handleRefreshData = async () => {
     try {
@@ -827,9 +864,9 @@ export default function App() {
     });
   }, [records, filters]);
 
-  // 1b. Market Share Specific Filtering (Only status_busqueda === 'OK')
+  // 1b. Market Share Specific Filtering (status OK + HISTORIAL, sin solapamiento)
   const marketShareRecords = useMemo(() => {
-    return filteredRecords.filter(r => r.status_busqueda === 'OK');
+    return filteredRecords.filter(recordInScope);
   }, [filteredRecords]);
 
   // 1c. Core Tickets Filtering (facturas_v2)
@@ -861,8 +898,8 @@ export default function App() {
 
     // Routine Stats - Always use full filteredRecords to show audit health
     const routineStats = filteredRecords.reduce((acc, r) => {
-      if (r.status_busqueda === 'OK') acc.cerradas++;
-      else acc.conError++;
+      if (r.status_busqueda === 'OK')        acc.cerradas++;
+      else if (r.status_busqueda !== 'HISTORIAL') acc.conError++; // no cuenta histórico como error
       return acc;
     }, { cerradas: 0, conError: 0 });
 
@@ -910,23 +947,40 @@ export default function App() {
     })).sort((a, b) => b.value - a.value);
   }, [filteredTickets]);
 
-  // 4. Reactive Trend Data (Exclusive for Market Share - based on Routine OK)
+  // 4. Reactive Trend Data (Market Share - OK records + HISTORIAL overlay)
   const reactiveTrendDataRoutine = useMemo(() => {
-    const monthlyData = marketShareRecords.reduce((acc, r) => {
-      if (!r.mes || !r.ano) return acc;
-      const y = parseInt(r.ano);
-      const m = String(parseInt(r.mes)).padStart(2, '0');
-      const key = `${y}-${m}`;
-      acc[key] = (acc[key] || 0) + (parseFloat(r.transacciones) || 0);
-      return acc;
-    }, {});
+    // OK records by month: sum trx + sum promedio
+    const okData = {};
+    const okProm = {};
+    marketShareRecords.forEach(r => {
+      if (!r.mes || !r.ano) return;
+      const key = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2, '0')}`;
+      okData[key] = (okData[key] || 0) + (parseFloat(r.transacciones) || 0);
+      okProm[key] = (okProm[key] || 0) + (parseFloat(r.promedio) || 0);
+    });
 
-    const sortedKeys = Object.keys(monthlyData).sort();
-    return sortedKeys.map(key => ({
-      name: key,
-      tickets: monthlyData[key]
-    })).slice(-12);
-  }, [marketShareRecords]);
+    // HISTORIAL records by month: sum trx + sum promedio
+    const histData = {};
+    const histProm = {};
+    filteredRecords
+      .filter(r => r.status_busqueda === 'HISTORIAL' && (parseInt(r.ano) * 100 + parseInt(r.mes)) <= CUTOFF_KEY)
+      .forEach(r => {
+        if (!r.mes || !r.ano) return;
+        const key = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2, '0')}`;
+        histData[key] = (histData[key] || 0) + (parseFloat(r.transacciones) || 0);
+        histProm[key] = (histProm[key] || 0) + (parseFloat(r.promedio) || 0);
+      });
+
+    const allKeys = [...new Set([...Object.keys(okData), ...Object.keys(histData)])].sort();
+    return allKeys.map(key => ({
+      name:          key,
+      tickets:       okData[key]    ?? null,
+      historial:     histData[key]  ?? null,
+      promedio:      okProm[key]    ?? null,
+      historialProm: histProm[key]  ?? null,
+    }));
+  }, [marketShareRecords, filteredRecords]);
+
 
   // 4b. Reactive Trend Data (For Competitor Analysis - based on facturas_v2)
   const reactiveTrendDataTickets = useMemo(() => {
@@ -1297,8 +1351,9 @@ export default function App() {
                   { id: 'comparativos', icon: GitCompare, label: 'Comparativos' },
                   { id: 'puntos_compartidos', icon: MapPin, label: 'Puntos Compartidos' },
                 ] : [
-                  { id: 'tickets', icon: Ticket, label: 'Tickets' },
-                  { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' }
+                  { id: 'tickets',  icon: Ticket,      label: 'Tickets' },
+                  { id: 'alarmas',  icon: ShieldAlert,  label: 'Alarmas' },
+                  { id: 'gaps',     icon: TrendingDown, label: 'Gaps' },
                 ]).map(sub => (
                   <button
                     key={sub.id}
@@ -1375,6 +1430,13 @@ export default function App() {
                 onUpdateTicket={handleUpdateTicket}
                 isRefreshing={isRefreshing}
               />
+            ) : activeSubTab === 'gaps' ? (
+              <GapsDashboard
+                key="gaps"
+                gaps={gaps}
+                isLoading={gapsLoading}
+                onRefresh={handleRefreshGaps}
+              />
             ) : (
               <TicketsDashboard
                 key="tickets"
@@ -1383,6 +1445,8 @@ export default function App() {
                 shareData={reactiveShareDataTickets}
                 globalFilters={filters}
                 onFilterChange={setFilters}
+                onUpdateTicket={handleUpdateTicket}
+                isRefreshing={isRefreshing}
               />
             )
           )}

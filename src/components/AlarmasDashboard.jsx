@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
     AlertTriangle,
     Search,
@@ -73,7 +73,7 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
     }, [records]);
 
     const competidorOptions = useMemo(() => {
-        const comps = new Set(records.filter(r => r.status_busqueda !== 'OK').map(r => r.competidor).filter(Boolean));
+        const comps = new Set(records.filter(r => r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL').map(r => r.competidor).filter(Boolean));
         return [
             { value: 'all', label: 'Todos los Competidores' },
             ...Array.from(comps).sort().map(c => ({ value: c, label: c }))
@@ -83,7 +83,7 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
     const localOptions = useMemo(() => {
         const locals = new Set(
             records
-                .filter(r => r.status_busqueda !== 'OK' && (filterCompetidor === 'all' || r.competidor === filterCompetidor))
+                .filter(r => r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL' && (filterCompetidor === 'all' || r.competidor === filterCompetidor))
                 .map(r => r.local)
                 .filter(Boolean)
         );
@@ -97,6 +97,7 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
     const alarmRecords = useMemo(() => {
         const filtered = records.filter(r => {
             if (r.status_busqueda === 'OK') return false;
+            if (r.status_busqueda === 'HISTORIAL') return false; // Mostrar en tab Historial
 
             const matchesStatus = selectedStatus === 'all' || r.status_busqueda === selectedStatus;
 
@@ -526,6 +527,21 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
 // --- Sub-components for better organization ---
 
 const TicketEditSection = ({ title, data, onChange, getImageUrl }) => {
+    const [zoomed, setZoomed] = useState(false);
+    const [origin, setOrigin] = useState('50% 50%');
+    const imgRef              = useRef(null);
+    const imgUrl              = getImageUrl(data.originalFilename);
+
+    const handleImgClick = (e) => {
+        if (imgRef.current) {
+            const rect = imgRef.current.getBoundingClientRect();
+            const x = (((e.clientX - rect.left) / rect.width)  * 100).toFixed(1);
+            const y = (((e.clientY - rect.top)  / rect.height) * 100).toFixed(1);
+            setOrigin(`${x}% ${y}%`);
+        }
+        setZoomed(z => !z);
+    };
+
     return (
         <div className="flex flex-col bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border border-slate-200 dark:border-white/10 shadow-sm">
             <div className="p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] flex items-center justify-between">
@@ -540,19 +556,24 @@ const TicketEditSection = ({ title, data, onChange, getImageUrl }) => {
 
             <div className="p-0">
                 {/* Image Section */}
-                <div className="aspect-[4/5] bg-slate-100 dark:bg-black/20 relative group overflow-hidden border-b border-slate-100 dark:border-white/5">
+                <div className={`aspect-[4/5] bg-slate-100 dark:bg-black/20 relative border-b border-slate-100 dark:border-white/5 flex items-center justify-center ${zoomed ? 'overflow-auto' : 'overflow-hidden'}`}>
+                    {zoomed && (
+                        <div className="absolute top-2 left-2 z-10 px-2 py-0.5 bg-accent-orange/90 text-white text-[7px] font-black uppercase tracking-widest rounded-full pointer-events-none animate-pulse">
+                            Zoom — click para salir
+                        </div>
+                    )}
                     <img
-                        src={getImageUrl(data.originalFilename)}
+                        ref={imgRef}
+                        src={imgUrl}
                         alt="Ticket"
-                        className="w-full h-full object-contain hover:scale-150 transition-transform duration-500 cursor-zoom-in"
+                        onClick={handleImgClick}
+                        style={{ transformOrigin: origin }}
+                        className={`object-contain transition-all duration-300 select-none ${zoomed ? 'scale-[1.8] cursor-zoom-out' : 'w-full h-full cursor-zoom-in'}`}
                         onError={(e) => {
                             e.target.onerror = null;
                             e.target.src = "https://placehold.co/600x800/1e293b/FFFFFF?text=IMAGEN+NO+ENCONTRADA";
                         }}
                     />
-                    <div className="absolute bottom-4 right-4 z-10 p-2 bg-white/90 dark:bg-slate-900/90 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                        <ImageIcon size={14} className="text-accent-orange" />
-                    </div>
                 </div>
 
                 {/* Form Fields */}

@@ -8,6 +8,7 @@ import {
     PieChart,
     Table as TableIcon,
     Filter,
+    BookOpen,
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, AreaChart, Area, XAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
 import CustomSelect from './common/CustomSelect';
@@ -41,6 +42,16 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
     const [currentPage, setCurrentPage] = useState(1);
     const [sortKey, setSortKey] = useState('transacciones');
     const [sortDir, setSortDir] = useState('desc');
+    const [showHistorial, setShowHistorial] = useState(false);
+
+    const [chartMetric, setChartMetric] = useState('trx');
+
+    // Filter trend data
+    const chartData = useMemo(() => {
+        if (!trendData) return [];
+        if (showHistorial) return trendData;
+        return trendData.filter(d => d.tickets != null).slice(-12);
+    }, [trendData, showHistorial]);
 
 
     const channelOptions = ['Delivery', 'Recojo en tienda', 'Salón'];
@@ -143,15 +154,36 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                             <div className="w-1.5 h-6 bg-accent-orange rounded-full" />
                             Evolución Transacciones Registradas
                         </h3>
-                        <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
+                    <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 border border-slate-200 dark:border-white/10 rounded-lg p-1">
+                                {[{ v: 'trx', l: 'Trx' }, { v: 'prom_diario', l: 'Prom. Diario' }].map(opt => (
+                                    <button
+                                        key={opt.v}
+                                        onClick={() => setChartMetric(opt.v)}
+                                        className={`px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-all ${
+                                            chartMetric === opt.v
+                                                ? 'bg-accent-orange/20 text-accent-orange'
+                                                : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                        }`}
+                                    >{opt.l}</button>
+                                ))}
+                            </div>
+                            <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
+                        </div>
                     </div>
-                    <div className="flex-1 w-full mt-6" style={{ minHeight: '320px' }}>
+
+
+                    <div className="flex-1 w-full mt-2" style={{ minHeight: '320px' }}>
                         <ResponsiveContainer width="100%" height={320}>
-                            <AreaChart data={trendData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
+                            <AreaChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
                                 <defs>
                                     <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#ff5e00" stopOpacity={0.8} />
                                         <stop offset="95%" stopColor="#ff5e00" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="colorHistorial" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
+                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <XAxis
@@ -159,6 +191,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                     stroke={theme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"}
                                     fontSize={10}
                                     tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
+                                    interval={showHistorial ? Math.floor(chartData.length / 10) : 0}
                                     tickFormatter={(str) => {
                                         if (!str || !str.includes('-')) return str;
                                         const [y, m] = str.split('-');
@@ -167,10 +200,34 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                     }}
                                 />
                                 <RechartsTooltip
-                                    contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.8)' : '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontWeight: 'bold' }}
+                                    contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.9)' : '#fff', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '12px', fontWeight: 'bold' }}
+                                    formatter={(value, name) => [
+                                        value != null ? value.toLocaleString('es-PE') : '—',
+                                        name === 'historial' ? 'Historial campo' : 'Mediciones OK'
+                                    ]}
                                     itemStyle={{ color: '#ff5e00' }}
                                 />
-                                <Area type="monotone" dataKey="tickets" name="Transacciones" stroke="#ff5e00" fillOpacity={1} fill="url(#colorTrend)" />
+                                {/* Historial area — rendered behind OK area */}
+                                {showHistorial && chartMetric === 'trx' && (
+                                    <Area type="monotone" dataKey="historial" name="historial"
+                                        stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 3"
+                                        fillOpacity={1} fill="url(#colorHistorial)" connectNulls />
+                                )}
+                                {showHistorial && chartMetric === 'prom_diario' && (
+                                    <Area type="monotone" dataKey="historialProm" name="historialProm"
+                                        stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 3"
+                                        fillOpacity={1} fill="url(#colorHistorial)" connectNulls />
+                                )}
+                                {/* Main data area */}
+                                {chartMetric === 'trx' ? (
+                                    <Area type="monotone" dataKey="tickets" name="tickets"
+                                        stroke="#ff5e00" strokeWidth={2}
+                                        fillOpacity={1} fill="url(#colorTrend)" connectNulls />
+                                ) : (
+                                    <Area type="monotone" dataKey="promedio" name="promedio"
+                                        stroke="#ff5e00" strokeWidth={2}
+                                        fillOpacity={1} fill="url(#colorTrend)" connectNulls />
+                                )}
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
@@ -402,6 +459,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
         caja: 'all'
     });
     const [currentPage, setCurrentPage] = useState(1);
+    const [matrixMetric, setMatrixMetric] = useState('trx');
 
 
     // Generate real months based on available data or a rolling 12M from selection
@@ -427,17 +485,16 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
         return list;
     }, [currentFilters.year, currentFilters.month]);
 
-    // Matrix data generation logic (Real Monthly data from allRecords)
     const matrixData = useMemo(() => {
-        // Group allRecords by Local+Caja and Month
         const localMonthMap = {};
+        const promMonthMap = {};
+        const countMonthMap = {};
 
         allRecords.forEach(rec => {
-            // Priority: use rec.mes and rec.ano if available
             let y, m;
             if (rec.mes && rec.ano) {
                 y = parseInt(rec.ano);
-                m = parseInt(rec.mes) - 1; // 1-12 to 0-11
+                m = parseInt(rec.mes) - 1;
             } else {
                 const date = new Date(rec.fecha_y_hora_registro || rec.fecha);
                 y = date.getFullYear();
@@ -445,11 +502,12 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
             }
 
             const key = `${rec.local}||${rec.caja ?? ''}_${y}_${m}`;
-            if (!localMonthMap[key]) localMonthMap[key] = 0;
+            if (!localMonthMap[key]) { localMonthMap[key] = 0; promMonthMap[key] = 0; countMonthMap[key] = 0; }
             localMonthMap[key] += parseInt(rec.transacciones_diferencial || rec.transacciones) || 0;
+            promMonthMap[key]  += parseFloat(rec.promedio) || 0;
+            countMonthMap[key] += 1;
         });
 
-        // Get unique local+caja combinations and their metadata
         const localsMetadata = {};
         allRecords.forEach(rec => {
             const rowKey = `${rec.local}||${rec.caja ?? ''}`;
@@ -468,10 +526,17 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                 const key = `${meta.local}||${meta.caja ?? ''}_${m.year}_${m.month}`;
                 return localMonthMap[key] || 0;
             });
+            const monthlyProm = months.map(m => {
+                const key = `${meta.local}||${meta.caja ?? ''}_${m.year}_${m.month}`;
+                const count = countMonthMap[key] || 1;
+                return promMonthMap[key] != null ? (promMonthMap[key] / count) : 0;
+            });
             return {
                 ...meta,
                 monthly,
-                total: monthly.reduce((a, b) => a + b, 0)
+                monthlyProm,
+                total: monthly.reduce((a, b) => a + b, 0),
+                totalProm: monthlyProm.reduce((a, b) => a + b, 0) / 12
             };
         }).filter(row => row.total > 0);
     }, [allRecords, months]);
@@ -494,18 +559,18 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
         [filteredMatrix, currentPage]
     );
 
-    // Monthly totals for the top row
     const monthlyTotals = useMemo(() => {
         const totals = new Array(12).fill(0);
+        const totalsP = new Array(12).fill(0);
         filteredMatrix.forEach(row => {
-            row.monthly.forEach((val, i) => {
-                totals[i] += val;
-            });
+            row.monthly.forEach((val, i) => { totals[i] += val; });
+            row.monthlyProm.forEach((val, i) => { totalsP[i] += val; });
         });
-        return totals;
+        return { trx: totals, prom: totalsP };
     }, [filteredMatrix]);
 
     const grandTotal = useMemo(() => filteredMatrix.reduce((sum, row) => sum + row.total, 0), [filteredMatrix]);
+    const grandTotalProm = useMemo(() => filteredMatrix.length > 0 ? filteredMatrix.reduce((sum, row) => sum + row.totalProm, 0) / filteredMatrix.length : 0, [filteredMatrix]);
 
     // Internal Cascading Filters Logic
     const competitors = useMemo(() => ['all', ...new Set(matrixData.map(d => d.competidor))], [matrixData]);
@@ -549,10 +614,23 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                         <TrendingUp className="w-4 h-4 text-accent-orange" />
                         Matriz de Transacciones Mensuales (Rolling 12M)
                     </h3>
-                    <div className="px-3 py-1 bg-accent-orange/10 rounded-full border border-accent-orange/20">
-                        <span className="text-[10px] font-black uppercase text-accent-orange">
-                            Pág. {currentPage} de {totalPages || 1} · {filteredMatrix.length} locales
-                        </span>
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1 border border-slate-200 dark:border-white/10 rounded-lg p-1">
+                            {[{ v: 'trx', l: 'Trx' }, { v: 'prom_diario', l: 'Prom. Diario' }, { v: 'ambos', l: 'Ambos' }].map(opt => (
+                                <button key={opt.v} onClick={() => setMatrixMetric(opt.v)}
+                                    className={`px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-all ${
+                                        matrixMetric === opt.v
+                                            ? 'bg-accent-orange/20 text-accent-orange'
+                                            : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                    }`}
+                                >{opt.l}</button>
+                            ))}
+                        </div>
+                        <div className="px-3 py-1 bg-accent-orange/10 rounded-full border border-accent-orange/20">
+                            <span className="text-[10px] font-black uppercase text-accent-orange">
+                                Pág. {currentPage} de {totalPages || 1} · {filteredMatrix.length} locales
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -604,13 +682,23 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                         {/* Totals Row (Sticky under the header) */}
                         <tr className="bg-slate-100 dark:bg-white/10 font-black text-slate-900 dark:text-white sticky top-[44px] z-20 backdrop-blur-md">
                             <td colSpan="3" className="px-4 py-3 sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.1)] text-right uppercase italic text-accent-orange">Totales Consolidados</td>
-                            {monthlyTotals.map((total, i) => (
-                                <td key={i} className="px-3 py-3 text-center text-accent-orange font-mono border-l border-slate-200 dark:border-white/5">
-                                    {new Intl.NumberFormat('es-ES').format(total)}
-                                </td>
-                            ))}
+                            {monthlyTotals.trx.map((total, i) => {
+                                const pVal = monthlyTotals.prom[i];
+                                return (
+                                    <td key={i} className="px-3 py-3 text-center text-accent-orange font-mono border-l border-slate-200 dark:border-white/5">
+                                        {matrixMetric === 'ambos' ? (
+                                            <div className="flex flex-col items-center gap-0.5">
+                                                <span>{new Intl.NumberFormat('es-ES').format(total)}</span>
+                                                <span className="text-violet-400 text-[9px]">{pVal.toFixed(1)}</span>
+                                            </div>
+                                        ) : matrixMetric === 'prom_diario' ? pVal.toFixed(1)
+                                          : new Intl.NumberFormat('es-ES').format(total)}
+                                    </td>
+                                );
+                            })}
                             <td className="px-4 py-3 text-center bg-accent-orange text-white font-black shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]">
-                                {new Intl.NumberFormat('es-ES').format(grandTotal)}
+                                {matrixMetric === 'prom_diario' ? grandTotalProm.toFixed(1)
+                                    : new Intl.NumberFormat('es-ES').format(grandTotal)}
                             </td>
                         </tr>
 
@@ -624,13 +712,30 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                                 </td>
                                 <td className="px-4 py-3 sticky left-[120px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] font-medium text-slate-500 truncate">{row.local}</td>
                                 <td className="px-4 py-3 sticky left-[280px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] text-center font-bold opacity-50">{row.caja}</td>
-                                {row.monthly.map((val, i) => (
-                                    <td key={i} className={`px-3 py-3 text-center font-mono border-l border-slate-100 dark:border-white/[0.02] ${val > 2500 ? 'text-emerald-500 font-bold' : val === 0 ? 'opacity-20' : ''}`}>
-                                        {new Intl.NumberFormat('es-ES').format(val)}
-                                    </td>
-                                ))}
+                                {row.monthly.map((val, i) => {
+                                    const pVal = row.monthlyProm[i];
+                                    return (
+                                        <td key={i} className="px-3 py-3 text-center font-mono border-l border-slate-100 dark:border-white/[0.02]">
+                                            {matrixMetric === 'ambos' ? (
+                                                val > 0 ? (
+                                                    <div className="flex flex-col items-center gap-0.5">
+                                                        <span className={`font-mono ${val > 2500 ? 'text-emerald-500 font-bold' : ''}`}>{new Intl.NumberFormat('es-ES').format(val)}</span>
+                                                        <span className="text-violet-400 text-[9px] font-bold">{pVal.toFixed(1)}</span>
+                                                    </div>
+                                                ) : <span className="opacity-20">-</span>
+                                            ) : matrixMetric === 'prom_diario' ? (
+                                                pVal > 0 ? <span className="text-violet-400 font-bold">{pVal.toFixed(1)}</span> : <span className="opacity-20">-</span>
+                                            ) : (
+                                                <span className={`${val > 2500 ? 'text-emerald-500 font-bold' : val === 0 ? 'opacity-20' : ''}`}>
+                                                    {val === 0 ? '-' : new Intl.NumberFormat('es-ES').format(val)}
+                                                </span>
+                                            )}
+                                        </td>
+                                    );
+                                })}
                                 <td className="px-4 py-3 text-center bg-accent-orange/[0.02] font-black text-accent-orange group-hover:bg-accent-orange/[0.05]">
-                                    {new Intl.NumberFormat('es-ES').format(row.total)}
+                                    {matrixMetric === 'prom_diario' ? row.totalProm.toFixed(1)
+                                        : new Intl.NumberFormat('es-ES').format(row.total)}
                                 </td>
                             </tr>
                         ))}

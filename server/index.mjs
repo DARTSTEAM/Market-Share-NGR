@@ -36,6 +36,7 @@ let cache = {
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 const QUERY_RECORDS = `
+  -- Mediciones actuales del pipeline Gemini
   SELECT
     competidor, codigo_tienda, local, caja, status_busqueda,
     transacciones_diferencial, ticket_actual, ticket_anterior,
@@ -44,6 +45,18 @@ const QUERY_RECORDS = `
     region, distrito,
     punto_compartido, cc_punto_compartido, grupos_cc, marcas_en_pc, n_marcas_en_pc
   FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
+
+  UNION ALL
+
+  -- Datos históricos 2022-2026 (archivo de campo, status = 'HISTORIAL')
+  SELECT
+    competidor, codigo_tienda, local, caja, status_busqueda,
+    transacciones_diferencial, ticket_actual, ticket_anterior,
+    fecha_y_hora_registro, fecha_anterior, filename_actual, filename_anterior,
+    delta_dias, ac, promedio_transacciones_diarias, mes, ano,
+    region, distrito,
+    punto_compartido, cc_punto_compartido, grupos_cc, marcas_en_pc, n_marcas_en_pc
+  FROM \`${PROJECT_ID}.${DATASET_ID}.procesar_historial_tasas\`()
 `;
 
 const QUERY_TICKETS = `
@@ -213,6 +226,71 @@ app.get('/api/health', (req, res) => {
         recordCount: cache.data?.records?.length ?? 0,
     });
 });
+
+// GET /api/gaps — gap estimation data (separate cache, lazy)
+const cacheGaps = { data: null, fetchedAt: null };
+const GAPS_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+app.get('/api/gaps', async (req, res) => {
+    try {
+        const isStale = !cacheGaps.fetchedAt || (Date.now() - new Date(cacheGaps.fetchedAt).getTime()) > GAPS_TTL_MS;
+        if (isStale || !cacheGaps.data) {
+            console.log('[/api/gaps] Fetching from BigQuery...');
+            const QUERY_GAPS = `
+                SELECT
+                    competidor, local, caja, codigo_tienda,
+                    mes, ano, region, distrito,
+                    gap_inicio_estimado, gap_fin_estimado,
+                    dias_gap, nombre_mes_gap, gap_multiple_meses,
+                    fecha_anterior, fecha_actual, delta_dias,
+                    transacciones_observadas_total, tasa_diaria_observada,
+                    tasa_diaria_usada, transacciones_gap_estimadas,
+                    estimacion_baja, estimacion_alta,
+                    metodo_estimacion, confianza,
+                    n_obs_estacional, n_obs_global
+                FROM \`${PROJECT_ID}.${DATASET_ID}.estimar_gap_transacciones\`('2024-01-01')
+                ORDER BY transacciones_gap_estimadas DESC
+            `;
+            const [job] = await bigquery.createQueryJob({ query: QUERY_GAPS });
+            const [rows] = await job.getQueryResults();
+            cacheGaps.data = rows.map(r => ({
+                competidor:                  r.competidor || '',
+                local:                       r.local || '',
+                caja:                        r.caja || '',
+                codigo_tienda:               r.codigo_tienda || '',
+                mes:                         r.mes ?? '',
+                ano:                         r.ano ?? '',
+                region:                      r.region || '',
+                distrito:                    r.distrito || '',
+                gap_inicio_estimado:         r.gap_inicio_estimado?.value || r.gap_inicio_estimado || '',
+                gap_fin_estimado:            r.gap_fin_estimado?.value || r.gap_fin_estimado || '',
+                dias_gap:                    r.dias_gap ?? 0,
+                nombre_mes_gap:              r.nombre_mes_gap || '',
+                gap_multiple_meses:          r.gap_multiple_meses ?? false,
+                fecha_anterior:              r.fecha_anterior?.value || r.fecha_anterior || '',
+                fecha_actual:                r.fecha_actual?.value || r.fecha_actual || '',
+                delta_dias:                  r.delta_dias ?? 0,
+                transacciones_observadas:    r.transacciones_observadas_total ?? 0,
+                tasa_diaria_observada:       parseFloat(r.tasa_diaria_observada) || 0,
+                tasa_diaria_usada:           parseFloat(r.tasa_diaria_usada) || 0,
+                transacciones_estimadas:     r.transacciones_gap_estimadas ?? 0,
+                estimacion_baja:             r.estimacion_baja ?? 0,
+                estimacion_alta:             r.estimacion_alta ?? 0,
+                metodo:                      r.metodo_estimacion || '',
+                confianza:                   r.confianza || '',
+                n_obs_estacional:            r.n_obs_estacional ?? 0,
+                n_obs_global:                r.n_obs_global ?? 0,
+            }));
+            cacheGaps.fetchedAt = new Date().toISOString();
+            console.log(`[/api/gaps] Fetched ${cacheGaps.data.length} gaps.`);
+        }
+        res.json({ gaps: cacheGaps.data, fetchedAt: cacheGaps.fetchedAt });
+    } catch (err) {
+        console.error('[/api/gaps] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 app.listen(port, () => {
     console.log(`NGR Proxy server running at http://localhost:${port}`);
