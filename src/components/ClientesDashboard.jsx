@@ -123,7 +123,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const [filterCajaMes, setFilterCajaMes] = useState('all');
     const [filterYear, setFilterYear] = useState('all');
     const [sortCaja, setSortCaja] = useState('competidor_asc');
-    const [evolucionMetric, setEvolucionMetric] = useState('trx_total');
+    const [evolucionMetric, setEvolucionMetric] = useState('trx_avg');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
 
     // Available years from all valid records (OK + HISTORIAL in scope)
@@ -150,7 +150,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         );
         setSelectedCompetitors([]);
     };
-    const [topMetric, setTopMetric] = useState('trx'); // 'trx' | 'prom_diario'
+    const [topMetric, setTopMetric] = useState('prom_diario'); // show prom diario only
     const [exporting, setExporting] = useState(false);
     const [expandDistribucion, setExpandDistribucion] = useState(false);
     const [expandEvolucion, setExpandEvolucion] = useState(false);
@@ -384,8 +384,11 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     // ── Display rows for Distribución table (filtered by month + sorted) ────────
     const distribRows = useMemo(() => {
         const withTrx = cajaRows.map(row => {
-            const trx = filterCajaMes === 'all' ? row.total : (row.months[filterCajaMes] || 0);
-            return { ...row, displayTrx: trx };
+            // Use promedio diario average instead of total trx
+            const promSum = filterCajaMes === 'all'
+                ? Object.keys(row.promedios || {}).reduce((s, mk) => s + (row.promedios[mk] / (row.promCounts[mk] || 1)), 0)
+                : (row.promedios?.[filterCajaMes] != null ? row.promedios[filterCajaMes] / (row.promCounts[filterCajaMes] || 1) : 0);
+            return { ...row, displayTrx: promSum };
         });
         // Recompute local totals for the selected period
         const localTotals = {};
@@ -741,53 +744,16 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                 ) : (
                     <div className="space-y-6">
 
-                        {/* ── 1. Trx Totales / Prom. Diario ───────────────────────────────── */}
-                        <div ref={refTrx} className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                {[{ value: 'trx', label: 'Trx Totales' }, { value: 'prom_diario', label: 'Prom. Diario ∑' }, { value: 'ambos', label: 'Ambos' }].map(opt => (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => setTopMetric(opt.value)}
-                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${topMetric === opt.value
-                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                            }`}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                ))}
-                            </div>
-                            {topMetric === 'ambos' ? (
-                                <div className="space-y-4">
-                                    <SectionTable
-                                        title="Trx Totales"
-                                        headerColor="#1e3a5f"
-                                        rows={filteredRows}
-                                        months={months}
-                                        renderCell={(row, m) => formatTrx(getTrx(row.key, m.key))}
-                                    />
-                                    <SectionTable
-                                        title="Prom. Transacciones Diarias"
-                                        headerColor="#4c1d95"
-                                        rows={filteredRows}
-                                        months={months}
-                                        renderCell={(row, m) => formatTrx(getProm(row.key, m.key))}
-                                        footnote="Suma del campo promedio de transacciones diarias de todos los locales del competidor en el período."
-                                    />
-                                </div>
-                            ) : (
-                                <SectionTable
-                                    title={topMetric === 'trx' ? 'Trx Totales' : 'Suma Promedio Diario por Competidor'}
-                                    headerColor="#1e3a5f"
-                                    rows={filteredRows}
-                                    months={months}
-                                    renderCell={(row, m) => topMetric === 'trx'
-                                        ? formatTrx(getTrx(row.key, m.key))
-                                        : formatTrx(getProm(row.key, m.key))
-                                    }
-                                    footnote={topMetric === 'prom_diario' ? 'Suma del campo promedio de transacciones diarias de todos los locales del competidor en el período.' : undefined}
-                                />
-                            )}
+                                        {/* ── 1. Suma Promedio Diario ────────────────────────────────── */}
+                        <div ref={refTrx}>
+                            <SectionTable
+                                title="Suma Promedio Diario por Competidor"
+                                headerColor="#1e3a5f"
+                                rows={filteredRows}
+                                months={months}
+                                renderCell={(row, m) => formatTrx(getProm(row.key, m.key))}
+                                footnote="Suma del campo promedio de transacciones diarias de todos los locales del competidor en el período."
+                            />
                         </div>
 
                         {/* ── 2. Crec % ───────────────────────────────────────────────────── */}
@@ -901,7 +867,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                 </th>
                                             </tr>
                                             <tr className="bg-slate-100 dark:bg-white/[0.04]">
-                                                {['Competidor', 'Local', 'Trx Totales', '% del Local'].map(h => (
+                                                {['Competidor', 'Local', 'Prom. Diario', '% del Local'].map(h => (
                                                     <th key={h} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right first:text-left">{h}</th>
                                                 ))}
                                             </tr>
@@ -944,44 +910,27 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                 </div>
                                 </div>
 
+                                <div ref={refEvolucion} className="space-y-3">
                                 {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
                                 {/* Controls row */}
-                                <div ref={refEvolucion} className="space-y-3">
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Evolución — mostrar:</span>
-                                        {[{ value: 'trx_total', label: 'Trx Totales' }, { value: 'trx_avg', label: 'Prom. Diario' }, { value: 'ambos', label: 'Ambos' }].map(opt => (
-                                            <button
-                                                key={opt.value}
-                                                onClick={() => setEvolucionMetric(opt.value)}
-                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${evolucionMetric === opt.value
-                                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                                    }`}
-                                            >
-                                                {opt.label}
-                                            </button>
-                                        ))}
-                                        <div className="ml-auto flex items-center gap-2">
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
-                                            <select
-                                                value={sortEvol}
-                                                onChange={e => setSortEvol(e.target.value)}
-                                                className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
-                                            >
-                                                <option value="competidor_asc">Competidor (A-Z)</option>
-                                                <option value="local_asc">Local (A-Z)</option>
-                                            </select>
-                                        </div>
-                                    </div>
+                                <div className="flex flex-wrap items-center justify-end gap-2">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
+                                    <select
+                                        value={sortEvol}
+                                        onChange={e => setSortEvol(e.target.value)}
+                                        className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
+                                    >
+                                        <option value="competidor_asc">Competidor (A-Z)</option>
+                                        <option value="local_asc">Local (A-Z)</option>
+                                    </select>
+                                </div>
                                     <div className="relative rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg overflow-hidden">
                                     <div className={expandEvolucion ? 'overflow-x-auto' : 'overflow-auto max-h-96'}>
                                         <table className="w-full text-left whitespace-nowrap text-[11px]">
                                             <thead className="sticky top-0 z-10">
                                                 <tr>
                                                     <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 2}>
-                                                        {evolucionMetric === 'trx_total' ? 'Evolución de Trx Totales por Local'
-                                                            : evolucionMetric === 'trx_avg' ? 'Evolución de Promedio Diario por Local'
-                                                            : 'Evolución Trx Totales + Prom. Diario por Local'}
+                                                        Evolución de Promedio Diario por Local
                                                     </th>
                                                 </tr>
                                                 <tr className="bg-slate-100 dark:bg-white/[0.04]">
@@ -1058,7 +1007,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                         {expandEvolucion ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
                                     </button>
                                     </div>
-                                </div>
+                                </div>{/* closes refEvolucion */}
                             </>
                         )}
                     </div>

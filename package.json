@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "fetch": "node fetch_bq_data.cjs",
-    "prebuild": "npm run fetch",
-    "build": "npm run fetch && node process_csv.cjs && vite build",
+    "build": "vite build",
+    "build:with-data": "npm run fetch && node process_csv.cjs && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

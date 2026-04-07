@@ -175,7 +175,12 @@ app.post('/api/update-ticket', async (req, res) => {
 
     if (!filename) return res.status(400).json({ error: 'Filename is required' });
 
+    const t0 = Date.now();
+    const ts = (label) => console.log(`[update-ticket] ${label} — +${Date.now() - t0}ms`);
+
     try {
+        ts(`START — filename: ${filename}`);
+
         const query = `
           UPDATE \`${PROJECT_ID}.${DATASET_ID}.facturas_v2\`
           SET
@@ -203,13 +208,17 @@ app.post('/api/update-ticket', async (req, res) => {
             },
         };
 
-        console.log(`[/api/update-ticket] Updating filename: ${filename}`);
+        ts('createQueryJob — about to submit');
         const [job] = await bigquery.createQueryJob(options);
-        await job.getQueryResults();
+        ts(`createQueryJob — done, job.id=${job.id}`);
 
-        // Force cache refresh after update
-        const data = await getCachedData(true);
-        res.json({ success: true, message: 'Ticket updated and data refreshed', data });
+        await job.getQueryResults();
+        ts('getQueryResults — done');
+
+        // Invalidate cache so next /api/data call returns fresh data
+        cache.fetchedAt = null;
+        ts('DONE — sending response');
+        res.json({ success: true, message: 'Ticket updated in BigQuery' });
     } catch (err) {
         console.error('[/api/update-ticket] Error:', err.message);
         res.status(500).json({ error: err.message });

@@ -549,7 +549,7 @@ export default function App() {
   const handleUpdateTicket = async (ticketData) => {
     try {
       setIsRefreshing(true);
-      setNotification({ type: 'info', message: 'Actualizando BigQuery y refrescando datos...' });
+      setNotification({ type: 'info', message: 'Guardando corrección...' });
 
       const response = await fetch(`${API_BASE_URL}/api/update-ticket`, {
         method: 'POST',
@@ -568,18 +568,11 @@ export default function App() {
 
       const result = await response.json();
 
-      if (result.success && result.data) {
-        setNotification({ type: 'success', message: '¡Datos sincronizados correctamente con BigQuery!' });
-
-        // Update entire state from the server response which contains calculated fields
-        setRecords(result.data.records);
-        setTickets(result.data.tickets);
-      } else if (result.success) {
-        // Fallback for success without full data
-        setNotification({ type: 'success', message: '¡Ticket actualizado con éxito!' });
+      if (result.success) {
         const targetFilename = ticketData.filename || ticketData.originalFilename;
 
-        // 1. Update tickets list
+        // Optimistic update: remove the corrected alarm immediately from the list
+        // and update tickets state with the corrected values
         setTickets(prev => prev.map(t =>
           (t.filename === targetFilename)
             ? {
@@ -597,34 +590,12 @@ export default function App() {
             : t
         ));
 
-        // 2. Update alarm records list
-        setRecords(prev => prev.map(r => {
-          let updated = { ...r };
-          let hasChange = false;
+        // Remove the alarm record that was just corrected from the list
+        setRecords(prev => prev.filter(r =>
+          r.filename_actual !== targetFilename && r.filename_anterior !== targetFilename
+        ));
 
-          if (r.filename_actual === targetFilename) {
-            updated.ticket_actual = ticketData.ticket;
-            updated.fecha = ticketData.fecha;
-            updated.numero_de_caja = ticketData.caja;
-            updated.local = ticketData.local;
-            updated.competidor = ticketData.competidor;
-            updated.codigo_tienda = ticketData.codigoTienda;
-            hasChange = true;
-          }
-
-          if (r.filename_anterior === targetFilename) {
-            updated.ticket_anterior = ticketData.ticket;
-            updated.fecha_anterior = ticketData.fecha;
-            updated.numero_de_caja = ticketData.caja;
-            updated.local = ticketData.local;
-            updated.competidor = ticketData.competidor;
-            updated.codigo_tienda = ticketData.codigoTienda;
-            hasChange = true;
-          }
-
-          return hasChange ? updated : r;
-        }));
-
+        setNotification({ type: 'success', message: '✓ Corrección guardada en BigQuery' });
       } else {
         throw new Error(result.error || 'Error al actualizar el ticket');
       }

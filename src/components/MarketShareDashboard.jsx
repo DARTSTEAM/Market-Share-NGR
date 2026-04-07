@@ -44,7 +44,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
     const [sortDir, setSortDir] = useState('desc');
     const [showHistorial, setShowHistorial] = useState(false);
 
-    const [chartMetric, setChartMetric] = useState('trx');
+    const [chartMetric, setChartMetric] = useState('prom_diario');
 
     // Filter trend data
     const chartData = useMemo(() => {
@@ -154,22 +154,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                             <div className="w-1.5 h-6 bg-accent-orange rounded-full" />
                             Evolución Transacciones Registradas
                         </h3>
-                    <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1 border border-slate-200 dark:border-white/10 rounded-lg p-1">
-                                {[{ v: 'trx', l: 'Trx' }, { v: 'prom_diario', l: 'Prom. Diario' }].map(opt => (
-                                    <button
-                                        key={opt.v}
-                                        onClick={() => setChartMetric(opt.v)}
-                                        className={`px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-all ${
-                                            chartMetric === opt.v
-                                                ? 'bg-accent-orange/20 text-accent-orange'
-                                                : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                        }`}
-                                    >{opt.l}</button>
-                                ))}
-                            </div>
-                            <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
-                        </div>
+                    <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
                     </div>
 
 
@@ -342,12 +327,10 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                     setSortDir(dir);
                                 }}
                                 options={[
-                                    { value: 'transacciones_desc', label: 'Transacciones ↓' },
-                                    { value: 'transacciones_asc', label: 'Transacciones ↑' },
-                                    { value: 'codigo_tienda_asc', label: 'Cód. Tienda A→Z' },
-                                    { value: 'codigo_tienda_desc', label: 'Cód. Tienda Z→A' },
                                     { value: 'promDiario_desc', label: 'Prom. Diario ↓' },
                                     { value: 'promDiario_asc', label: 'Prom. Diario ↑' },
+                                    { value: 'codigo_tienda_asc', label: 'Cód. Tienda A→Z' },
+                                    { value: 'codigo_tienda_desc', label: 'Cód. Tienda Z→A' },
                                     { value: 'competidor_asc', label: 'Competidor A→Z' },
                                     { value: 'competidor_desc', label: 'Competidor Z→A' },
                                     { value: 'local_asc', label: 'Local A→Z' },
@@ -371,7 +354,6 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                 <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('local')}>Sede / Local{sortIcon('local')}</th>
                                 <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('canal')}>Canal{sortIcon('canal')}</th>
                                 <th className="px-6 py-5 text-center">Caja</th>
-                                <th className="px-6 py-5 text-center cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('transacciones')}>Transacciones{sortIcon('transacciones')}</th>
                                 <th className="px-6 py-5 text-center cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('promDiario')}>Prom. Diario{sortIcon('promDiario')}</th>
                                 <th className="px-6 py-5 text-center">Momento (A/C)</th>
                             </tr>
@@ -400,7 +382,6 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                         </span>
                                     </td>
                                     <td className="px-6 py-5 text-center font-bold text-slate-500 dark:text-white/40">{row.caja || '-'}</td>
-                                    <td className="px-6 py-5 text-center font-black text-slate-900 dark:text-white font-mono">{row.transacciones}</td>
                                     <td className="px-6 py-5 text-center text-emerald-600 dark:text-accent-lemon font-black font-mono">{row.promDiario}</td>
                                     <td className="px-6 py-5 text-center">
                                         <div className="flex justify-center gap-1.5">
@@ -459,7 +440,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
         caja: 'all'
     });
     const [currentPage, setCurrentPage] = useState(1);
-    const [matrixMetric, setMatrixMetric] = useState('trx');
+    const [matrixMetric, setMatrixMetric] = useState('prom_diario');
 
 
     // Generate real months based on available data or a rolling 12M from selection
@@ -615,16 +596,8 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                         Matriz de Transacciones Mensuales (Rolling 12M)
                     </h3>
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 border border-slate-200 dark:border-white/10 rounded-lg p-1">
-                            {[{ v: 'trx', l: 'Trx' }, { v: 'prom_diario', l: 'Prom. Diario' }, { v: 'ambos', l: 'Ambos' }].map(opt => (
-                                <button key={opt.v} onClick={() => setMatrixMetric(opt.v)}
-                                    className={`px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-widest transition-all ${
-                                        matrixMetric === opt.v
-                                            ? 'bg-accent-orange/20 text-accent-orange'
-                                            : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                    }`}
-                                >{opt.l}</button>
-                            ))}
+                        <div className="px-3 py-1 rounded-lg bg-accent-orange/10 border border-accent-orange/20">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-accent-orange">Prom. Diario</span>
                         </div>
                         <div className="px-3 py-1 bg-accent-orange/10 rounded-full border border-accent-orange/20">
                             <span className="text-[10px] font-black uppercase text-accent-orange">
