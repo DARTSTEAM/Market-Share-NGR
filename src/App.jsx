@@ -869,6 +869,33 @@ export default function App() {
     return filteredRecords.filter(recordInScope);
   }, [filteredRecords]);
 
+  // 1b2. Puntos Compartidos evolution records — last 12 months, ignores date filter
+  const pcEvolutionRecords = useMemo(() => {
+    const now = new Date();
+    const cutoffAno = now.getFullYear();
+    const cutoffMes = now.getMonth() + 1; // 1-12
+    // Compute key 12 months back
+    const cutoffKeyMin = (() => {
+      let y = cutoffAno;
+      let m = cutoffMes - 12;
+      if (m <= 0) { m += 12; y -= 1; }
+      return y * 100 + m;
+    })();
+    return records.filter(r => {
+      if (!recordInScope(r)) return false;
+      if (!r.punto_compartido) return false;
+      // Only apply non-date filters
+      const cMatch = filters.competitor === 'all' || r.competidor === filters.competitor;
+      const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[r.competidor] === filters.category;
+      const rMatch = filters.region === 'all' || r.region === filters.region;
+      const dMatch = filters.distrito === 'all' || r.distrito === filters.distrito;
+      if (!cMatch || !catMatch || !rMatch || !dMatch) return false;
+      // Last 12 months window
+      const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
+      return key >= cutoffKeyMin;
+    });
+  }, [records, filters.competitor, filters.category, filters.region, filters.distrito]);
+
   // 1c. Core Tickets Filtering (facturas_v2)
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
@@ -1406,6 +1433,7 @@ export default function App() {
               <PuntosCompartidosDashboard
                 key="puntos_compartidos"
                 allRecords={marketShareRecords}
+                evolutionRecords={pcEvolutionRecords}
                 shareData={reactiveShareDataRoutine}
               />
             ) : (
