@@ -473,6 +473,7 @@ export default function App() {
   const [notification, setNotification] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRefreshingData, setIsRefreshingData] = useState(false);
+  const [syncQueue, setSyncQueue] = useState([]); // [{id, label, status: 'syncing'|'done'|'error'}]
 
   // Use state for data to make it reactive to updates
   const [records, setRecords] = useState([]);
@@ -546,68 +547,61 @@ export default function App() {
     }
   };
 
-  const handleUpdateTicket = async (ticketData) => {
-    try {
-      setIsRefreshing(true);
-      setNotification({ type: 'info', message: 'Guardando corrección...' });
+  const handleUpdateTicket = (ticketData) => {
+    const syncId = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const label = ticketData.local || ticketData.originalFilename || 'Ticket';
 
-      const response = await fetch(`${API_BASE_URL}/api/update-ticket`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: ticketData.filename || ticketData.originalFilename,
-          ticket: ticketData.ticket,
-          importe: ticketData.importe,
-          fecha: ticketData.fecha,
-          caja: ticketData.caja,
-          local: ticketData.local,
-          competidor: ticketData.competidor,
-          codigoTienda: ticketData.codigoTienda
-        })
-      });
+    // 1. Optimistic removal — alarm disappears immediately
+    const targetFilename = ticketData.filename || ticketData.originalFilename;
+    setRecords(prev => prev.filter(r =>
+      r.filename_actual !== targetFilename && r.filename_anterior !== targetFilename
+    ));
+    setTickets(prev => prev.map(t =>
+      t.filename === targetFilename
+        ? { ...t, ticket: ticketData.ticket, importe: ticketData.importe, fecha: ticketData.fecha,
+            numero_de_caja: ticketData.caja, caja: ticketData.caja,
+            local: ticketData.local, competidor: ticketData.competidor,
+            codigo_tienda: ticketData.codigoTienda, codigoTienda: ticketData.codigoTienda }
+        : t
+    ));
 
-      const result = await response.json();
+    // 2. Add to sync queue
+    setSyncQueue(prev => [...prev, { id: syncId, label, status: 'syncing' }]);
 
-      if (result.success) {
-        const targetFilename = ticketData.filename || ticketData.originalFilename;
-
-        // Optimistic update: remove the corrected alarm immediately from the list
-        // and update tickets state with the corrected values
-        setTickets(prev => prev.map(t =>
-          (t.filename === targetFilename)
-            ? {
-              ...t,
-              ticket: ticketData.ticket,
-              importe: ticketData.importe,
-              fecha: ticketData.fecha,
-              numero_de_caja: ticketData.caja,
-              caja: ticketData.caja,
-              local: ticketData.local,
-              competidor: ticketData.competidor,
-              codigo_tienda: ticketData.codigoTienda,
-              codigoTienda: ticketData.codigoTienda
-            }
-            : t
-        ));
-
-        // Remove the alarm record that was just corrected from the list
-        setRecords(prev => prev.filter(r =>
-          r.filename_actual !== targetFilename && r.filename_anterior !== targetFilename
-        ));
-
-        setNotification({ type: 'success', message: '✓ Corrección guardada en BigQuery' });
-      } else {
-        throw new Error(result.error || 'Error al actualizar el ticket');
-      }
-    } catch (error) {
-      console.error('Update error:', error);
-      setNotification({ type: 'error', message: `Error: ${error.message}` });
-    } finally {
-      setIsRefreshing(false);
-      // Auto-hide notification
-      setTimeout(() => setNotification(null), 5000);
-    }
+    // 3. Fire BQ update in background
+    fetch(`${API_BASE_URL}/api/update-ticket`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: targetFilename,
+        ticket: ticketData.ticket,
+        importe: ticketData.importe,
+        fecha: ticketData.fecha,
+        caja: ticketData.caja,
+        local: ticketData.local,
+        competidor: ticketData.competidor,
+        codigoTienda: ticketData.codigoTienda
+      })
+    })
+    .then(r => r.json())
+    .then(result => {
+      const status = result.success ? 'done' : 'error';
+      setSyncQueue(prev => prev.map(s => s.id === syncId ? { ...s, status } : s));
+      if (result.success) cache_invalidate();
+      // Auto-remove after 3s
+      setTimeout(() => setSyncQueue(prev => prev.filter(s => s.id !== syncId)), 3000);
+    })
+    .catch(() => {
+      setSyncQueue(prev => prev.map(s => s.id === syncId ? { ...s, status: 'error' } : s));
+      setTimeout(() => setSyncQueue(prev => prev.filter(s => s.id !== syncId)), 4000);
+    });
   };
+
+  // Soft cache invalidation — next /api/data fetch gets fresh data
+  const cache_invalidate = () => {
+    // No-op on frontend; server already nullified fetchedAt
+  };
+
 
   // Derive filter options from raw records
   const monthsArr = useMemo(() => {
@@ -1448,6 +1442,69 @@ export default function App() {
                 isRefreshing={isRefreshing}
               />
             )
+          )}
+        </AnimatePresence>
+
+        {/* ── Sync Indicator (bottom-right floating) ── */}
+        <AnimatePresence>
+          {syncQueue.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 items-end"
+            >
+              {syncQueue.map(item => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, x: 40, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 40, scale: 0.95 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl px-4 py-3 min-w-[240px] max-w-[300px]"
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Status icon */}
+                    <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
+                      style={{ background: item.status === 'done' ? '#dcfce7' : item.status === 'error' ? '#fee2e2' : '#eff6ff' }}>
+                      {item.status === 'done' && (
+                        <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                      {item.status === 'error' && (
+                        <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                      {item.status === 'syncing' && (
+                        <svg className="w-4 h-4 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                        </svg>
+                      )}
+                    </div>
+                    {/* Label */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100 truncate">{item.label}</p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                        {item.status === 'syncing' ? 'Sincronizando con BigQuery...' : item.status === 'done' ? 'Guardado ✓' : 'Error al guardar'}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="mt-2.5 h-1 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-700">
+                    {item.status === 'syncing' ? (
+                      <div className="h-full rounded-full bg-blue-500 animate-[indeterminate_1.4s_ease-in-out_infinite]"
+                        style={{ width: '40%', animationName: 'indeterminate' }} />
+                    ) : (
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: '100%', background: item.status === 'done' ? '#22c55e' : '#ef4444' }} />
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
           )}
         </AnimatePresence>
       </main>

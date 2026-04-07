@@ -84,6 +84,12 @@ body {
     }
   }
 
+  @keyframes indeterminate {
+    0%   { transform: translateX(-100%); width: 50%; }
+    50%  { width: 35%; }
+    100% { transform: translateX(280%); width: 50%; }
+  }
+
   .pwa-card {
     @apply bg-white dark:bg-black/40 backdrop-blur-[40px] border border-slate-200 dark:border-white/[0.1] rounded-[32px] transition-all duration-500 shadow-xl shadow-slate-200/50 dark:shadow-none;
   }

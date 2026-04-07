@@ -207,18 +207,17 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
         });
     };
 
-    const handleSave = async () => {
+    const handleSave = () => {
         if (!onUpdateTicket || !editingTicket) return;
 
-        // Update Actual
-        await onUpdateTicket(editingTicket.actual);
-
-        // Update Anterior if exists
-        if (editingTicket.anterior) {
-            await onUpdateTicket(editingTicket.anterior);
-        }
-
+        // Close modal immediately — sync happens in background
+        const toSave = editingTicket;
         setEditingTicket(null);
+
+        onUpdateTicket(toSave.actual);
+        if (toSave.anterior) {
+            onUpdateTicket(toSave.anterior);
+        }
     };
 
     // Construction of the image URL - Assuming a GCS bucket pattern
