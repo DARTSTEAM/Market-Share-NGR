@@ -38,11 +38,21 @@ const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
 
 const ITEMS_PER_PAGE_MAIN = 20;
 
+// Confidence color for estimated rows
+const CONFIANZA_DOT = {
+    'ALTA':          '#10b981',
+    'MEDIA':         '#eab308',
+    'BAJA':          '#ca8a04',
+    'MUY_BAJA':      '#f97316',
+    'SIN_HISTORIAL': '#ef4444',
+};
+
 export default function MarketShareDashboard({ filters, onFilterChange, globalFilterBar, reactiveMetrics, shareData, trendData, filteredTableData, allRecords }) {
     const [currentPage, setCurrentPage] = useState(1);
     const [sortKey, setSortKey] = useState('transacciones');
     const [sortDir, setSortDir] = useState('desc');
     const [showHistorial, setShowHistorial] = useState(false);
+    const [onlyEstimados, setOnlyEstimados] = useState(false);
 
     const [chartMetric, setChartMetric] = useState('prom_diario');
 
@@ -62,14 +72,14 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
             const hash = item.competidor.charCodeAt(0) + item.local.charCodeAt(0) + i;
             const canal = channelOptions[hash % channelOptions.length];
 
-            // Filter out by channel filter if selected
-            if (filters.channel !== 'all' && canal.toLowerCase() !== filters.channel.toLowerCase() && filters.channel.toLowerCase() !== (canal === 'Recojo en tienda' ? 'tienda' : canal.toLowerCase())) {
+            // Estimated rows don't have a real channel — skip channel filter for them
+            if (!item.isEstimado && filters.channel !== 'all' && canal.toLowerCase() !== filters.channel.toLowerCase() && filters.channel.toLowerCase() !== (canal === 'Recojo en tienda' ? 'tienda' : canal.toLowerCase())) {
                 return null;
             }
 
             return {
                 ...item,
-                canal,
+                canal: item.isEstimado ? null : canal,
                 transacciones: item.ventas,
                 promDiario: parseFloat(item.promedioDiario) || 0
             };
@@ -90,6 +100,11 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
         });
     }, [displayTableData, sortKey, sortDir]);
 
+    const filteredByEstimado = useMemo(() => {
+        if (!onlyEstimados) return sortedTableData;
+        return sortedTableData.filter(r => r.isEstimado);
+    }, [sortedTableData, onlyEstimados]);
+
     const handleSort = (key) => {
         if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
         else { setSortKey(key); setSortDir('desc'); }
@@ -100,8 +115,8 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
         return <span className="ml-1 text-accent-orange">{sortDir === 'asc' ? '↑' : '↓'}</span>;
     };
 
-    const totalPages = Math.ceil(sortedTableData.length / ITEMS_PER_PAGE_MAIN);
-    const paginatedData = sortedTableData.slice((currentPage - 1) * ITEMS_PER_PAGE_MAIN, currentPage * ITEMS_PER_PAGE_MAIN);
+    const totalPages = Math.ceil(filteredByEstimado.length / ITEMS_PER_PAGE_MAIN);
+    const paginatedData = filteredByEstimado.slice((currentPage - 1) * ITEMS_PER_PAGE_MAIN, currentPage * ITEMS_PER_PAGE_MAIN);
 
     // Channel mix logic based on shareData
     const channelMix = useMemo(() => {
@@ -341,8 +356,26 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                         </div>
                         <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 flex items-center gap-2 text-[10px] font-bold text-slate-500 dark:text-white/60">
                             <Filter className="w-3 h-3" />
-                            Mostrando {sortedTableData.length} registros
+                            Mostrando {filteredByEstimado.length} registros
                         </div>
+
+                        {/* Toggle Solo Estimados */}
+                        <button
+                            onClick={() => { setOnlyEstimados(v => !v); setCurrentPage(1); }}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
+                                onlyEstimados
+                                    ? 'bg-amber-400/20 border-amber-400/50 text-amber-600 dark:text-amber-400 shadow-inner'
+                                    : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:border-amber-400/40 hover:text-amber-500'
+                            }`}
+                        >
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: onlyEstimados ? '#f59e0b' : '#94a3b8', display: 'inline-block', transition: 'background 0.2s' }} />
+                            Solo Estimados
+                            {onlyEstimados && (
+                                <span className="bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[8px] leading-none">
+                                    {filteredByEstimado.length}
+                                </span>
+                            )}
+                        </button>
                     </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -359,8 +392,19 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[11px] text-slate-700 dark:text-white/70">
-                            {paginatedData.map((row) => (
-                                <tr key={row.competidor + row.local + String(row.caja)} className="hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors group">
+                            {paginatedData.map((row) => {
+                                const isEst = row.isEstimado;
+                                const dotColor = isEst ? (CONFIANZA_DOT[row.confianza] || '#94a3b8') : null;
+                                return (
+                                <tr
+                                    key={row.competidor + row.local + String(row.caja)}
+                                    className={`transition-colors group border-l-4 ${
+                                        isEst
+                                            ? 'border-dashed bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-50/70 dark:hover:bg-amber-900/15'
+                                            : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/[0.03]'
+                                    }`}
+                                    style={isEst ? { borderLeftColor: dotColor } : {}}
+                                >
                                     <td className="px-6 py-5">
                                         {(() => {
                                             const color = shareData.find(s => s.name === row.competidor)?.color || '#94a3b8';
@@ -377,24 +421,42 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                     <td className="px-6 py-5 font-black text-[10px] text-accent-orange/80 font-mono tracking-tight">{row.codigo_tienda || '-'}</td>
                                     <td className="px-6 py-5 font-bold uppercase text-[10px] text-slate-500 dark:text-white/60">{row.local}</td>
                                     <td className="px-6 py-5">
-                                        <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
-                                            {row.canal}
-                                        </span>
+                                        {isEst ? (
+                                            <span className="inline-flex items-center gap-1">
+                                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
+                                                <span className="font-black text-[9px] uppercase tracking-widest" style={{ color: dotColor }}>
+                                                    Est. {row.confianza?.replace('_', ' ')}
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
+                                                {row.canal}
+                                            </span>
+                                        )}
                                     </td>
-                                    <td className="px-6 py-5 text-center font-bold text-slate-500 dark:text-white/40">{row.caja || '-'}</td>
-                                    <td className="px-6 py-5 text-center text-emerald-600 dark:text-accent-lemon font-black font-mono">{row.promDiario}</td>
+                                    <td className="px-6 py-5 text-center font-bold text-slate-500 dark:text-white/40">
+                                        {isEst ? <span className="opacity-30 text-[10px]">—</span> : (row.caja || '-')}
+                                    </td>
+                                    <td className="px-6 py-5 text-center font-black font-mono" style={isEst ? { color: dotColor } : {}} >
+                                        {isEst && <span className="opacity-60 mr-0.5">~</span>}{row.promDiario.toFixed ? row.promDiario.toFixed(1) : row.promDiario}
+                                    </td>
                                     <td className="px-6 py-5 text-center">
-                                        <div className="flex justify-center gap-1.5">
-                                            {[-1, 0, 1].map(v => (
-                                                <div
-                                                    key={v}
-                                                    className={`w-2 h-2 rounded-full transition-shadow ${row.ac === v ? (v === -1 ? 'bg-accent-orange shadow-[0_0_8px_rgba(255,126,75,0.6)]' : v === 0 ? 'bg-accent-blue shadow-[0_0_8px_rgba(0,112,243,0.6)]' : 'bg-accent-lemon shadow-[0_0_8px_rgba(204,255,0,0.6)]') : 'bg-slate-200 dark:bg-white/10'}`}
-                                                />
-                                            ))}
-                                        </div>
+                                        {isEst ? (
+                                            <span className="text-[9px] font-bold text-slate-400 italic">estimado</span>
+                                        ) : (
+                                            <div className="flex justify-center gap-1.5">
+                                                {[-1, 0, 1].map(v => (
+                                                    <div
+                                                        key={v}
+                                                        className={`w-2 h-2 rounded-full transition-shadow ${row.ac === v ? (v === -1 ? 'bg-accent-orange shadow-[0_0_8px_rgba(255,126,75,0.6)]' : v === 0 ? 'bg-accent-blue shadow-[0_0_8px_rgba(0,112,243,0.6)]' : 'bg-accent-lemon shadow-[0_0_8px_rgba(204,255,0,0.6)]') : 'bg-slate-200 dark:bg-white/10'}`}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

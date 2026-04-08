@@ -23,7 +23,7 @@ const getImageUrl = (filename) => {
 // ─────────────────────────────────────────────
 // Edit Modal with Image Viewer
 // ─────────────────────────────────────────────
-const EditModal = ({ ticket, onClose, onSave, isSaving }) => {
+const EditModal = ({ ticket, onClose, onSave, isSaving, onPrev, onNext, navInfo }) => {
     const [form, setForm] = useState({
         competidor:   ticket.competidor   || '',
         local:        ticket.local        || '',
@@ -35,6 +35,23 @@ const EditModal = ({ ticket, onClose, onSave, isSaving }) => {
         canal:        ticket.canal        || ticket.canal_de_venta || '',
         filename:     ticket.filename     || '',
     });
+
+    // Reset form when ticket prop changes (navigation)
+    React.useEffect(() => {
+        setForm({
+            competidor:   ticket.competidor   || '',
+            local:        ticket.local        || '',
+            codigoTienda: ticket.codigo_tienda || ticket.codigoTienda || '',
+            caja:         ticket.caja         || ticket.numero_de_caja || '',
+            ticket:       ticket.ticket       || ticket.numero_de_ticket || '',
+            importe:      ticket.importe      ?? ticket.importe_total ?? 0,
+            fecha:        ticket.fecha        ? String(ticket.fecha).split('T')[0] : '',
+            canal:        ticket.canal        || ticket.canal_de_venta || '',
+            filename:     ticket.filename     || '',
+        });
+        setImgError(false);
+        setZoomed(false);
+    }, [ticket]);
 
     const [imgError, setImgError] = useState(false);
     const [zoomed, setZoomed]     = useState(false);
@@ -72,19 +89,43 @@ const EditModal = ({ ticket, onClose, onSave, isSaving }) => {
             <div className="w-full max-w-4xl max-h-[95vh] bg-white dark:bg-slate-950 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-400">
 
                 {/* Header */}
-                <div className="p-5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between shrink-0">
-                    <div>
+                <div className="p-5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between gap-3 shrink-0">
+                    <div className="min-w-0">
                         <h3 className="text-lg font-black italic uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-2">
-                            <Edit3 size={18} className="text-accent-orange" />
+                            <Edit3 size={18} className="text-accent-orange flex-shrink-0" />
                             Editar Ticket
                         </h3>
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 truncate max-w-xs">
                             {form.filename}
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors">
-                        <X size={20} className="text-slate-400" />
-                    </button>
+                    {/* Nav arrows + counter */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                            onClick={onPrev}
+                            disabled={!onPrev}
+                            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            title="Ticket anterior"
+                        >
+                            <ChevronLeft size={18} className="text-slate-600 dark:text-slate-300" />
+                        </button>
+                        {navInfo && (
+                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 min-w-[52px] text-center">
+                                {navInfo.current} / {navInfo.total}
+                            </span>
+                        )}
+                        <button
+                            onClick={onNext}
+                            disabled={!onNext}
+                            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            title="Ticket siguiente"
+                        >
+                            <ChevronRight size={18} className="text-slate-600 dark:text-slate-300" />
+                        </button>
+                        <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors ml-1">
+                            <X size={20} className="text-slate-400" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Body: Image + Form side by side */}
@@ -145,23 +186,33 @@ const EditModal = ({ ticket, onClose, onSave, isSaving }) => {
                         </div>
 
                         {/* Footer buttons inside scroll area */}
-                        <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
-                            <button
-                                onClick={onClose}
-                                className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                onClick={() => onSave(form)}
-                                disabled={isSaving}
-                                className="flex-[2] py-3 rounded-2xl bg-accent-orange text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-accent-orange/20 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                            >
-                                {isSaving
-                                    ? <><Loader2 size={16} className="animate-spin" /> Guardando...</>
-                                    : <><Save size={16} /> Guardar Cambios</>
-                                }
-                            </button>
+                        <div className="flex flex-col gap-2 pt-4 border-t border-slate-100 dark:border-white/5">
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={onClose}
+                                    className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => onSave(form)}
+                                    disabled={isSaving}
+                                    className="flex-[2] py-3 rounded-2xl bg-accent-orange text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-accent-orange/20 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                                >
+                                    {isSaving
+                                        ? <><Loader2 size={16} className="animate-spin" /> Guardando...</>
+                                        : <><Save size={16} /> Guardar Cambios</>
+                                    }
+                                </button>
+                            </div>
+                            {onNext && (
+                                <button
+                                    onClick={() => { onSave(form); setTimeout(onNext, 80); }}
+                                    className="w-full py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all"
+                                >
+                                    <Save size={13} /> Guardar y Siguiente <ChevronRight size={13} />
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -175,11 +226,18 @@ const EditModal = ({ ticket, onClose, onSave, isSaving }) => {
 // ─────────────────────────────────────────────
 const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onFilterChange, onUpdateTicket, isRefreshing }) => {
 
-    const [searchTerm, setSearchTerm]     = useState('');
-    const [currentPage, setCurrentPage]   = useState(1);
+    const [searchTerm, setSearchTerm]       = useState('');
+    const [currentPage, setCurrentPage]     = useState(1);
     const [editingTicket, setEditingTicket] = useState(null);
-    const [isSaving, setIsSaving]         = useState(false);
-    const [sortBy, setSortBy]             = useState('fecha_desc');
+    const [editingIndex, setEditingIndex]   = useState(null);
+    const [isSaving, setIsSaving]           = useState(false);
+    const [sortBy, setSortBy]               = useState('fecha_desc');
+
+    const openTicketAt = (idx) => {
+        if (idx < 0 || idx >= filteredTickets.length) return;
+        setEditingTicket(filteredTickets[idx]);
+        setEditingIndex(idx);
+    };
 
     const [filters, setFilters] = useState({
         competidor:   globalFilters?.competitor || 'all',
@@ -314,6 +372,7 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
                 codigoTienda: form.codigoTienda,
             });
             setEditingTicket(null);
+            setEditingIndex(null);
         } finally {
             setIsSaving(false);
         }
@@ -499,7 +558,7 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
                                         <td className="px-5 py-4 text-center">
                                             {imgUrl ? (
                                                 <div className="w-10 h-12 mx-auto rounded-lg overflow-hidden border border-slate-200 dark:border-white/10 cursor-pointer group/img relative"
-                                                    onClick={() => setEditingTicket(t)}
+                                                    onClick={() => openTicketAt(filteredTickets.indexOf(t))}
                                                 >
                                                     <img
                                                         src={imgUrl}
@@ -517,7 +576,7 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
                                         </td>
                                         <td className="px-5 py-4 text-center">
                                             <button
-                                                onClick={() => setEditingTicket(t)}
+                                                onClick={() => openTicketAt(filteredTickets.indexOf(t))}
                                                 className="p-2 bg-accent-orange/10 text-accent-orange rounded-xl hover:bg-accent-orange hover:text-white transition-all flex items-center gap-1.5 font-black uppercase tracking-tighter text-[9px] mx-auto"
                                             >
                                                 <Edit3 size={12} /> Editar
@@ -563,10 +622,14 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
             {/* Edit Modal */}
             {editingTicket && (
                 <EditModal
+                    key={editingTicket.filename}
                     ticket={editingTicket}
-                    onClose={() => setEditingTicket(null)}
+                    onClose={() => { setEditingTicket(null); setEditingIndex(null); }}
                     onSave={handleSave}
                     isSaving={isSaving || isRefreshing}
+                    onPrev={editingIndex > 0 ? () => openTicketAt(editingIndex - 1) : null}
+                    onNext={editingIndex !== null && editingIndex < filteredTickets.length - 1 ? () => openTicketAt(editingIndex + 1) : null}
+                    navInfo={editingIndex !== null ? { current: editingIndex + 1, total: filteredTickets.length } : null}
                 />
             )}
         </div>

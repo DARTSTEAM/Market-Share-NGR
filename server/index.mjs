@@ -48,7 +48,37 @@ const QUERY_RECORDS = `
 
   UNION ALL
 
-  -- Datos históricos 2022-2026 (archivo de campo, status = 'HISTORIAL')
+  -- Gaps estimados: períodos sin medición donde se estima la tasa diaria
+  SELECT
+    competidor,
+    codigo_tienda,
+    local,
+    caja,
+    CONCAT('ESTIMADO-', confianza)           AS status_busqueda,
+    transacciones_gap_estimadas              AS transacciones_diferencial,
+    CAST(NULL AS INT64)                      AS ticket_actual,
+    CAST(NULL AS INT64)                      AS ticket_anterior,
+    DATETIME(gap_inicio_estimado)            AS fecha_y_hora_registro,
+    CAST(fecha_anterior AS DATETIME)         AS fecha_anterior,
+    filename_actual,
+    filename_anterior,
+    dias_gap                                 AS delta_dias,
+    CAST(NULL AS INT64)                      AS ac,
+    tasa_diaria_usada                        AS promedio_transacciones_diarias,
+    mes_gap                                  AS mes,
+    EXTRACT(YEAR FROM gap_inicio_estimado)   AS ano,
+    region,
+    distrito,
+    punto_compartido,
+    cc_punto_compartido,
+    grupos_cc,
+    CAST(NULL AS STRING)                     AS marcas_en_pc,
+    CAST(NULL AS INT64)                      AS n_marcas_en_pc
+  FROM \`${PROJECT_ID}.${DATASET_ID}.estimar_gap_transacciones\`('2024-01-01')
+
+  UNION ALL
+
+  -- Datos históricos 2022-2025 (archivo de campo, status = 'HISTORIAL')
   SELECT
     competidor, codigo_tienda, local, caja, status_busqueda,
     transacciones_diferencial, ticket_actual, ticket_anterior,

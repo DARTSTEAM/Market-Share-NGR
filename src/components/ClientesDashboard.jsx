@@ -242,6 +242,15 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
     const allCatsSelected = selectedCategories.length === categories.length;
 
+    // Confidence dot colors for ESTIMADO-* rows
+    const CONFIANZA_DOT = {
+        'ALTA':          '#10b981',
+        'MEDIA':         '#eab308',
+        'BAJA':          '#ca8a04',
+        'MUY_BAJA':      '#f97316',
+        'SIN_HISTORIAL': '#ef4444',
+    };
+
     // Build pivot: for each competitor x month → { trx, tiendas (distinct locals) }
     const { months, competitors, pivot } = useMemo(() => {
         // Filter to OK records in selected category
@@ -332,9 +341,11 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
         const CUTOFF2 = 202511;
         const filtered = records.filter(r => {
             const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
+            const isEst = r.status_busqueda?.startsWith('ESTIMADO-');
             if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF2) return false;
             if (r.status_busqueda === 'OK'        && key <= CUTOFF2) return false;
-            if (r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL') return false;
+            if (isEst                             && key <= CUTOFF2) return false; // estimados solo post-cutoff
+            if (!isEst && r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL') return false;
             if (filterYear !== 'all' && parseInt(r.ano) !== parseInt(filterYear)) return false;
             return r.mes && r.ano && r.local &&
                 selectedCategories.includes(competitorToCategory[r.competidor]) &&
@@ -355,7 +366,13 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             if (!monthSet[mk]) monthSet[mk] = { key: mk, label: `${MONTH_SHORT[mes - 1]}-${String(ano).slice(2)}` };
 
             if (!pivotMap[rowKey]) {
-                pivotMap[rowKey] = { local: r.local, competidor: r.competidor, months: {}, promedios: {}, promCounts: {}, counts: {}, total: 0 };
+                const isEst = r.status_busqueda?.startsWith('ESTIMADO-');
+                pivotMap[rowKey] = {
+                    local: r.local, competidor: r.competidor,
+                    months: {}, promedios: {}, promCounts: {}, counts: {}, total: 0,
+                    isEstimado: isEst,
+                    confianza: isEst ? r.status_busqueda.replace('ESTIMADO-', '') : null,
+                };
             }
             const trx = parseFloat(r.transacciones) || 0;
             const prom = parseFloat(r.promedio) || 0;
@@ -877,16 +894,32 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                 const compChanged = i === 0 || distribRows[i - 1].competidor !== row.competidor;
                                                 const isFirstOfLocal = sortCaja === 'competidor_asc' && (compChanged || distribRows[i - 1].local !== row.local);
                                                 const isNewComp = sortCaja === 'competidor_asc' && compChanged;
+                                                const dotColor = row.isEstimado ? (CONFIANZA_DOT[row.confianza] || '#94a3b8') : null;
                                                 return (
-                                                    <tr key={`${row.competidor}-${row.local}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                    <tr
+                                                        key={`${row.competidor}-${row.local}`}
+                                                        className={`transition-colors border-l-4 ${
+                                                            row.isEstimado
+                                                                ? 'bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-50/70 dark:hover:bg-amber-900/15'
+                                                                : `hover:bg-slate-50 dark:hover:bg-white/[0.02] border-transparent ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`
+                                                        }`}
+                                                        style={row.isEstimado ? { borderLeftColor: dotColor } : {}}
+                                                    >
                                                         <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                            {sortCaja === 'competidor_asc'
-                                                                ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↓</span>)
-                                                                : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
-                                                            }
+                                                            {row.isEstimado ? (
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 }} />
+                                                                    <span style={{ color: dotColor }} className="font-black text-[9px] uppercase tracking-widest">{row.competidor}</span>
+                                                                </span>
+                                                            ) : (
+                                                                sortCaja === 'competidor_asc'
+                                                                    ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↓</span>)
+                                                                    : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
+                                                            )}
                                                         </td>
                                                         <td className="px-4 py-2.5 text-right font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                        <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900 dark:text-white">
+                                                        <td className="px-4 py-2.5 text-right font-mono font-black" style={row.isEstimado ? { color: dotColor } : {}}>
+                                                            {row.isEstimado && <span className="opacity-50 mr-0.5">~</span>}
                                                             {new Intl.NumberFormat('es-PE').format(Math.round(row.displayTrx))}
                                                         </td>
                                                         <td className="px-4 py-2.5 text-right">
@@ -951,13 +984,28 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                 }).map((row, i, arr) => {
                                                     const compChanged = i === 0 || arr[i - 1].competidor !== row.competidor;
                                                     const isNewComp = sortEvol === 'competidor_asc' && compChanged;
+                                                    const dotColor = row.isEstimado ? (CONFIANZA_DOT[row.confianza] || '#94a3b8') : null;
                                                     return (
-                                                        <tr key={`ev-${row.competidor}-${row.local}`} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.02] ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`}>
+                                                        <tr
+                                                            key={`ev-${row.competidor}-${row.local}`}
+                                                            className={`transition-colors border-l-4 ${
+                                                                row.isEstimado
+                                                                    ? 'bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-50/70 dark:hover:bg-amber-900/15'
+                                                                    : `hover:bg-slate-50 dark:hover:bg-white/[0.02] border-transparent ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`
+                                                            }`}
+                                                            style={row.isEstimado ? { borderLeftColor: dotColor } : {}}
+                                                        >
                                                             <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                                {sortEvol === 'competidor_asc'
-                                                                    ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : <span className="text-slate-500 dark:text-white/40 font-bold">{row.competidor}</span>)
-                                                                    : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
-                                                                }
+                                                                {row.isEstimado ? (
+                                                                    <span className="flex items-center gap-1.5">
+                                                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 }} />
+                                                                        <span style={{ color: dotColor }} className="font-black text-[9px] uppercase tracking-widest">{row.competidor}</span>
+                                                                    </span>
+                                                                ) : (
+                                                                    sortEvol === 'competidor_asc'
+                                                                        ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : <span className="text-slate-500 dark:text-white/40 font-bold">{row.competidor}</span>)
+                                                                        : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
+                                                                )}
                                                             </td>
                                                             <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
                                                             {cajaMonths.map(m => {
@@ -971,7 +1019,10 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                                         <td key={m.key} className="px-4 py-2.5 text-right font-mono">
                                                                             {total !== undefined ? (
                                                                                 <div className="flex flex-col items-end gap-0.5">
-                                                                                    <span className="font-black text-slate-900 dark:text-white text-[11px]">{Math.round(total).toLocaleString('es-PE')}</span>
+                                                                                    <span className="font-black text-[11px]" style={row.isEstimado ? { color: dotColor } : { color: 'inherit' }}>
+                                                                                        {row.isEstimado && <span className="opacity-50 mr-0.5">~</span>}
+                                                                                        {Math.round(total).toLocaleString('es-PE')}
+                                                                                    </span>
                                                                                     <span className="text-[9px] text-violet-400 font-bold">{promVal !== undefined ? promVal.toFixed(1) : '-'}</span>
                                                                                 </div>
                                                                             ) : <span className="text-slate-300 dark:text-white/15">-</span>}
@@ -979,15 +1030,13 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                                                                     );
                                                                 }
 
-                                                                const v = evolucionMetric === 'trx_total'
-                                                                    ? total
-                                                                    : promVal;
+                                                                const v = evolucionMetric === 'trx_total' ? total : promVal;
                                                                 return (
                                                                     <td key={m.key} className="px-4 py-2.5 text-right font-mono">
                                                                         {v !== undefined
-                                                                            ? <span className="font-black text-slate-900 dark:text-white">
-                                                                                {v.toFixed(1)}
-                                                                            </span>
+                                                                            ? <span className="font-black" style={row.isEstimado ? { color: dotColor } : {}}>
+                                                                                {row.isEstimado && <span className="opacity-50 mr-0.5">~</span>}{v.toFixed(1)}
+                                                                              </span>
                                                                             : <span className="text-slate-300 dark:text-white/15">-</span>
                                                                         }
                                                                     </td>

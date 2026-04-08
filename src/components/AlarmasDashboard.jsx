@@ -21,17 +21,13 @@ import {
     Calendar as CalendarIcon,
     MapPin,
     Monitor,
-    Store
+    Store,
+    TrendingUp,
+    ArrowUpDown
 } from 'lucide-react';
 import CustomSelect from './common/CustomSelect';
 
-// Fallback icon for TrendingUp since it wasn't imported from previous context but common in dashboards
-const TrendingUp = ({ size, className }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-        <polyline points="17 6 23 6 23 12" />
-    </svg>
-);
+
 
 const ALARM_STATUS_CONFIG = {
     'REINICIO_TICKETS': { label: 'Reinicio Tickets', color: 'text-blue-500', bg: 'bg-blue-500/10', icon: RefreshCw },
@@ -42,19 +38,38 @@ const ALARM_STATUS_CONFIG = {
     'SIN_HISTORIAL': { label: 'Sin Historial', color: 'text-slate-500', bg: 'bg-slate-500/10', icon: Info },
 };
 
+// Helper: resolve config for ESTIMADO-* statuses dynamically
+const getEstimadoConfig = (status) => {
+    if (!status?.startsWith('ESTIMADO-')) return null;
+    const confianza = status.replace('ESTIMADO-', '');
+    const map = {
+        'ALTA':         { label: 'Estimado · Alta',      color: 'text-emerald-500', bg: 'bg-emerald-500/10', dot: '#10b981' },
+        'MEDIA':        { label: 'Estimado · Media',     color: 'text-yellow-500',  bg: 'bg-yellow-500/10',  dot: '#eab308' },
+        'BAJA':         { label: 'Estimado · Baja',      color: 'text-yellow-600',  bg: 'bg-yellow-600/10',  dot: '#ca8a04' },
+        'MUY_BAJA':     { label: 'Estimado · Muy Baja',  color: 'text-orange-500',  bg: 'bg-orange-500/10',  dot: '#f97316' },
+        'SIN_HISTORIAL':{ label: 'Estimado · Sin Hist.', color: 'text-red-500',     bg: 'bg-red-500/10',     dot: '#ef4444' },
+    };
+    return map[confianza] || { label: status, color: 'text-slate-400', bg: 'bg-slate-400/10', dot: '#94a3b8' };
+};
+
 const ITEMS_PER_PAGE = 10;
 
 const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
 const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) => {
+    const [activeTab, setActiveTab] = useState('alarmas'); // 'alarmas' | 'estimados'
     const [selectedStatus, setSelectedStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterMes, setFilterMes] = useState('all');
     const [filterCompetidor, setFilterCompetidor] = useState('all');
     const [filterLocal, setFilterLocal] = useState('all');
     const [editingTicket, setEditingTicket] = useState(null);
+    const [editingIndex, setEditingIndex] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [sortBy, setSortBy] = useState('fecha_desc');
+    const [estSearchTerm, setEstSearchTerm] = useState('');
+    const [estFilterComp, setEstFilterComp] = useState('all');
+    const [estSortBy, setEstSortBy] = useState('trx_desc');
 
 
     // Dynamic filter options derived from records
@@ -93,21 +108,17 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
         ];
     }, [records, filterCompetidor]);
 
-    // Filtered records based on status, selectors and search
+    // Filtered records based on status, selectors and search (real alarms only)
     const alarmRecords = useMemo(() => {
         const filtered = records.filter(r => {
             if (r.status_busqueda === 'OK') return false;
-            if (r.status_busqueda === 'HISTORIAL') return false; // Mostrar en tab Historial
+            if (r.status_busqueda === 'HISTORIAL') return false;
+            if (r.status_busqueda?.startsWith('ESTIMADO-')) return false; // handled in Estimados tab
 
             const matchesStatus = selectedStatus === 'all' || r.status_busqueda === selectedStatus;
-
-            const matchesMes = filterMes === 'all' || (
-                r.mes && String(parseInt(r.mes)) === filterMes
-            );
-
+            const matchesMes = filterMes === 'all' || (r.mes && String(parseInt(r.mes)) === filterMes);
             const matchesCompetidor = filterCompetidor === 'all' || r.competidor === filterCompetidor;
             const matchesLocal = filterLocal === 'all' || r.local === filterLocal;
-
             const matchesSearch =
                 (r.local || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (r.competidor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -129,6 +140,30 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
             return 0;
         });
     }, [records, selectedStatus, searchTerm, filterMes, filterCompetidor, filterLocal, sortBy]);
+
+    // Estimated gap records
+    const estimatedRecords = useMemo(() => {
+        const filtered = records.filter(r => r.status_busqueda?.startsWith('ESTIMADO-')).filter(r => {
+            const matchesComp = estFilterComp === 'all' || r.competidor === estFilterComp;
+            const matchesSearch =
+                (r.local || '').toLowerCase().includes(estSearchTerm.toLowerCase()) ||
+                (r.competidor || '').toLowerCase().includes(estSearchTerm.toLowerCase()) ||
+                (r.codigo_tienda || '').toLowerCase().includes(estSearchTerm.toLowerCase());
+            return matchesComp && matchesSearch;
+        });
+        return [...filtered].sort((a, b) => {
+            if (estSortBy === 'trx_desc') return (b.promedio || 0) - (a.promedio || 0);
+            if (estSortBy === 'trx_asc')  return (a.promedio || 0) - (b.promedio || 0);
+            if (estSortBy === 'competidor') return (a.competidor || '').localeCompare(b.competidor || '');
+            if (estSortBy === 'confianza') return (a.status_busqueda || '').localeCompare(b.status_busqueda || '');
+            return 0;
+        });
+    }, [records, estFilterComp, estSearchTerm, estSortBy]);
+
+    const estCompOptions = useMemo(() => {
+        const comps = new Set(records.filter(r => r.status_busqueda?.startsWith('ESTIMADO-')).map(r => r.competidor).filter(Boolean));
+        return [{ value: 'all', label: 'Todos' }, ...Array.from(comps).sort().map(c => ({ value: c, label: c }))];
+    }, [records]);
 
     // Summary stats
     const stats = useMemo(() => {
@@ -205,6 +240,13 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
             anterior: anteriorData ? { ...anteriorData, originalFilename: record.filename_anterior } : null,
             alarmStatus: record.status_busqueda
         });
+        const idx = alarmRecords.findIndex(r => r.filename_actual === record.filename_actual);
+        setEditingIndex(idx >= 0 ? idx : null);
+    };
+
+    const navigateTo = (newIndex) => {
+        if (newIndex < 0 || newIndex >= alarmRecords.length) return;
+        handleEdit(alarmRecords[newIndex]);
     };
 
     const handleSave = () => {
@@ -272,8 +314,125 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                 })}
             </div>
 
+            {/* Tab switcher: Alarmas / Estimados */}
+            <div className="flex gap-2">
+                <button
+                    onClick={() => setActiveTab('alarmas')}
+                    className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                        activeTab === 'alarmas'
+                            ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
+                            : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-slate-200 dark:hover:bg-white/10'
+                    }`}
+                >
+                    ⚠ Alarmas <span className="ml-1 opacity-70">({alarmRecords.length})</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('estimados')}
+                    className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                        activeTab === 'estimados'
+                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                            : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-slate-200 dark:hover:bg-white/10'
+                    }`}
+                >
+                    ◈ Períodos Estimados <span className="ml-1 opacity-70">({estimatedRecords.length})</span>
+                </button>
+            </div>
+
             {/* Main Content */}
             <div className="grid grid-cols-1 gap-6">
+                {activeTab === 'estimados' && (
+                <section className="pwa-card overflow-hidden border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/50">
+                    <div className="p-4 border-b border-slate-200 dark:border-white/10 flex flex-col gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex-1 min-w-[200px] relative group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar local, competidor o código..."
+                                    className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pl-11 pr-4 text-sm font-bold text-slate-700 dark:text-white placeholder:text-slate-400 focus:outline-none"
+                                    value={estSearchTerm}
+                                    onChange={e => setEstSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <CustomSelect
+                                selected={estFilterComp}
+                                onChange={setEstFilterComp}
+                                options={estCompOptions}
+                                icon={<TrendingUp size={14} />}
+                            />
+                            <CustomSelect
+                                selected={estSortBy}
+                                onChange={setEstSortBy}
+                                options={[
+                                    { value: 'trx_desc', label: 'Trx/día ↓' },
+                                    { value: 'trx_asc',  label: 'Trx/día ↑' },
+                                    { value: 'competidor', label: 'Competidor A-Z' },
+                                    { value: 'confianza', label: 'Confianza' },
+                                ]}
+                                icon={<ArrowUpDown size={14} />}
+                            />
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 dark:bg-black/20 text-slate-500 dark:text-white/40 font-black text-[9px] uppercase tracking-[0.2em]">
+                                <tr>
+                                    <th className="px-6 py-4">Confianza</th>
+                                    <th className="px-6 py-4">ID Tienda</th>
+                                    <th className="px-6 py-4">Competidor / Local</th>
+                                    <th className="px-6 py-4 text-right">Trx/día estimadas</th>
+                                    <th className="px-6 py-4 text-right">Total período</th>
+                                    <th className="px-6 py-4">Período gap</th>
+                                    <th className="px-6 py-4 text-right">Días</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[11px]">
+                                {estimatedRecords.length === 0 && (
+                                    <tr><td colSpan={7} className="px-6 py-10 text-center text-slate-400 font-bold">Sin períodos estimados</td></tr>
+                                )}
+                                {estimatedRecords.map((r, idx) => {
+                                    const cfg = getEstimadoConfig(r.status_busqueda);
+                                    const trxDia = parseFloat(r.promedio) || 0;
+                                    const totalTrx = parseFloat(r.transacciones) || 0;
+                                    const dias = r.delta_dias ?? '-';
+                                    const fechaDesde = r.fecha_anterior ? new Date(r.fecha_anterior).toLocaleDateString('es-ES') : '-';
+                                    const fechaHasta = r.fecha ? new Date(r.fecha).toLocaleDateString('es-ES') : '-';
+                                    return (
+                                        <tr key={idx} className={`transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.03] border-l-4`}
+                                            style={{ borderLeftColor: cfg?.dot || '#94a3b8' }}>
+                                            <td className="px-6 py-4">
+                                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${cfg?.bg}`}>
+                                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: cfg?.dot, display: 'inline-block', flexShrink: 0 }} />
+                                                    <span className={`font-black text-[10px] uppercase tracking-tighter ${cfg?.color}`}>{cfg?.label}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 font-mono font-bold text-slate-400">{r.codigo_tienda || '-'}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-black text-slate-900 dark:text-white uppercase">{r.competidor}</span>
+                                                    <span className="text-slate-500 font-bold">{r.local}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className={`font-black text-lg ${cfg?.color}`}>{trxDia.toLocaleString('es-AR', { maximumFractionDigits: 1 })}</span>
+                                                <span className="text-slate-400 text-[10px] font-bold ml-1">trx/día</span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-bold text-slate-600 dark:text-white/60">
+                                                {totalTrx > 0 ? Math.round(totalTrx).toLocaleString('es-AR') : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 font-bold text-slate-400">
+                                                {fechaDesde} → {fechaHasta}
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-mono font-bold text-slate-400">{dias}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                )}
+                {activeTab === 'alarmas' && (
                 <section className="pwa-card overflow-hidden border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/50">
                     <div className="p-4 border-b border-slate-200 dark:border-white/10 flex flex-col gap-3">
                         {/* Fila 1: Buscador + Ordenar */}
@@ -421,6 +580,7 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                         </div>
                     </div>
                 </section>
+                )}
             </div>
 
             {/* Edit Modal / Slide-over */}
@@ -428,10 +588,10 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
                     <div className={`w-full ${editingTicket.anterior ? 'max-w-7xl' : 'max-w-5xl'} h-full bg-white dark:bg-slate-950 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-10 duration-500`}>
                         {/* Modal Header */}
-                        <div className="p-6 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
-                            <div>
+                        <div className="p-6 border-b border-slate-200 dark:border-white/10 flex items-center justify-between gap-4">
+                            <div className="min-w-0">
                                 <h3 className="text-xl font-black italic uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
-                                    <Edit3 className="text-accent-orange" />
+                                    <Edit3 className="text-accent-orange flex-shrink-0" />
                                     {editingTicket.anterior ? 'Comparativa y Corrección Dual' : 'Corrección de Ticket'}
                                 </h3>
                                 <div className="flex items-center gap-2 mt-1">
@@ -440,12 +600,36 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                                     </span>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => setEditingTicket(null)}
-                                className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors"
-                            >
-                                <X size={24} className="text-slate-400" />
-                            </button>
+                            {/* Navigation arrows + counter */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                <button
+                                    onClick={() => navigateTo(editingIndex - 1)}
+                                    disabled={editingIndex === null || editingIndex === 0}
+                                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title="Alarma anterior"
+                                >
+                                    <ChevronLeft size={20} className="text-slate-600 dark:text-slate-300" />
+                                </button>
+                                {editingIndex !== null && (
+                                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 min-w-[56px] text-center">
+                                        {editingIndex + 1} / {alarmRecords.length}
+                                    </span>
+                                )}
+                                <button
+                                    onClick={() => navigateTo(editingIndex + 1)}
+                                    disabled={editingIndex === null || editingIndex >= alarmRecords.length - 1}
+                                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    title="Alarma siguiente"
+                                >
+                                    <ChevronRight size={20} className="text-slate-600 dark:text-slate-300" />
+                                </button>
+                                <button
+                                    onClick={() => setEditingTicket(null)}
+                                    className="p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-full transition-colors ml-1"
+                                >
+                                    <X size={24} className="text-slate-400" />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Modal Body */}
@@ -492,24 +676,28 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                                     </div>
                                 </div>
 
-                                <div className="pt-6 space-y-4">
+                                <div className="pt-6 space-y-3">
                                     <button
                                         onClick={handleSave}
-                                        disabled={isRefreshing}
-                                        className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 ${isRefreshing ? 'bg-slate-400 cursor-not-allowed opacity-70' : 'bg-accent-orange text-white shadow-accent-orange/20 hover:scale-[1.02] active:scale-95'}`}
+                                        className="w-full py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 bg-accent-orange text-white shadow-accent-orange/20 hover:scale-[1.02] active:scale-95"
                                     >
-                                        {isRefreshing ? (
-                                            <>
-                                                <Loader2 size={20} className="animate-spin" />
-                                                Sincronizando...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Save size={20} />
-                                                Guardar Cambios
-                                            </>
-                                        )}
+                                        <Save size={20} />
+                                        Guardar Cambios
                                     </button>
+                                    {editingIndex !== null && editingIndex < alarmRecords.length - 1 && (
+                                        <button
+                                            onClick={() => {
+                                                handleSave();
+                                                // navigateTo fires after handleSave closes modal, so delay slightly
+                                                setTimeout(() => navigateTo(editingIndex + 1), 80);
+                                            }}
+                                            className="w-full py-3 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95"
+                                        >
+                                            <Save size={15} />
+                                            Guardar y Siguiente
+                                            <ChevronRight size={15} />
+                                        </button>
+                                    )}
                                     <p className="text-[8px] text-center text-slate-400 font-bold uppercase underline leading-relaxed">
                                         Se ejecutarán comandos UPDATE en facturas_v2 para asegurar la consistencia.
                                     </p>

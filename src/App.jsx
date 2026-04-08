@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Moon, Sun, TrendingUp, TrendingDown, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw, MapPin } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
@@ -36,8 +36,9 @@ const CUTOFF_KEY = HISTORIAL_CUTOFF.ano * 100 + HISTORIAL_CUTOFF.mes; // 202511
 // Helper de filtro para evitar solapamiento entre HISTORIAL y OK
 const recordInScope = (r) => {
   const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
-  if (r.status_busqueda === 'HISTORIAL') return key <= CUTOFF_KEY; // historico <= Nov 2024
-  if (r.status_busqueda === 'OK')        return key >  CUTOFF_KEY; // rutina   >= Dic 2024
+  if (r.status_busqueda === 'HISTORIAL') return key <= CUTOFF_KEY; // historico <= Nov 2025
+  if (r.status_busqueda === 'OK')        return key >  CUTOFF_KEY; // rutina   >= Dic 2025
+  if (r.status_busqueda?.startsWith('ESTIMADO-')) return key > CUTOFF_KEY; // estimados como OK
   return false;
 };
 
@@ -473,7 +474,9 @@ export default function App() {
   const [notification, setNotification] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRefreshingData, setIsRefreshingData] = useState(false);
-  const [syncQueue, setSyncQueue] = useState([]); // [{id, label, status: 'syncing'|'done'|'error'}]
+  const [syncQueue, setSyncQueue] = useState([]); // [{id, label, status}]
+  const [alarmsRefreshing, setAlarmsRefreshing] = useState(false);
+  const refreshTimer = useRef(null);
 
   // Use state for data to make it reactive to updates
   const [records, setRecords] = useState([]);
@@ -587,9 +590,9 @@ export default function App() {
     .then(result => {
       const status = result.success ? 'done' : 'error';
       setSyncQueue(prev => prev.map(s => s.id === syncId ? { ...s, status } : s));
-      if (result.success) cache_invalidate();
-      // Auto-remove after 3s
-      setTimeout(() => setSyncQueue(prev => prev.filter(s => s.id !== syncId)), 3000);
+      if (result.success) scheduleAlarmsRefresh();
+      // Auto-remove after 3.5s
+      setTimeout(() => setSyncQueue(prev => prev.filter(s => s.id !== syncId)), 3500);
     })
     .catch(() => {
       setSyncQueue(prev => prev.map(s => s.id === syncId ? { ...s, status: 'error' } : s));
@@ -597,9 +600,24 @@ export default function App() {
     });
   };
 
-  // Soft cache invalidation — next /api/data fetch gets fresh data
-  const cache_invalidate = () => {
-    // No-op on frontend; server already nullified fetchedAt
+  // After a successful BQ update, debounce a background alarms refresh
+  const scheduleAlarmsRefresh = () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    setAlarmsRefreshing(true);
+    refreshTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/data`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.records) setRecords(data.records);
+          if (data.tickets) setTickets(data.tickets);
+        }
+      } catch (e) {
+        console.warn('Background refresh failed:', e);
+      } finally {
+        setAlarmsRefreshing(false);
+      }
+    }, 2000); // wait 2s after last sync before fetching
   };
 
 
@@ -990,17 +1008,21 @@ export default function App() {
       })).slice(-15);
   }, [filteredTickets]);
 
-  // 5. Reactive Table Data (Market Share View - OK only)
+  // 5. Reactive Table Data (Market Share View - OK + ESTIMADO)
   const aggregatedTableDataRoutine = useMemo(() => {
     const localMap = {};
     marketShareRecords.forEach(r => {
-      const rowKey = `${r.local}||${r.caja ?? ''}`;
+      const isEst = r.status_busqueda?.startsWith('ESTIMADO-');
+      // For estimados (no caja): key by local only so they merge into one row per store
+      const rowKey = isEst
+        ? `${r.competidor}||${r.local}||ESTIMADO`
+        : `${r.local}||${r.caja ?? ''}`;
       if (!localMap[rowKey]) {
         localMap[rowKey] = {
           competidor: r.competidor,
           codigo_tienda: r.codigo_tienda || '',
           local: r.local,
-          caja: r.caja || '-',
+          caja: isEst ? '' : (r.caja || '-'),
           ventas: 0,
           uniqueTicketsCount: 0,
           cajasTotal: new Set(),
@@ -1010,7 +1032,9 @@ export default function App() {
           fecha_anterior: r.fecha_y_hora_registro || '-',
           delta_dias: r.delta_dias || 0,
           ac: r.ac || 0,
-          promedioDiario: 0
+          promedioDiario: 0,
+          isEstimado: isEst,
+          confianza: isEst ? r.status_busqueda.replace('ESTIMADO-', '') : null,
         };
       }
       const trans = parseFloat(r.transacciones) || 0;
@@ -1447,7 +1471,7 @@ export default function App() {
 
         {/* ── Sync Indicator (bottom-right floating) ── */}
         <AnimatePresence>
-          {syncQueue.length > 0 && (
+          {(syncQueue.length > 0 || alarmsRefreshing) && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1504,9 +1528,29 @@ export default function App() {
                   </div>
                 </motion.div>
               ))}
+
+              {/* Alarms refresh chip */}
+              <AnimatePresence>
+                {alarmsRefreshing && (
+                  <motion.div
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 40 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl px-4 py-2.5 min-w-[240px] flex items-center gap-3"
+                  >
+                    <svg className="w-4 h-4 text-amber-500 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"/>
+                    </svg>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Recalculando alarmas...</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>
+
       </main>
     </div>
   );
