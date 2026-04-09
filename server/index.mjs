@@ -48,33 +48,34 @@ const QUERY_RECORDS = `
 
   UNION ALL
 
-  -- Gaps estimados: períodos sin medición donde se estima la tasa diaria
+  -- Gaps estimados: meses sin medición estimados por generar_estimaciones_mensuales
   SELECT
     competidor,
     codigo_tienda,
     local,
-    caja,
-    CONCAT('ESTIMADO-', confianza)           AS status_busqueda,
-    transacciones_gap_estimadas              AS transacciones_diferencial,
+    CAST(NULL AS STRING)                     AS caja,
+    CONCAT('ESTIMADO-', metodo_estimacion)   AS status_busqueda,
+    trx_totales_estimadas                    AS transacciones_diferencial,
     CAST(NULL AS INT64)                      AS ticket_actual,
     CAST(NULL AS INT64)                      AS ticket_anterior,
-    DATETIME(gap_inicio_estimado)            AS fecha_y_hora_registro,
+    DATETIME(fecha_estimacion)               AS fecha_y_hora_registro,
     CAST(fecha_anterior AS DATETIME)         AS fecha_anterior,
-    filename_actual,
-    filename_anterior,
-    dias_gap                                 AS delta_dias,
+    CAST(NULL AS STRING)                     AS filename_actual,
+    CAST(NULL AS STRING)                     AS filename_anterior,
+    delta_dias,
     CAST(NULL AS INT64)                      AS ac,
-    tasa_diaria_usada                        AS promedio_transacciones_diarias,
-    mes_gap                                  AS mes,
-    EXTRACT(YEAR FROM gap_inicio_estimado)   AS ano,
-    region,
-    distrito,
-    punto_compartido,
-    cc_punto_compartido,
-    grupos_cc,
+    trx_diarias_estimadas                    AS promedio_transacciones_diarias,
+    mes,
+    ano,
+    CAST(NULL AS STRING)                     AS region,
+    CAST(NULL AS STRING)                     AS distrito,
+    CAST(NULL AS STRING)                     AS punto_compartido,
+    CAST(NULL AS STRING)                     AS cc_punto_compartido,
+    CAST(NULL AS STRING)                     AS grupos_cc,
     CAST(NULL AS STRING)                     AS marcas_en_pc,
     CAST(NULL AS INT64)                      AS n_marcas_en_pc
-  FROM \`${PROJECT_ID}.${DATASET_ID}.estimar_gap_transacciones\`('2024-01-01')
+  FROM \`${PROJECT_ID}.${DATASET_ID}.generar_estimaciones_mensuales\`('2024-01-01')
+  WHERE metodo_estimacion != 'INSUFICIENTE_DATA'
 
   UNION ALL
 
@@ -145,10 +146,8 @@ async function fetchFromBigQuery() {
         region: '',
         distrito: '',
         canal_de_venta: t.canal_de_venta || '',
-        // Aliases normalizados para el frontend
         ticket: t.numero_de_ticket || '',
         importe: t.importe_total ?? 0,
-        // Campos originales también disponibles
         importe_total: t.importe_total ?? 0,
         numero_de_ticket: t.numero_de_ticket || '',
         numero_de_caja: t.numero_de_caja || '',
@@ -275,53 +274,41 @@ app.get('/api/gaps', async (req, res) => {
         const isStale = !cacheGaps.fetchedAt || (Date.now() - new Date(cacheGaps.fetchedAt).getTime()) > GAPS_TTL_MS;
         if (isStale || !cacheGaps.data) {
             console.log('[/api/gaps] Fetching from BigQuery...');
+            // Nueva TVF ya devuelve una fila por local+mes — no se necesita GROUP BY
             const QUERY_GAPS = `
                 SELECT
-                    competidor, local, caja, codigo_tienda,
-                    mes, ano, region, distrito,
-                    gap_inicio_estimado, gap_fin_estimado,
-                    dias_gap, nombre_mes_gap, gap_multiple_meses,
-                    fecha_anterior, fecha_actual, delta_dias,
-                    transacciones_observadas_total, tasa_diaria_observada,
-                    tasa_diaria_usada, transacciones_gap_estimadas,
-                    estimacion_baja, estimacion_alta,
-                    metodo_estimacion, confianza,
-                    n_obs_estacional, n_obs_global
-                FROM \`${PROJECT_ID}.${DATASET_ID}.estimar_gap_transacciones\`('2024-01-01')
-                ORDER BY transacciones_gap_estimadas DESC
+                    competidor,
+                    local,
+                    codigo_tienda,
+                    mes,
+                    ano,
+                    fecha_anterior,
+                    fecha_estimacion,
+                    delta_dias,
+                    trx_diarias_estimadas,
+                    trx_totales_estimadas,
+                    metodo_estimacion
+                FROM \`${PROJECT_ID}.${DATASET_ID}.generar_estimaciones_mensuales\`('2024-01-01')
+                WHERE metodo_estimacion != 'INSUFICIENTE_DATA'
+                ORDER BY trx_totales_estimadas DESC
             `;
             const [job] = await bigquery.createQueryJob({ query: QUERY_GAPS });
             const [rows] = await job.getQueryResults();
             cacheGaps.data = rows.map(r => ({
-                competidor:                  r.competidor || '',
-                local:                       r.local || '',
-                caja:                        r.caja || '',
-                codigo_tienda:               r.codigo_tienda || '',
-                mes:                         r.mes ?? '',
-                ano:                         r.ano ?? '',
-                region:                      r.region || '',
-                distrito:                    r.distrito || '',
-                gap_inicio_estimado:         r.gap_inicio_estimado?.value || r.gap_inicio_estimado || '',
-                gap_fin_estimado:            r.gap_fin_estimado?.value || r.gap_fin_estimado || '',
-                dias_gap:                    r.dias_gap ?? 0,
-                nombre_mes_gap:              r.nombre_mes_gap || '',
-                gap_multiple_meses:          r.gap_multiple_meses ?? false,
-                fecha_anterior:              r.fecha_anterior?.value || r.fecha_anterior || '',
-                fecha_actual:                r.fecha_actual?.value || r.fecha_actual || '',
-                delta_dias:                  r.delta_dias ?? 0,
-                transacciones_observadas:    r.transacciones_observadas_total ?? 0,
-                tasa_diaria_observada:       parseFloat(r.tasa_diaria_observada) || 0,
-                tasa_diaria_usada:           parseFloat(r.tasa_diaria_usada) || 0,
-                transacciones_estimadas:     r.transacciones_gap_estimadas ?? 0,
-                estimacion_baja:             r.estimacion_baja ?? 0,
-                estimacion_alta:             r.estimacion_alta ?? 0,
-                metodo:                      r.metodo_estimacion || '',
-                confianza:                   r.confianza || '',
-                n_obs_estacional:            r.n_obs_estacional ?? 0,
-                n_obs_global:                r.n_obs_global ?? 0,
+                competidor:            r.competidor || '',
+                local:                 r.local || '',
+                codigo_tienda:         r.codigo_tienda || '',
+                mes:                   r.mes ?? '',
+                ano:                   r.ano ?? '',
+                fecha_anterior:        r.fecha_anterior?.value || r.fecha_anterior || '',
+                fecha_estimacion:      r.fecha_estimacion?.value || r.fecha_estimacion || '',
+                delta_dias:            r.delta_dias ?? 0,
+                trx_diarias_estimadas: r.trx_diarias_estimadas ?? 0,
+                trx_totales_estimadas: r.trx_totales_estimadas ?? 0,
+                metodo:                r.metodo_estimacion || '',
             }));
             cacheGaps.fetchedAt = new Date().toISOString();
-            console.log(`[/api/gaps] Fetched ${cacheGaps.data.length} gaps.`);
+            console.log(`[/api/gaps] Fetched ${cacheGaps.data.length} gaps (agrupados por local).`);
         }
         res.json({ gaps: cacheGaps.data, fetchedAt: cacheGaps.fetchedAt });
     } catch (err) {
@@ -330,6 +317,186 @@ app.get('/api/gaps', async (req, res) => {
     }
 });
 
+
+// GET /api/gap-lookup — Devuelve los meses usados en el rolling para un gap específico
+// Params: codigo_tienda, mes (int), ano (int)
+app.get('/api/gap-lookup', async (req, res) => {
+    const { codigo_tienda, mes, ano } = req.query;
+    if (!codigo_tienda || !mes || !ano) {
+        return res.status(400).json({ error: 'codigo_tienda, mes, ano son requeridos' });
+    }
+    const mesInt = parseInt(mes, 10);
+    const anoInt = parseInt(ano, 10);
+    try {
+        const QUERY = `
+            WITH
+              lect_caja_raw AS (
+                SELECT codigo_tienda, caja, mes, ano,
+                  MAX(DATE(fecha_y_hora_registro))                               AS fecha_lectura,
+                  ROUND(AVG(CAST(promedio_transacciones_diarias AS FLOAT64)), 0) AS tasa_caja,
+                  CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja_num
+                FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
+                WHERE status_busqueda = 'OK'
+                  AND CAST(promedio_transacciones_diarias AS FLOAT64) > 0
+                  AND CAST(promedio_transacciones_diarias AS FLOAT64) < 2000
+                  AND delta_dias BETWEEN 10 AND 45
+                  AND codigo_tienda = @codigo_tienda
+                GROUP BY 1, 2, 3, 4
+              ),
+              lect_tienda AS (
+                SELECT codigo_tienda, mes, ano,
+                  MAX(fecha_lectura) AS fecha_lectura,
+                  SUM(tasa_caja)     AS tasa_total
+                FROM lect_caja_raw
+                GROUP BY 1, 2, 3
+              ),
+              scanner_nums AS (
+                SELECT DISTINCT caja_num FROM lect_caja_raw
+              ),
+              hist_matched AS (
+                SELECT h.mes, h.ano,
+                  LAST_DAY(DATE(h.ano, h.mes, 1)) AS fecha_lectura,
+                  ROUND(SUM(h.trx_promedio), 0)   AS tasa_total
+                FROM \`${PROJECT_ID}.${DATASET_ID}.historial_tasas\` h
+                JOIN scanner_nums
+                  ON CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'(\\d+)') AS INT64) AS STRING) = scanner_nums.caja_num
+                WHERE h.codigo_tienda = @codigo_tienda
+                  AND h.trx_promedio > 0 AND h.trx_promedio < 2000
+                GROUP BY 1, 2, 3
+              ),
+              lect_ext AS (
+                SELECT mes, ano, fecha_lectura, CAST(tasa_total AS INT64) AS tasa, 'REAL' AS tipo
+                FROM lect_tienda
+                UNION ALL
+                SELECT hm.mes, hm.ano, hm.fecha_lectura, CAST(hm.tasa_total AS INT64) AS tasa, 'HISTORIAL'
+                FROM hist_matched hm
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM lect_tienda lt WHERE lt.mes = hm.mes AND lt.ano = hm.ano
+                )
+              )
+            SELECT mes, ano, tasa, tipo
+            FROM lect_ext
+            WHERE fecha_lectura >= DATE_SUB(DATE(@ano_gap, @mes_gap, 1), INTERVAL 6 MONTH)
+              AND fecha_lectura < DATE(@ano_gap, @mes_gap, 1)
+            ORDER BY ano, mes
+        `;
+        const [job] = await bigquery.createQueryJob({
+            query: QUERY,
+            params: { codigo_tienda, mes_gap: mesInt, ano_gap: anoInt },
+            types:  { mes_gap: 'INT64', ano_gap: 'INT64' },
+        });
+        const [rows] = await job.getQueryResults();
+        const puntos = rows.map(r => ({
+            mes: r.mes, ano: r.ano, tasa: r.tasa, tipo: r.tipo,
+        }));
+        const promedio = puntos.length
+            ? Math.round(puntos.reduce((s, p) => s + (p.tasa || 0), 0) / puntos.length)
+            : 0;
+        res.json({ puntos, promedio });
+    } catch (err) {
+        console.error('[/api/gap-lookup] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// GET /api/gap-detail — delegates entirely to BigQuery TVF detalle_estimacion
+// La lógica de cascada (A→C→D→G) y la fuente de datos viven en BigQuery.
+app.get('/api/gap-detail', async (req, res) => {
+    const { codigo_tienda, caja, mes, ano } = req.query;
+    if (!codigo_tienda || !mes || !ano) {
+        return res.status(400).json({ error: 'codigo_tienda, mes, ano are required' });
+    }
+    try {
+        const q = `
+            SELECT
+                ano, mes, mes_texto, caja_fuente, valor,
+                metodo, fecha_lectura, delta_dias, subtipo,
+                metodo_ganador, promedio_metodo, es_fuente_activa
+            FROM \`${PROJECT_ID}.${DATASET_ID}.detalle_estimacion\`(
+                @codigo_tienda,
+                @caja,
+                CAST(@mes AS INT64),
+                CAST(@ano AS INT64)
+            )
+        `;
+        const [job] = await bigquery.createQueryJob({
+            query: q,
+            params: { codigo_tienda, caja: caja || '', mes: String(mes), ano: String(ano) },
+        });
+        const [rows] = await job.getQueryResults();
+
+        const metodo_ganador = rows[0]?.metodo_ganador || 'INSUFICIENTE_DATA';
+        const promedio       = rows[0]?.promedio_metodo ?? null;
+
+        res.json({
+            metodo:          metodo_ganador,
+            promedio_metodo: promedio,
+            rows: rows.map(r => ({
+                ano:              r.ano ?? '',
+                mes:              r.mes ?? '',
+                mes_texto:        r.mes_texto || '',
+                caja_fuente:      r.caja_fuente || '',
+                valor:            r.valor ?? null,
+                metodo:           r.metodo || '',
+                fecha_lectura:    r.fecha_lectura?.value || r.fecha_lectura || '',
+                delta_dias:       r.delta_dias ?? null,
+                subtipo:          r.subtipo || '',
+                es_fuente_activa: r.es_fuente_activa ?? false,
+            })),
+        });
+    } catch (err) {
+        console.error('[/api/gap-detail] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/local-gap-detail — desglose por caja de un local+mes+ano agrupado
+app.get('/api/local-gap-detail', async (req, res) => {
+    const { codigo_tienda, mes, ano } = req.query;
+    if (!codigo_tienda || !mes || !ano) {
+        return res.status(400).json({ error: 'codigo_tienda, mes, ano are required' });
+    }
+    try {
+        const q = `
+            SELECT
+                caja,
+                fecha_anterior,
+                fecha_estimacion,
+                delta_dias,
+                trx_diarias_estimadas,
+                trx_totales_estimadas,
+                metodo_estimacion
+            FROM \`${PROJECT_ID}.${DATASET_ID}.generar_estimaciones_mensuales\`('2024-01-01')
+            WHERE codigo_tienda = @codigo_tienda
+              AND mes  = CAST(@mes AS INT64)
+              AND ano  = CAST(@ano AS INT64)
+              AND metodo_estimacion != 'INSUFICIENTE_DATA'
+            ORDER BY trx_totales_estimadas DESC
+        `;
+        const [job] = await bigquery.createQueryJob({
+            query: q,
+            params: { codigo_tienda, mes: String(mes), ano: String(ano) },
+        });
+        const [rows] = await job.getQueryResults();
+
+        res.json({
+            cajas: rows.map(r => ({
+                caja:                  r.caja || '',
+                fecha_anterior:        r.fecha_anterior?.value || r.fecha_anterior || '',
+                fecha_estimacion:      r.fecha_estimacion?.value || r.fecha_estimacion || '',
+                delta_dias:            r.delta_dias ?? 0,
+                trx_diarias_estimadas: r.trx_diarias_estimadas ?? 0,
+                trx_totales_estimadas: r.trx_totales_estimadas ?? 0,
+                metodo:                r.metodo_estimacion || '',
+            })),
+            total: rows.reduce((s, r) => s + (r.trx_totales_estimadas ?? 0), 0),
+        });
+    } catch (err) {
+        console.error('[/api/local-gap-detail] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.listen(port, () => {
     console.log(`NGR Proxy server running at http://localhost:${port}`);
