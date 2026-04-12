@@ -265,54 +265,254 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// GET /api/gaps — gap estimation data (separate cache, lazy)
-const cacheGaps = { data: null, fetchedAt: null };
-const GAPS_TTL_MS = 60 * 60 * 1000; // 1 hour
+// GET /api/estimation-matrix
+// Devuelve la matriz pivot (local × mes × caja) con tipo REAL/HISTORIAL/ESTIMADO/MANUAL/GAP
+// Query param: competidor (opcional)
+const cacheMatrix = { data: null, fetchedAt: null };
+const MATRIX_TTL_MS = 10 * 60 * 1000; // 10 min
 
-app.get('/api/gaps', async (req, res) => {
+app.get('/api/estimation-matrix', async (req, res) => {
+    const { competidor } = req.query;
     try {
-        const isStale = !cacheGaps.fetchedAt || (Date.now() - new Date(cacheGaps.fetchedAt).getTime()) > GAPS_TTL_MS;
-        if (isStale || !cacheGaps.data) {
-            console.log('[/api/gaps] Fetching from BigQuery...');
-            // Nueva TVF ya devuelve una fila por local+mes — no se necesita GROUP BY
-            const QUERY_GAPS = `
+        const isStale = !cacheMatrix.fetchedAt || (Date.now() - new Date(cacheMatrix.fetchedAt).getTime()) > MATRIX_TTL_MS;
+        if (isStale || !cacheMatrix.data) {
+            console.log('[/api/estimation-matrix] Building from BigQuery...');
+            const CUTOFF = '2025-11-30'; // fin del historial
+
+            // 1. Datos reales (post-cutoff)
+            const Q_REAL = `
                 SELECT
-                    competidor,
-                    local,
-                    codigo_tienda,
-                    mes,
-                    ano,
-                    fecha_anterior,
-                    fecha_estimacion,
-                    delta_dias,
-                    trx_diarias_estimadas,
-                    trx_totales_estimadas,
-                    metodo_estimacion
+                    competidor, codigo_tienda, local, caja,
+                    mes, ano,
+                    ROUND(AVG(CAST(promedio_transacciones_diarias AS FLOAT64)), 1) AS tasa,
+                    'REAL' AS tipo,
+                    MAX(DATE(fecha_y_hora_registro)) AS fecha_lectura
+                FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
+                WHERE status_busqueda = 'OK'
+                  AND DATE(fecha_y_hora_registro) > '${CUTOFF}'
+                  AND CAST(promedio_transacciones_diarias AS FLOAT64) > 0
+                GROUP BY 1,2,3,4,5,6
+            `;
+            // 2. Historial (hasta cutoff)
+            const Q_HIST = `
+                SELECT
+                    h.competidor, h.codigo_tienda, h.local,
+                    CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'(\\d+)') AS INT64) AS STRING) AS caja,
+                    h.mes, h.ano,
+                    ROUND(h.trx_promedio, 1) AS tasa,
+                    'HISTORIAL' AS tipo,
+                    LAST_DAY(DATE(h.ano, h.mes, 1)) AS fecha_lectura
+                FROM \`${PROJECT_ID}.${DATASET_ID}.historial_tasas\` h
+                WHERE h.trx_promedio > 0
+            `;
+            // 3. Estimados automáticos (post-cutoff)
+            const Q_EST = `
+                SELECT
+                    competidor, codigo_tienda, local, caja,
+                    mes, ano,
+                    ROUND(trx_diarias_estimadas, 1) AS tasa,
+                    'ESTIMADO' AS tipo,
+                    DATE(fecha_estimacion) AS fecha_lectura
                 FROM \`${PROJECT_ID}.${DATASET_ID}.generar_estimaciones_mensuales\`('2024-01-01')
                 WHERE metodo_estimacion != 'INSUFICIENTE_DATA'
-                ORDER BY trx_totales_estimadas DESC
             `;
-            const [job] = await bigquery.createQueryJob({ query: QUERY_GAPS });
-            const [rows] = await job.getQueryResults();
-            cacheGaps.data = rows.map(r => ({
-                competidor:            r.competidor || '',
-                local:                 r.local || '',
-                codigo_tienda:         r.codigo_tienda || '',
-                mes:                   r.mes ?? '',
-                ano:                   r.ano ?? '',
-                fecha_anterior:        r.fecha_anterior?.value || r.fecha_anterior || '',
-                fecha_estimacion:      r.fecha_estimacion?.value || r.fecha_estimacion || '',
-                delta_dias:            r.delta_dias ?? 0,
-                trx_diarias_estimadas: r.trx_diarias_estimadas ?? 0,
-                trx_totales_estimadas: r.trx_totales_estimadas ?? 0,
-                metodo:                r.metodo_estimacion || '',
-            }));
-            cacheGaps.fetchedAt = new Date().toISOString();
-            console.log(`[/api/gaps] Fetched ${cacheGaps.data.length} gaps (agrupados por local).`);
+            // 4. Estimados manuales (si existe la tabla)
+            const Q_MAN = `
+                SELECT
+                    competidor, codigo_tienda, local, caja,
+                    mes, ano,
+                    ROUND(trx_diarias, 1) AS tasa,
+                    'MANUAL' AS tipo,
+                    DATE(updated_at) AS fecha_lectura
+                FROM \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\`
+            `;
+
+            const runQ = async (q) => {
+                try {
+                    const [job] = await bigquery.createQueryJob({ query: q });
+                    const [rows] = await job.getQueryResults();
+                    return rows;
+                } catch(e) {
+                    console.warn('[estimation-matrix] query failed (maybe table missing):', e.message.slice(0, 100));
+                    return [];
+                }
+            };
+
+            const [rowsReal, rowsHist, rowsEst, rowsMan] = await Promise.all([
+                runQ(Q_REAL), runQ(Q_HIST), runQ(Q_EST), runQ(Q_MAN)
+            ]);
+
+            // Armar estructura plana
+            const allRows = [
+                ...rowsReal.map(r => ({ ...r, tipo: 'REAL' })),
+                ...rowsHist.map(r => ({ ...r, tipo: 'HISTORIAL' })),
+                ...rowsEst.map(r => ({ ...r, tipo: 'ESTIMADO' })),
+                ...rowsMan.map(r => ({ ...r, tipo: 'MANUAL' })),
+            ];
+
+            // Deduplicar: prioridad REAL > MANUAL > ESTIMADO > HISTORIAL
+            const PRIO = { REAL: 4, MANUAL: 3, ESTIMADO: 2, HISTORIAL: 1 };
+            const cellMap = {}; // `codigo_tienda||caja||ano-mm` → row
+            for (const r of allRows) {
+                const ano = r.ano?.value ?? r.ano;
+                const mes = r.mes?.value ?? r.mes;
+                const mk = `${ano}-${String(mes).padStart(2,'0')}`;
+                const cajaStr = String(r.caja?.value ?? r.caja ?? '');
+                const k = `${r.codigo_tienda}||${cajaStr}||${mk}`;
+                if (!cellMap[k] || PRIO[r.tipo] > PRIO[cellMap[k].tipo]) {
+                    const tasa = parseFloat(r.tasa?.value ?? r.tasa ?? 0);
+                    cellMap[k] = {
+                        codigo_tienda: r.codigo_tienda,
+                        local:         r.local,
+                        competidor:    r.competidor,
+                        caja:          cajaStr,
+                        mes:           parseInt(mes),
+                        ano:           parseInt(ano),
+                        mk,
+                        tasa,
+                        tipo:          r.tipo,
+                    };
+                }
+            }
+
+            // Determinar meses disponibles (últimos 9 meses reales + actual)
+            const mesSet = new Set();
+            for (const row of Object.values(cellMap)) {
+                mesSet.add(row.mk);
+            }
+            const mesesSorted = [...mesSet].sort().slice(-9); // últimos 9
+
+            // Agrupar por local
+            const localMap = {};
+            for (const cell of Object.values(cellMap)) {
+                if (!mesesSorted.includes(cell.mk)) continue;
+                const lk = cell.codigo_tienda;
+                if (!localMap[lk]) {
+                    localMap[lk] = {
+                        codigo_tienda: cell.codigo_tienda,
+                        local:         cell.local,
+                        competidor:    cell.competidor,
+                        cajas:         new Set(),
+                        celdas:        {},
+                    };
+                }
+                localMap[lk].cajas.add(cell.caja);
+                localMap[lk].celdas[`${cell.caja}||${cell.mk}`] = cell;
+            }
+
+            // Calcular caída % por caja (mes actual vs mes anterior en la ventana)
+            for (const local of Object.values(localMap)) {
+                for (const caja of local.cajas) {
+                    for (let i = 1; i < mesesSorted.length; i++) {
+                        const mk  = mesesSorted[i];
+                        const mkp = mesesSorted[i-1];
+                        const curr = local.celdas[`${caja}||${mk}`];
+                        const prev = local.celdas[`${caja}||${mkp}`];
+                        if (curr && prev && prev.tasa > 0) {
+                            curr.caida_pct = ((curr.tasa - prev.tasa) / prev.tasa) * 100;
+                        }
+                    }
+                }
+                local.cajas = [...local.cajas].sort((a, b) => {
+                    const na = parseInt(a) || 0;
+                    const nb = parseInt(b) || 0;
+                    return na - nb;
+                });
+            }
+
+            cacheMatrix.data = {
+                meses:   mesesSorted,
+                locales: Object.values(localMap).sort((a,b) => a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local)),
+            };
+            cacheMatrix.fetchedAt = new Date().toISOString();
+            console.log(`[/api/estimation-matrix] Built: ${cacheMatrix.data.locales.length} locales, ${mesesSorted.length} meses.`);
         }
-        res.json({ gaps: cacheGaps.data, fetchedAt: cacheGaps.fetchedAt });
+
+        let { locales, meses: mesesAll } = cacheMatrix.data;
+        if (competidor) {
+            locales = locales.filter(l => l.competidor === competidor);
+        }
+        res.json({ locales, meses: mesesAll, fetchedAt: cacheMatrix.fetchedAt });
     } catch (err) {
-        console.error('[/api/gaps] Error:', err.message);
+        console.error('[/api/estimation-matrix] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/save-estimation — MERGE una estimación manual a BigQuery
+app.post('/api/save-estimation', async (req, res) => {
+    const { codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo } = req.body;
+    if (!codigo_tienda || !caja || !mes || !ano || trx_diarias == null) {
+        return res.status(400).json({ error: 'codigo_tienda, caja, mes, ano, trx_diarias son requeridos' });
+    }
+    try {
+        // Ensure table exists
+        const CREATE_Q = `
+            CREATE TABLE IF NOT EXISTS \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\` (
+                codigo_tienda STRING,
+                local         STRING,
+                competidor    STRING,
+                caja          STRING,
+                mes           INT64,
+                ano           INT64,
+                trx_diarias   FLOAT64,
+                metodo        STRING,
+                usuario       STRING,
+                updated_at    TIMESTAMP
+            )
+        `;
+        await bigquery.createQueryJob({ query: CREATE_Q }).then(([j]) => j.getQueryResults());
+
+        // MERGE (upsert)
+        const MERGE_Q = `
+            MERGE \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\` T
+            USING (SELECT
+                @codigo_tienda AS codigo_tienda,
+                @local         AS local,
+                @competidor    AS competidor,
+                @caja          AS caja,
+                @mes           AS mes,
+                @ano           AS ano,
+                @trx_diarias   AS trx_diarias,
+                @metodo        AS metodo
+            ) S
+            ON T.codigo_tienda = S.codigo_tienda
+               AND T.caja = S.caja
+               AND T.mes  = S.mes
+               AND T.ano  = S.ano
+            WHEN MATCHED THEN UPDATE SET
+                trx_diarias = S.trx_diarias,
+                metodo      = S.metodo,
+                local       = S.local,
+                competidor  = S.competidor,
+                updated_at  = CURRENT_TIMESTAMP()
+            WHEN NOT MATCHED THEN INSERT
+                (codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo, usuario, updated_at)
+                VALUES (S.codigo_tienda, S.local, S.competidor, S.caja, S.mes, S.ano, S.trx_diarias, S.metodo, 'dashboard', CURRENT_TIMESTAMP())
+        `;
+        const [job] = await bigquery.createQueryJob({
+            query: MERGE_Q,
+            params: {
+                codigo_tienda,
+                local:      local || '',
+                competidor: competidor || '',
+                caja:       String(caja),
+                mes:        parseInt(mes),
+                ano:        parseInt(ano),
+                trx_diarias: parseFloat(trx_diarias),
+                metodo:     metodo || 'MANUAL',
+            },
+            types: { mes: 'INT64', ano: 'INT64', trx_diarias: 'FLOAT64' },
+        });
+        await job.getQueryResults();
+
+        // Invalidate matrix cache so next fetch picks up the manual
+        cacheMatrix.fetchedAt = null;
+
+        console.log(`[/api/save-estimation] Saved: ${codigo_tienda} caja=${caja} ${mes}/${ano} → ${trx_diarias} tx/día (${metodo})`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[/api/save-estimation] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -373,11 +573,24 @@ app.get('/api/gap-lookup', async (req, res) => {
                 WHERE NOT EXISTS (
                   SELECT 1 FROM lect_tienda lt WHERE lt.mes = hm.mes AND lt.ano = hm.ano
                 )
+                UNION ALL
+                -- Meses estimados anteriores (chaining) dentro de la ventana rolling
+                SELECT
+                  g.mes, g.ano,
+                  g.fecha_estimacion AS fecha_lectura,
+                  CAST(g.trx_diarias_estimadas AS INT64) AS tasa,
+                  'ESTIMADO' AS tipo
+                FROM \`${PROJECT_ID}.${DATASET_ID}.generar_estimaciones_mensuales\`('2024-01-01') g
+                WHERE g.codigo_tienda = @codigo_tienda
+                  AND g.fecha_estimacion >= DATE_SUB(DATE(@ano_gap, @mes_gap, 1), INTERVAL 6 MONTH)
+                  AND g.fecha_estimacion <  DATE(@ano_gap, @mes_gap, 1)
+                  AND NOT EXISTS (SELECT 1 FROM lect_tienda  lt  WHERE lt.mes  = g.mes AND lt.ano  = g.ano)
+                  AND NOT EXISTS (SELECT 1 FROM hist_matched hm2 WHERE hm2.mes = g.mes AND hm2.ano = g.ano)
               )
             SELECT mes, ano, tasa, tipo
             FROM lect_ext
             WHERE fecha_lectura >= DATE_SUB(DATE(@ano_gap, @mes_gap, 1), INTERVAL 6 MONTH)
-              AND fecha_lectura < DATE(@ano_gap, @mes_gap, 1)
+              AND fecha_lectura <  DATE(@ano_gap, @mes_gap, 1)
             ORDER BY ano, mes
         `;
         const [job] = await bigquery.createQueryJob({

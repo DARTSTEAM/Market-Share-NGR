@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Moon, Sun, TrendingUp, TrendingDown, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw, MapPin } from 'lucide-react';
+import { Moon, Sun, TrendingUp, TrendingDown, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw, MapPin, ClipboardEdit } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import MarketShareDashboard from './components/MarketShareDashboard';
 import ComparativosDashboard from './components/ComparativosDashboard';
 import TicketsDashboard from './components/TicketsDashboard';
 import AlarmasDashboard from './components/AlarmasDashboard';
-import GapsDashboard from './components/GapsDashboard';
+import EstimacionesDashboard from './components/EstimacionesDashboard';
 import ClientesDashboard from './components/ClientesDashboard';
 import PuntosCompartidosDashboard from './components/PuntosCompartidosDashboard';
 import CustomSelect from './components/common/CustomSelect';
@@ -481,9 +481,6 @@ export default function App() {
   // Use state for data to make it reactive to updates
   const [records, setRecords] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [gaps, setGaps]       = useState([]);
-  const [gapsLoading, setGapsLoading] = useState(false);
-
   // Initial data fetch to sync with BigQuery on load
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -502,27 +499,6 @@ export default function App() {
     };
     fetchInitialData();
   }, []);
-
-  // Lazy fetch gaps only when the sub-tab is opened
-  useEffect(() => {
-    if (activeSubTab !== 'gaps' || gaps.length > 0) return;
-    setGapsLoading(true);
-    fetch(`${API_BASE_URL}/api/gaps`)
-      .then(r => r.json())
-      .then(d => { if (d.gaps) setGaps(d.gaps); })
-      .catch(e => console.error('[gaps] fetch error:', e))
-      .finally(() => setGapsLoading(false));
-  }, [activeSubTab]);
-
-  const handleRefreshGaps = () => {
-    setGaps([]);
-    setGapsLoading(true);
-    fetch(`${API_BASE_URL}/api/gaps`)
-      .then(r => r.json())
-      .then(d => { if (d.gaps) setGaps(d.gaps); })
-      .catch(e => console.error('[gaps] fetch error:', e))
-      .finally(() => setGapsLoading(false));
-  };
 
   const handleRefreshData = async () => {
     try {
@@ -1369,7 +1345,7 @@ export default function App() {
                 ] : [
                   { id: 'tickets',  icon: Ticket,      label: 'Tickets' },
                   { id: 'alarmas',  icon: ShieldAlert,  label: 'Alarmas' },
-                  { id: 'gaps',     icon: TrendingDown, label: 'Gaps' },
+                  { id: 'estimaciones', icon: ClipboardEdit, label: 'Estimaciones' },
                 ]).map(sub => (
                   <button
                     key={sub.id}
@@ -1447,12 +1423,9 @@ export default function App() {
                 onUpdateTicket={handleUpdateTicket}
                 isRefreshing={isRefreshing}
               />
-            ) : activeSubTab === 'gaps' ? (
-              <GapsDashboard
-                key="gaps"
-                gaps={gaps}
-                isLoading={gapsLoading}
-                onRefresh={handleRefreshGaps}
+            ) : activeSubTab === 'estimaciones' ? (
+              <EstimacionesDashboard
+                key="estimaciones"
               />
             ) : (
               <TicketsDashboard

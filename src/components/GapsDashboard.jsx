@@ -283,7 +283,7 @@ export default function GapsDashboard({ gaps = [], isLoading = false, onRefresh 
                     <React.Fragment key={i}>
                       <tr
                         onClick={() => openRow(i, g)}
-                        className="hover:bg-orange-50 dark:hover:bg-accent-orange/[0.04] cursor-pointer transition-colors group"
+                        className={`cursor-pointer transition-colors group ${isOpen ? "bg-orange-50/30 dark:bg-slate-700 border-l-2 border-accent-orange" : "hover:bg-orange-50 dark:hover:!bg-orange-500/10"}`}
                       >
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest border ${COMPETITOR_COLORS[g.competidor] || 'bg-slate-500/20 text-slate-400 border-slate-500/30'}`}>
@@ -317,7 +317,7 @@ export default function GapsDashboard({ gaps = [], isLoading = false, onRefresh 
                         </td>
                       </tr>
                       {isOpen && (
-                        <tr className="bg-gradient-to-b from-slate-800/[0.03] to-slate-900/[0.06] dark:from-white/[0.02] dark:to-black/20">
+                        <tr className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-white/5">
                           <td colSpan={7} className="px-5 py-4 border-b border-slate-100 dark:border-white/5">
                             <div className="flex gap-6 text-[10px]">
 
@@ -345,7 +345,7 @@ export default function GapsDashboard({ gaps = [], isLoading = false, onRefresh 
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className="text-[7px] font-black uppercase tracking-widest text-slate-400">Ventana rolling 6M</span>
                                   <div className="flex items-center gap-1.5">
-                                    {[{t:'REAL',l:'Real'},{t:'HISTORIAL',l:'Historial'}].map(({t,l}) => (
+                                    {[{t:'REAL',l:'Real'},{t:'HISTORIAL',l:'Historial'},{t:'ESTIMADO',l:'Estimado'}].map(({t,l}) => (
                                       <span key={t} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[6px] font-black uppercase border ${TIPO_STYLE[t]?.bg}`}>
                                         <span className={`w-1 h-1 rounded-full ${TIPO_STYLE[t]?.dot}`} />{l}
                                       </span>
@@ -373,7 +373,7 @@ export default function GapsDashboard({ gaps = [], isLoading = false, onRefresh 
                                         {(() => {
                                           const maxTasa = Math.max(...detail.puntos.map(p => p.tasa || 0), 1);
                                           return detail.puntos.map(p => (
-                                            <tr key={`${p.mes}-${p.ano}`} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                                            <tr key={`${p.mes}-${p.ano}`} className="hover:bg-slate-100/50 dark:hover:bg-white/[0.04]">
                                               <td className="py-1.5 pr-3 whitespace-nowrap">
                                                 <span className="font-black text-slate-800 dark:text-white">{MESES[p.mes]?.slice(0,3)} </span>
                                                 <span className="text-slate-400 text-[8px]">{p.ano}</span>
@@ -383,7 +383,7 @@ export default function GapsDashboard({ gaps = [], isLoading = false, onRefresh 
                                                 <div className="w-24 h-1.5 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden">
                                                   <div
                                                     className={`h-full rounded-full transition-all ${
-                                                      p.tipo === 'REAL' ? 'bg-emerald-400' : 'bg-indigo-400'
+                                                      p.tipo === 'REAL' ? 'bg-emerald-400' : p.tipo === 'ESTIMADO' ? 'bg-amber-400' : 'bg-indigo-400'
                                                     }`}
                                                     style={{ width: `${Math.round((p.tasa / maxTasa) * 100)}%` }}
                                                   />
@@ -391,7 +391,7 @@ export default function GapsDashboard({ gaps = [], isLoading = false, onRefresh 
                                               </td>
                                               <td className="py-1.5 text-center">
                                                 <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[6px] font-black uppercase border ${TIPO_STYLE[p.tipo]?.bg || ''}`}>
-                                                  {p.tipo === 'REAL' ? <Wifi size={7}/> : <Database size={7}/>}
+                                                  {p.tipo === 'REAL' ? <Wifi size={7}/> : p.tipo === 'ESTIMADO' ? <TrendingDown size={7}/> : <Database size={7}/>}
                                                   {TIPO_STYLE[p.tipo]?.label || p.tipo}
                                                 </span>
                                               </td>
@@ -400,7 +400,7 @@ export default function GapsDashboard({ gaps = [], isLoading = false, onRefresh 
                                         })()}
                                       </tbody>
                                       <tfoot>
-                                        <tr className="border-t-2 border-slate-300 dark:border-white/10">
+                                        <tr className="border-t-2 border-slate-200 dark:border-white/15">
                                           <td className="pt-2 text-[8px] font-black uppercase tracking-widest text-slate-500">Promedio</td>
                                           <td className="pt-2 text-right font-black text-accent-orange text-[13px]">{fmt(detail.promedio)}</td>
                                           <td colSpan={2} className="pt-2 text-right text-[7px] text-slate-400">{detail.puntos.length} fuentes</td>
