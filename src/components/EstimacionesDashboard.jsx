@@ -291,37 +291,59 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
     acc + meses.filter(mk => esRutina(mk) && local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length, 0);
   const tieneGaps = gapCount > 0;
 
-  // Para NO_CAJA_DETAIL: celda GAP a nivel local solo en meses de rutina
-  const getGapCellLocal = (mk) => {
-    // En período histórico sin dato → celda vacía, no GAP
-    if (!esRutina(mk)) return null;
-    const hasData = local.cajas.some(c => {
+  // Para NO_CAJA_DETAIL: celda editable para CUALQUIER tipo de dato (no solo GAPs)
+  const PRIO_TIPO = { REAL: 4, MANUAL: 3, ESTIMADO: 2, HISTORIAL: 1 };
+  const getEditableCellLocal = (mk) => {
+    // Determinar el tipo y dato disponible combinando todas las cajas
+    let bestTipo = null;
+    local.cajas.forEach(c => {
       const cell = local.celdas[`${c}||${mk}`];
-      return cell && cell.tipo !== 'GAP' && cell.tasa != null;
+      if (cell && cell.tipo !== 'GAP' && (PRIO_TIPO[cell.tipo] ?? 0) > (PRIO_TIPO[bestTipo] ?? -1)) {
+        bestTipo = cell.tipo;
+      }
     });
-    if (hasData) return null;
+
+    const hasData = bestTipo !== null; // tiene al menos un dato no-GAP
+    const totalTasa = totalesPorMes[mk];
+
+    // Período histórico sin ningún dato → celda vacía (dash)
+    if (!esRutina(mk) && !hasData) return null;
+
+    // Usar la primera caja real del local como clave de guardado
+    const primaryCaja = local.cajas[0] ?? 'LOCAL';
+
     return {
-      key: `${local.codigo_tienda}||LOCAL||${mk}`,
+      key: `${local.codigo_tienda}||${primaryCaja}||${mk}`,
       codigo_tienda: local.codigo_tienda,
       local: local.local,
       competidor: local.competidor,
-      caja: 'LOCAL',
+      caja: primaryCaja,
       mes: parseInt(mk.split('-')[1]),
       ano: parseInt(mk.split('-')[0]),
-      tipo: 'GAP',
-      tasa: null,
+      tipo: hasData ? bestTipo : 'GAP',
+      tasa: hasData && totalTasa > 0 ? totalTasa : null,
     };
   };
 
-  // Puntos para preview en modo no-desglose (todas las cajas juntas del local)
-  const puntosLocal = useMemo(() =>
-    meses.flatMap(mk =>
-      local.cajas
-        .map(c => local.celdas[`${c}||${mk}`])
-        .filter(cell => cell && cell.tipo !== 'GAP' && cell.tasa != null && cell.tasa > 0)
-        .map(cell => ({ tasa: cell.tasa, tipo: cell.tipo, mes: cell.mes, ano: cell.ano }))
-    ).sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes),
-  [local.celdas, local.cajas, meses]);
+  // Puntos para preview en modo no-desglose: SUMA de todas las cajas por mes (1 entrada por mes)
+  const puntosLocal = useMemo(() => {
+    const byMes = {};
+    meses.forEach(mk => {
+      let sum = 0; let bestTipo = null;
+      const [ano, mes] = mk.split('-');
+      local.cajas.forEach(c => {
+        const cell = local.celdas[`${c}||${mk}`];
+        if (cell && cell.tipo !== 'GAP' && cell.tasa != null && cell.tasa > 0) {
+          sum += cell.tasa;
+          if (!bestTipo || (PRIO_TIPO[cell.tipo] ?? 0) > (PRIO_TIPO[bestTipo] ?? 0)) bestTipo = cell.tipo;
+        }
+      });
+      if (sum > 0 && bestTipo) {
+        byMes[mk] = { tasa: Math.round(sum * 10) / 10, tipo: bestTipo, mes: parseInt(mes), ano: parseInt(ano) };
+      }
+    });
+    return Object.values(byMes).sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes);
+  }, [local.celdas, local.cajas, meses]);
 
   return (
     <>
@@ -369,14 +391,14 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
         </td>
 
         {meses.map(mk => {
-          // Para NO_CAJA_DETAIL: celda del total puede ser un GAP editable directamente
+          // NO_CAJA_DETAIL: celda editable para todos los tipos (REAL, HIST, GAP, etc.)
           if (!esDesglose) {
-            const gapCell = getGapCellLocal(mk);
-            if (gapCell) {
+            const editCell = getEditableCellLocal(mk);
+            if (editCell) {
               return (
                 <Celda
                   key={mk}
-                  cell={gapCell}
+                  cell={editCell}
                   puntos={puntosLocal}
                   puntosLoading={false}
                   onSave={onSave}
@@ -386,8 +408,14 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                 />
               );
             }
+            // Histórico sin dato → celda vacía
+            return (
+              <td key={mk} className="px-3 py-3 text-right">
+                <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
+              </td>
+            );
           }
-          // Celda de total (para todos los competidores)
+          // Competidores con desglose: celda de total (no editable — editar por caja abajo)
           return (
             <td key={mk} className="px-3 py-3 text-right">
               <span className="font-black text-[12px] text-slate-700 dark:text-white/70">
