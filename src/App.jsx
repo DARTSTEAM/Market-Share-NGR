@@ -466,7 +466,7 @@ const kFormatter = (num) => {
 
 // Removed redundant COMPETITOR_TO_CATEGORY redeclaration if any
 
-export default function App() {
+export default function App({ user, onSignOut }) {
   const [activeCategory, setActiveCategory] = useState('marketshare');
   const [activeSubTab, setActiveSubTab] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
@@ -1287,6 +1287,27 @@ export default function App() {
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
               {activeCategory !== 'tickets' && activeCategory !== 'clientes' && globalFilterBar}
+
+              {/* ── User avatar + logout ── */}
+              {user && (
+                <div className="flex items-center gap-2 pl-2 border-l border-slate-200 dark:border-white/10">
+                  {user.photoURL
+                    ? <img src={user.photoURL} alt={user.displayName} className="w-8 h-8 rounded-full border-2 border-orange-400/40" />
+                    : <div className="w-8 h-8 rounded-full bg-orange-500/20 border border-orange-400/30 flex items-center justify-center text-orange-400 font-black text-xs">{user.displayName?.[0] ?? '?'}</div>
+                  }
+                  <div className="hidden lg:flex flex-col leading-tight">
+                    <span className="text-[10px] font-black text-slate-700 dark:text-white/80 truncate max-w-[120px]">{user.displayName}</span>
+                    <span className="text-[8px] text-slate-400 truncate max-w-[120px]">{user.email}</span>
+                  </div>
+                  <button
+                    onClick={onSignOut}
+                    title="Cerrar sesión"
+                    className="ml-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-white/10 text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-red-400 hover:border-red-400/30 transition-all"
+                  >
+                    Salir
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1426,6 +1447,7 @@ export default function App() {
             ) : activeSubTab === 'estimaciones' ? (
               <EstimacionesDashboard
                 key="estimaciones"
+                user={user}
               />
             ) : (
               <TicketsDashboard

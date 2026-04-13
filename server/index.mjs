@@ -280,42 +280,51 @@ app.get('/api/estimation-matrix', async (req, res) => {
             const CUTOFF = '2025-11-30'; // fin del historial
 
             // 1. Datos reales (post-cutoff)
+            // Normalizar caja con REGEXP_EXTRACT para obtener solo el número
+            // (el TVF puede devolver '001', '1', 'Caja 1', o vacío)
             const Q_REAL = `
                 SELECT
-                    competidor, codigo_tienda, local, caja,
-                    mes, ano,
-                    ROUND(AVG(CAST(promedio_transacciones_diarias AS FLOAT64)), 1) AS tasa,
-                    'REAL' AS tipo,
-                    MAX(DATE(fecha_y_hora_registro)) AS fecha_lectura
+                    competidor,
+                    codigo_tienda,
+                    local,
+                    CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
+                    mes,
+                    ano,
+                    ROUND(AVG(CAST(promedio_transacciones_diarias AS FLOAT64)), 1) AS tasa
                 FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
                 WHERE status_busqueda = 'OK'
                   AND DATE(fecha_y_hora_registro) > '${CUTOFF}'
                   AND CAST(promedio_transacciones_diarias AS FLOAT64) > 0
+                  AND REGEXP_CONTAINS(caja, r'\\d')
                 GROUP BY 1,2,3,4,5,6
             `;
-            // 2. Historial (hasta cutoff)
+            // 2. Historial hasta NOVIEMBRE 2025 inclusive
             const Q_HIST = `
                 SELECT
                     h.competidor,
                     h.codigo_tienda,
                     h.local,
-                    CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
+                    CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'(\\d+)') AS INT64) AS STRING) AS caja_num,
                     h.mes,
                     h.ano,
                     ROUND(h.trx_promedio, 1) AS tasa
                 FROM \`${PROJECT_ID}.${DATASET_ID}.historial_tasas\` h
                 WHERE h.trx_promedio > 0
+                  AND (h.ano < 2025 OR (h.ano = 2025 AND h.mes <= 11))
             `;
-            // 3. Estimados automáticos (post-cutoff)
+            // 3. Estimados automáticos (post-cutoff) — misma normalización de caja
             const Q_EST = `
                 SELECT
-                    competidor, codigo_tienda, local, caja,
-                    mes, ano,
-                    ROUND(trx_diarias_estimadas, 1) AS tasa,
-                    'ESTIMADO' AS tipo,
-                    DATE(fecha_estimacion) AS fecha_lectura
+                    competidor,
+                    codigo_tienda,
+                    local,
+                    CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
+                    mes,
+                    ano,
+                    ROUND(trx_diarias_estimadas, 1) AS tasa
                 FROM \`${PROJECT_ID}.${DATASET_ID}.generar_estimaciones_mensuales\`('2024-01-01')
                 WHERE metodo_estimacion != 'INSUFICIENTE_DATA'
+                  AND REGEXP_CONTAINS(caja, r'\\d')
             `;
             // 4. Estimados manuales (si existe la tabla)
             const Q_MAN = `
@@ -344,9 +353,10 @@ app.get('/api/estimation-matrix', async (req, res) => {
             ]);
 
             // Armar estructura plana
+            // HISTORIAL: renombrar caja_num → caja (alias alternativo usado en Q_HIST)
             const allRows = [
                 ...rowsReal.map(r => ({ ...r, tipo: 'REAL' })),
-                ...rowsHist.map(r => ({ ...r, tipo: 'HISTORIAL' })),
+                ...rowsHist.map(r => ({ ...r, caja: r.caja_num, tipo: 'HISTORIAL' })),
                 ...rowsEst.map(r => ({ ...r, tipo: 'ESTIMADO' })),
                 ...rowsMan.map(r => ({ ...r, tipo: 'MANUAL' })),
             ];
@@ -363,6 +373,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 if (!cellMap[k] || PRIO[r.tipo] > PRIO[cellMap[k].tipo]) {
                     const tasa = parseFloat(r.tasa?.value ?? r.tasa ?? 0);
                     cellMap[k] = {
+                        key:           k,   // usado por el frontend para identificar la celda en edición
                         codigo_tienda: r.codigo_tienda,
                         local:         r.local,
                         competidor:    r.competidor,
@@ -422,9 +433,8 @@ app.get('/api/estimation-matrix', async (req, res) => {
             }
 
             // ── GAP detection ──────────────────────────────────────────────────
-            // Determinar cuáles meses son "de rutina" (post-cutoff, donde se espera captura)
-            // Un local+caja tiene GAP si tiene historial pero no tiene dato REAL/ESTIMADO/MANUAL en ese mes
-            const CUTOFF_KEY = 202512; // ano*100 + mes → meses > 202511 son rutina
+            // Meses de rutina: noviembre 2025 en adelante (sin incluir noviembre en el histórico)
+            const CUTOFF_KEY = 202511; // ano*100 + mes > 202511 → desde Dic 2025 inclusive
 
             const mesesRutina = mesesSorted.filter(mk => {
                 const [a, m] = mk.split('-');
@@ -480,7 +490,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
 
 // POST /api/save-estimation — MERGE una estimación manual a BigQuery
 app.post('/api/save-estimation', async (req, res) => {
-    const { codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo } = req.body;
+    const { codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo, usuario, usuario_nombre } = req.body;
     if (!codigo_tienda || !caja || !mes || !ano || trx_diarias == null) {
         return res.status(400).json({ error: 'codigo_tienda, caja, mes, ano, trx_diarias son requeridos' });
     }
@@ -513,21 +523,24 @@ app.post('/api/save-estimation', async (req, res) => {
                 @mes           AS mes,
                 @ano           AS ano,
                 @trx_diarias   AS trx_diarias,
-                @metodo        AS metodo
+                @metodo        AS metodo,
+                @usuario        AS usuario,
+                @usuario_nombre AS usuario_nombre
             ) S
             ON T.codigo_tienda = S.codigo_tienda
                AND T.caja = S.caja
                AND T.mes  = S.mes
                AND T.ano  = S.ano
             WHEN MATCHED THEN UPDATE SET
-                trx_diarias = S.trx_diarias,
-                metodo      = S.metodo,
-                local       = S.local,
-                competidor  = S.competidor,
-                updated_at  = CURRENT_TIMESTAMP()
+                trx_diarias    = S.trx_diarias,
+                metodo         = S.metodo,
+                local          = S.local,
+                competidor     = S.competidor,
+                usuario        = S.usuario,
+                updated_at     = CURRENT_TIMESTAMP()
             WHEN NOT MATCHED THEN INSERT
                 (codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo, usuario, updated_at)
-                VALUES (S.codigo_tienda, S.local, S.competidor, S.caja, S.mes, S.ano, S.trx_diarias, S.metodo, 'dashboard', CURRENT_TIMESTAMP())
+                VALUES (S.codigo_tienda, S.local, S.competidor, S.caja, S.mes, S.ano, S.trx_diarias, S.metodo, S.usuario, CURRENT_TIMESTAMP())
         `;
         const [job] = await bigquery.createQueryJob({
             query: MERGE_Q,
@@ -539,7 +552,9 @@ app.post('/api/save-estimation', async (req, res) => {
                 mes:        parseInt(mes),
                 ano:        parseInt(ano),
                 trx_diarias: parseFloat(trx_diarias),
-                metodo:     metodo || 'MANUAL',
+                metodo:         metodo || 'MANUAL',
+                usuario:        usuario        || 'dashboard',
+                usuario_nombre: usuario_nombre || 'Dashboard',
             },
             types: { mes: 'INT64', ano: 'INT64', trx_diarias: 'FLOAT64' },
         });
@@ -548,7 +563,7 @@ app.post('/api/save-estimation', async (req, res) => {
         // Invalidate matrix cache so next fetch picks up the manual
         cacheMatrix.fetchedAt = null;
 
-        console.log(`[/api/save-estimation] Saved: ${codigo_tienda} caja=${caja} ${mes}/${ano} → ${trx_diarias} tx/día (${metodo})`);
+        console.log(`[/api/save-estimation] Saved: ${codigo_tienda} caja=${caja} ${mes}/${ano} → ${trx_diarias} tx/día (${metodo}) by ${usuario || 'dashboard'}`);
         res.json({ success: true });
     } catch (err) {
         console.error('[/api/save-estimation] Error:', err.message);

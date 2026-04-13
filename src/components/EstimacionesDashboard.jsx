@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ClipboardEdit, RefreshCw, Save, AlertTriangle, CheckCircle2,
-  Loader2, ChevronDown, ChevronRight, Search, SlidersHorizontal,
-  TrendingDown, Wifi, Database, Info, X, Check
+  ClipboardEdit, RefreshCw, AlertTriangle, CheckCircle2,
+  Loader2, ChevronDown, ChevronRight, Search,
+  TrendingDown, Wifi, Database, Info, X, Check, Pencil
 } from 'lucide-react';
 
 const API = window.location.hostname === 'localhost'
@@ -54,23 +54,28 @@ function calcularSugerido(metodo, puntos, manualVal) {
   return null;
 }
 
-// ── Celda individual (GAP o dato) ────────────────────────────────────────────
-function Celda({ cell, puntos, puntosLoading, onSave, pendingEdit, onStartEdit, onCancelEdit }) {
-  const [metodo, setMetodo]     = useState('IGUAL_ANTERIOR');
+// ── Panel de edición (reutilizado por GAP y celdas existentes) ─────────────────
+function EditPanel({ cell, puntos, puntosLoading, onSave, onCancelEdit }) {
+  const [metodo, setMetodo]       = useState('IGUAL_ANTERIOR');
   const [manualVal, setManualVal] = useState('');
-  const [saving, setSaving]     = useState(false);
+  const [saving, setSaving]       = useState(false);
   const inputRef = useRef(null);
 
-  const isEditing = pendingEdit?.key === cell.key;
-
-  const sugerido = useMemo(
-    () => isEditing ? calcularSugerido(metodo, puntos || [], manualVal) : null,
-    [metodo, puntos, manualVal, isEditing]
-  );
+  // Pre-cargar el valor actual cuando se abre el panel sobre una celda existente
+  useEffect(() => {
+    if (cell.tipo !== 'GAP' && cell.tasa != null) {
+      setManualVal(String(cell.tasa));
+    }
+  }, [cell.key]);
 
   useEffect(() => {
-    if (isEditing && metodo === 'MANUAL' && inputRef.current) inputRef.current.focus();
-  }, [isEditing, metodo]);
+    if (metodo === 'MANUAL' && inputRef.current) inputRef.current.focus();
+  }, [metodo]);
+
+  const sugerido = useMemo(
+    () => calcularSugerido(metodo, puntos || [], manualVal),
+    [metodo, puntos, manualVal]
+  );
 
   const handleSave = async () => {
     const valor = metodo === 'MANUAL' ? parseFloat(manualVal) : sugerido;
@@ -84,18 +89,134 @@ function Celda({ cell, puntos, puntosLoading, onSave, pendingEdit, onStartEdit, 
     }
   };
 
-  // Celda con dato real / historial / estimado existente
+  return (
+    <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/20 p-4 space-y-3 z-30">
+
+      {/* Valor actual de referencia (solo si no es GAP) */}
+      {cell.tipo !== 'GAP' && cell.tasa != null && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10">
+          <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Valor actual</span>
+          <span className="flex items-center gap-1.5 font-black text-sm text-slate-700 dark:text-white">
+            {fmt(cell.tasa)}
+            <span className={`w-1.5 h-1.5 rounded-full ${TIPO_CONFIG[cell.tipo]?.dot || 'bg-slate-400'}`} />
+          </span>
+        </div>
+      )}
+
+      {/* Método selector */}
+      <div className="space-y-1.5">
+        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+          {cell.tipo === 'GAP' ? 'Método de estimación' : 'Sobreescribir con'}
+        </p>
+        {METODOS.map(m => (
+          <button
+            key={m.id}
+            onClick={() => setMetodo(m.id)}
+            className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-xl text-left transition-all ${
+              metodo === m.id
+                ? 'bg-accent-orange/10 border border-accent-orange/30 text-accent-orange'
+                : 'border border-transparent hover:border-slate-200 dark:hover:border-white/10 text-slate-600 dark:text-white/60'
+            }`}
+          >
+            <div className={`w-3.5 h-3.5 rounded-full border-2 mt-0.5 flex-shrink-0 flex items-center justify-center ${
+              metodo === m.id ? 'border-accent-orange bg-accent-orange' : 'border-slate-300 dark:border-white/20'
+            }`}>
+              {metodo === m.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+            </div>
+            <div>
+              <p className="text-[10px] font-black">{m.label}</p>
+              <p className="text-[8px] text-slate-400 dark:text-white/30 mt-0.5">{m.desc}</p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Input manual */}
+      {metodo === 'MANUAL' && (
+        <div>
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">Trx/día</p>
+          <input
+            ref={inputRef}
+            type="number"
+            value={manualVal}
+            onChange={e => setManualVal(e.target.value)}
+            placeholder="ej. 245"
+            className="w-full px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-black text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
+          />
+        </div>
+      )}
+
+      {/* Preview */}
+      {puntosLoading ? (
+        <div className="flex items-center gap-2 text-slate-400 py-1">
+          <Loader2 size={12} className="animate-spin" />
+          <span className="text-[9px]">Cargando historial…</span>
+        </div>
+      ) : sugerido != null ? (
+        <div className="flex items-center justify-between px-3 py-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
+          <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Preview</span>
+          <span className="font-black text-amber-600 dark:text-amber-400 text-base">{fmt(sugerido)} <span className="text-[9px]">tx/día</span></span>
+        </div>
+      ) : (
+        <div className="px-3 py-2 bg-slate-100 dark:bg-white/5 rounded-xl">
+          <p className="text-[9px] text-slate-400">Sin historial suficiente</p>
+        </div>
+      )}
+
+      {/* Botones */}
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={onCancelEdit}
+          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving || (metodo !== 'MANUAL' && sugerido == null) || (metodo === 'MANUAL' && !manualVal)}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-accent-orange text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40 transition-all hover:bg-orange-600"
+        >
+          {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+          Guardar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Celda individual — todas son editables ────────────────────────────────────
+function Celda({ cell, puntos, puntosLoading, onSave, pendingEdit, onStartEdit, onCancelEdit }) {
+  const isEditing = pendingEdit?.key === cell.key;
+
+  // Celda con dato existente (REAL, HISTORIAL, ESTIMADO, MANUAL) — editable con click
   if (cell.tipo !== 'GAP') {
     const cfg = TIPO_CONFIG[cell.tipo] || TIPO_CONFIG.ESTIMADO;
     const esCaidaAlarm = cell.caida_pct != null && cell.caida_pct <= -20;
     return (
-      <td className={`px-3 py-2.5 text-right align-middle group relative ${esCaidaAlarm ? 'bg-red-500/5' : ''}`}>
+      <td
+        className={`px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-colors ${
+          esCaidaAlarm ? 'bg-red-500/5' : 'hover:bg-slate-100/60 dark:hover:bg-white/[0.04]'
+        }`}
+        onClick={e => { e.stopPropagation(); onStartEdit(cell); }}
+      >
+        {isEditing && (
+          <div className="relative z-20" onClick={e => e.stopPropagation()}>
+            <EditPanel
+              cell={cell}
+              puntos={puntos}
+              puntosLoading={puntosLoading}
+              onSave={onSave}
+              onCancelEdit={onCancelEdit}
+            />
+          </div>
+        )}
         <div className="flex items-center justify-end gap-1.5">
           {esCaidaAlarm && <AlertTriangle size={9} className="text-red-400 shrink-0" />}
           <span className={`font-mono font-black text-[12px] ${esCaidaAlarm ? 'text-red-400' : 'text-slate-800 dark:text-white/90'}`}>
             {fmt(cell.tasa)}
           </span>
           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+          <Pencil size={7} className="opacity-0 group-hover:opacity-30 text-slate-400 transition-opacity shrink-0 -mr-0.5" />
         </div>
         {esCaidaAlarm && (
           <div className="text-[8px] text-red-400 font-black text-right">
@@ -106,92 +227,20 @@ function Celda({ cell, puntos, puntosLoading, onSave, pendingEdit, onStartEdit, 
     );
   }
 
-  // Celda GAP — editable
+  // Celda GAP — editable (igual que antes)
   return (
-    <td className="px-1.5 py-1.5 align-middle relative" style={{ minWidth: 90 }}>
-      {isEditing ? (
+    <td className="px-1.5 py-1.5 align-middle relative" style={{ minWidth: 90 }} onClick={e => e.stopPropagation()}>
+      {isEditing && (
         <div className="relative z-20">
-          <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/20 p-4 space-y-3">
-            {/* Método selector */}
-            <div className="space-y-1.5">
-              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Método de estimación</p>
-              {METODOS.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => setMetodo(m.id)}
-                  className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-xl text-left transition-all ${
-                    metodo === m.id
-                      ? 'bg-accent-orange/10 border border-accent-orange/30 text-accent-orange'
-                      : 'border border-transparent hover:border-slate-200 dark:hover:border-white/10 text-slate-600 dark:text-white/60'
-                  }`}
-                >
-                  <div className={`w-3.5 h-3.5 rounded-full border-2 mt-0.5 flex-shrink-0 flex items-center justify-center ${
-                    metodo === m.id ? 'border-accent-orange bg-accent-orange' : 'border-slate-300 dark:border-white/20'
-                  }`}>
-                    {metodo === m.id && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black">{m.label}</p>
-                    <p className="text-[8px] text-slate-400 dark:text-white/30 mt-0.5">{m.desc}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Input manual */}
-            {metodo === 'MANUAL' && (
-              <div>
-                <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">Trx/día</p>
-                <input
-                  ref={inputRef}
-                  type="number"
-                  value={manualVal}
-                  onChange={e => setManualVal(e.target.value)}
-                  placeholder="ej. 245"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-black text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
-                />
-              </div>
-            )}
-
-            {/* Preview */}
-            {puntosLoading ? (
-              <div className="flex items-center gap-2 text-slate-400 py-1">
-                <Loader2 size={12} className="animate-spin" />
-                <span className="text-[9px]">Cargando historial…</span>
-              </div>
-            ) : sugerido != null ? (
-              <div className="flex items-center justify-between px-3 py-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Preview</span>
-                <span className="font-black text-amber-600 dark:text-amber-400 text-base">{fmt(sugerido)} <span className="text-[9px]">tx/día</span></span>
-              </div>
-            ) : (
-              <div className="px-3 py-2 bg-slate-100 dark:bg-white/5 rounded-xl">
-                <p className="text-[9px] text-slate-400">Sin historial suficiente</p>
-              </div>
-            )}
-
-            {/* Botones */}
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={onCancelEdit}
-                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || (metodo !== 'MANUAL' && sugerido == null) || (metodo === 'MANUAL' && !manualVal)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-accent-orange text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40 transition-all hover:bg-orange-600"
-              >
-                {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                Guardar
-              </button>
-            </div>
-          </div>
+          <EditPanel
+            cell={cell}
+            puntos={puntos}
+            puntosLoading={puntosLoading}
+            onSave={onSave}
+            onCancelEdit={onCancelEdit}
+          />
         </div>
-      ) : null}
-
-      {/* La celda GAP en sí */}
+      )}
       <button
         onClick={() => onStartEdit(cell)}
         className="w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 transition-all group"
@@ -203,11 +252,19 @@ function Celda({ cell, puntos, puntosLoading, onSave, pendingEdit, onStartEdit, 
   );
 }
 
-// ── Fila de un local (expandible) ─────────────────────────────────────────────
-function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle }) {
+// Competidores que NO necesitan desglose por caja
+const NO_CAJA_DETAIL = new Set(['DOMINOS', "DOMINO'S", 'LITTLE CAESARS', "LITTLE CAESAR'S"]);
 
-  // Derivar puntos históricos por caja directo de la matriz (sin llamada extra a la API)
-  // Así el preview es siempre por CAJA específica, no por el local completo
+// ── Fila de un local (expandible) ─────────────────────────────────────────────
+function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, pctEstimado = 0 }) {
+
+  const esDesglose = !NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
+
+  // Primer mes de rutina — meses < este valor son historial y no generan GAP
+  const RUTINA_DESDE = '2025-12';
+  const esRutina = (mk) => mk >= RUTINA_DESDE;
+
+  // Puntos históricos por caja directo de la matriz (para preview sin llamada extra a la API)
   const getPuntosCaja = useCallback((caja) => {
     return meses
       .map(mk => local.celdas[`${caja}||${mk}`])
@@ -215,7 +272,6 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
       .map(cell => ({ tasa: cell.tasa, tipo: cell.tipo, mes: cell.mes, ano: cell.ano }))
       .sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes);
   }, [local.celdas, meses]);
-
   // Calcular totales por mes
   const totalesPorMes = useMemo(() => {
     const t = {};
@@ -230,43 +286,121 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
     return t;
   }, [local, meses]);
 
-  const tieneGaps = local.cajas.some(caja =>
-    meses.some(mk => local.celdas[`${caja}||${mk}`]?.tipo === 'GAP')
-  );
+  // Solo cuentan como GAP las celdas marcadas como GAP en meses de rutina
+  const gapCount = local.cajas.reduce((acc, c) =>
+    acc + meses.filter(mk => esRutina(mk) && local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length, 0);
+  const tieneGaps = gapCount > 0;
+
+  // Para NO_CAJA_DETAIL: celda GAP a nivel local solo en meses de rutina
+  const getGapCellLocal = (mk) => {
+    // En período histórico sin dato → celda vacía, no GAP
+    if (!esRutina(mk)) return null;
+    const hasData = local.cajas.some(c => {
+      const cell = local.celdas[`${c}||${mk}`];
+      return cell && cell.tipo !== 'GAP' && cell.tasa != null;
+    });
+    if (hasData) return null;
+    return {
+      key: `${local.codigo_tienda}||LOCAL||${mk}`,
+      codigo_tienda: local.codigo_tienda,
+      local: local.local,
+      competidor: local.competidor,
+      caja: 'LOCAL',
+      mes: parseInt(mk.split('-')[1]),
+      ano: parseInt(mk.split('-')[0]),
+      tipo: 'GAP',
+      tasa: null,
+    };
+  };
+
+  // Puntos para preview en modo no-desglose (todas las cajas juntas del local)
+  const puntosLocal = useMemo(() =>
+    meses.flatMap(mk =>
+      local.cajas
+        .map(c => local.celdas[`${c}||${mk}`])
+        .filter(cell => cell && cell.tipo !== 'GAP' && cell.tasa != null && cell.tasa > 0)
+        .map(cell => ({ tasa: cell.tasa, tipo: cell.tipo, mes: cell.mes, ano: cell.ano }))
+    ).sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes),
+  [local.celdas, local.cajas, meses]);
 
   return (
     <>
       {/* Fila header del local */}
       <tr
-        onClick={onToggle}
-        className="cursor-pointer border-t border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
+        onClick={esDesglose ? onToggle : undefined}
+        className={`border-t border-slate-200 dark:border-white/5 transition-colors ${esDesglose ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`}
       >
         <td className="px-4 py-3 sticky left-0 bg-white dark:bg-slate-950 z-10">
           <div className="flex items-center gap-2">
-            {expandido ? <ChevronDown size={13} className="text-accent-orange shrink-0" /> : <ChevronRight size={13} className="text-slate-400 shrink-0" />}
-            <div>
-              <p className="font-black text-[11px] text-slate-900 dark:text-white leading-tight">{local.local}</p>
+            {esDesglose
+              ? (expandido
+                  ? <ChevronDown size={13} className="text-accent-orange shrink-0" />
+                  : <ChevronRight size={13} className="text-slate-400 shrink-0" />)
+              : <span className="w-[13px] shrink-0" />
+            }
+            <div className="flex-1 min-w-0">
+              <p className="font-black text-[11px] text-slate-900 dark:text-white leading-tight truncate">{local.local}</p>
               <p className="text-[8px] text-slate-400 font-mono">{local.codigo_tienda}</p>
             </div>
+            {/* Badge % estimado */}
+            {pctEstimado > 0 && (
+              <div className="flex flex-col items-end gap-0.5 shrink-0">
+                <span className={`text-[8px] font-black tabular-nums ${
+                  pctEstimado >= 60 ? 'text-red-400' : pctEstimado >= 30 ? 'text-amber-400' : 'text-emerald-400'
+                }`}>
+                  {pctEstimado}% est.
+                </span>
+                <div className="w-14 h-1 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      pctEstimado >= 60 ? 'bg-red-400' : pctEstimado >= 30 ? 'bg-amber-400' : 'bg-emerald-400'
+                    }`}
+                    style={{ width: `${pctEstimado}%` }}
+                  />
+                </div>
+              </div>
+            )}
             {tieneGaps && (
-              <span className="ml-1 px-1.5 py-0.5 bg-red-500/15 text-red-400 border border-red-500/30 rounded text-[7px] font-black uppercase">
-                {local.cajas.reduce((acc, c) => acc + meses.filter(mk => local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length, 0)} gaps
+              <span className="ml-1 px-1.5 py-0.5 bg-red-500/15 text-red-400 border border-red-500/30 rounded text-[7px] font-black uppercase shrink-0">
+                {gapCount} gaps
               </span>
             )}
           </div>
         </td>
-        {meses.map(mk => (
-          <td key={mk} className="px-3 py-3 text-right">
-            <span className="font-black text-[12px] text-slate-700 dark:text-white/70">
-              {totalesPorMes[mk] > 0 ? fmt(totalesPorMes[mk]) : <span className="text-slate-300 dark:text-white/15">—</span>}
-            </span>
-          </td>
-        ))}
+
+        {meses.map(mk => {
+          // Para NO_CAJA_DETAIL: celda del total puede ser un GAP editable directamente
+          if (!esDesglose) {
+            const gapCell = getGapCellLocal(mk);
+            if (gapCell) {
+              return (
+                <Celda
+                  key={mk}
+                  cell={gapCell}
+                  puntos={puntosLocal}
+                  puntosLoading={false}
+                  onSave={onSave}
+                  pendingEdit={pendingEdit}
+                  onStartEdit={onStartEdit}
+                  onCancelEdit={onCancelEdit}
+                />
+              );
+            }
+          }
+          // Celda de total (para todos los competidores)
+          return (
+            <td key={mk} className="px-3 py-3 text-right">
+              <span className="font-black text-[12px] text-slate-700 dark:text-white/70">
+                {totalesPorMes[mk] > 0 ? fmt(totalesPorMes[mk]) : <span className="text-slate-300 dark:text-white/15">—</span>}
+              </span>
+            </td>
+          );
+        })}
       </tr>
 
-      {/* Filas de cajas (expandidas) */}
+      {/* Filas de cajas (solo para competidores con desglose habilitado) */}
       <AnimatePresence>
-        {expandido && local.cajas.map(caja => (
+        {esDesglose && expandido && local.cajas.map(caja => (
           <motion.tr
             key={caja}
             initial={{ opacity: 0 }}
@@ -280,7 +414,16 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
               </span>
             </td>
             {meses.map(mk => {
-              const cell = local.celdas[`${caja}||${mk}`] || {
+              const existing = local.celdas[`${caja}||${mk}`];
+              // Si no hay dato Y es período histórico → celda vacía (sin GAP)
+              if (!existing && !esRutina(mk)) {
+                return (
+                  <td key={mk} className="px-3 py-2 text-right">
+                    <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
+                  </td>
+                );
+              }
+              const cell = existing || {
                 key: `${local.codigo_tienda}||${caja}||${mk}`,
                 codigo_tienda: local.codigo_tienda,
                 local: local.local,
@@ -291,13 +434,11 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                 tipo: 'GAP',
                 tasa: null,
               };
-              // Puntos de historial de ESA caja específica para el preview
-              const puntosCaja = getPuntosCaja(caja);
               return (
                 <Celda
                   key={mk}
                   cell={cell}
-                  puntos={puntosCaja}
+                  puntos={getPuntosCaja(caja)}
                   puntosLoading={false}
                   onSave={onSave}
                   pendingEdit={pendingEdit}
@@ -314,13 +455,14 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export default function EstimacionesDashboard() {
+export default function EstimacionesDashboard({ user }) {
   const [matrix, setMatrix]       = useState([]);    // locales con celdas
   const [meses, setMeses]         = useState([]);    // ['2025-01', ...]
   const [loading, setLoading]     = useState(false);
   const [filterComp, setFilterComp] = useState('');
   const [filterSoloGaps, setFilterSoloGaps] = useState(true);
-  const [search, setSearch]       = useState('');
+  const [sortBy, setSortBy]               = useState('estimado'); // 'estimado'|'gaps'|'local'
+  const [search, setSearch]               = useState('');
   const [expandidos, setExpandidos] = useState(new Set());
   const [pendingEdit, setPendingEdit] = useState(null);   // celda actualmente en edición
   const [savedCells, setSavedCells] = useState({});       // key → {tasa, metodo} guardadas localmente
@@ -356,20 +498,47 @@ export default function EstimacionesDashboard() {
     return () => document.removeEventListener('click', handler);
   }, []);
 
-  // Locales filtrados
+  // Porcentaje estimado/manual por local (sobre el total de celdas en meses de rutina)
+  const RUTINA_DESDE_GLOBAL = '2025-12';
+  const getPctEstimado = useCallback((local) => {
+    let total = 0; let estimados = 0;
+    const rutinaMeses = meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL);
+    local.cajas.forEach(caja => {
+      rutinaMeses.forEach(mk => {
+        const cell = local.celdas[`${caja}||${mk}`];
+        if (!cell) return; // huecos vacíos no cuentan
+        total++;
+        if (['ESTIMADO','MANUAL','GAP'].includes(cell.tipo)) estimados++;
+      });
+    });
+    return total > 0 ? Math.round((estimados / total) * 100) : 0;
+  }, [meses]);
+
+  // Locales filtrados + ordenados
   const localesFiltrados = useMemo(() => {
     let d = matrix;
     if (filterSoloGaps) {
       d = d.filter(local => local.cajas.some(caja =>
-        meses.some(mk => local.celdas[`${caja}||${mk}`]?.tipo === 'GAP')
+        meses.some(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${caja}||${mk}`]?.tipo === 'GAP')
       ));
     }
     if (search) {
       const q = search.toLowerCase();
       d = d.filter(l => l.local?.toLowerCase().includes(q) || l.codigo_tienda?.toLowerCase().includes(q));
     }
+    // Ordenar
+    d = [...d];
+    if (sortBy === 'estimado') {
+      d.sort((a, b) => getPctEstimado(b) - getPctEstimado(a));
+    } else if (sortBy === 'gaps') {
+      const gapCount = (local) => local.cajas.reduce((acc, c) =>
+        acc + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length, 0);
+      d.sort((a, b) => gapCount(b) - gapCount(a));
+    } else if (sortBy === 'local') {
+      d.sort((a, b) => a.local?.localeCompare(b.local));
+    }
     return d;
-  }, [matrix, meses, filterSoloGaps, search]);
+  }, [matrix, meses, filterSoloGaps, search, sortBy, getPctEstimado]);
 
   const competidores = useMemo(() => [...new Set(matrix.map(l => l.competidor))].sort(), [matrix]);
 
@@ -407,6 +576,8 @@ export default function EstimacionesDashboard() {
           ano: cell.ano,
           trx_diarias: cell.trx_diarias,
           metodo: cell.metodo,
+          usuario:       user?.email        ?? 'dashboard',
+          usuario_nombre: user?.displayName ?? 'Dashboard',
         }),
       });
       const result = await res.json();
@@ -550,6 +721,23 @@ export default function EstimacionesDashboard() {
           <option value="">Todos los competidores</option>
           {competidores.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        {/* Sort control */}
+        <div className="flex items-center gap-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-1">
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-2">Ordenar</span>
+          {[{ id: 'estimado', label: '% estimado' }, { id: 'gaps', label: 'gaps' }, { id: 'local', label: 'az' }].map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => setSortBy(opt.id)}
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                sortBy === opt.id
+                  ? 'bg-accent-orange text-white shadow-sm'
+                  : 'text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => setFilterSoloGaps(v => !v)}
           className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
@@ -628,6 +816,7 @@ export default function EstimacionesDashboard() {
                     onSave={handleSave}
                     expandido={expandidos.has(local.codigo_tienda)}
                     onToggle={() => toggleExpandido(local.codigo_tienda)}
+                    pctEstimado={getPctEstimado(local)}
                   />
                 ))}
               </tbody>
