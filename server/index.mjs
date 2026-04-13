@@ -296,12 +296,13 @@ app.get('/api/estimation-matrix', async (req, res) => {
             // 2. Historial (hasta cutoff)
             const Q_HIST = `
                 SELECT
-                    h.competidor, h.codigo_tienda, h.local,
-                    CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'(\\d+)') AS INT64) AS STRING) AS caja,
-                    h.mes, h.ano,
-                    ROUND(h.trx_promedio, 1) AS tasa,
-                    'HISTORIAL' AS tipo,
-                    LAST_DAY(DATE(h.ano, h.mes, 1)) AS fecha_lectura
+                    h.competidor,
+                    h.codigo_tienda,
+                    h.local,
+                    CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
+                    h.mes,
+                    h.ano,
+                    ROUND(h.trx_promedio, 1) AS tasa
                 FROM \`${PROJECT_ID}.${DATASET_ID}.historial_tasas\` h
                 WHERE h.trx_promedio > 0
             `;
@@ -420,12 +421,50 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 });
             }
 
+            // ── GAP detection ──────────────────────────────────────────────────
+            // Determinar cuáles meses son "de rutina" (post-cutoff, donde se espera captura)
+            // Un local+caja tiene GAP si tiene historial pero no tiene dato REAL/ESTIMADO/MANUAL en ese mes
+            const CUTOFF_KEY = 202512; // ano*100 + mes → meses > 202511 son rutina
+
+            const mesesRutina = mesesSorted.filter(mk => {
+                const [a, m] = mk.split('-');
+                return parseInt(a) * 100 + parseInt(m) > CUTOFF_KEY;
+            });
+
+            // Para cada local, detectar GAPs por caja en meses de rutina
+            for (const local of Object.values(localMap)) {
+                for (const caja of local.cajas) {
+                    for (const mk of mesesRutina) {
+                        const ck = `${caja}||${mk}`;
+                        if (!local.celdas[ck]) {
+                            // No hay dato en este mes de rutina → GAP
+                            const [ano, mes] = mk.split('-');
+                            local.celdas[ck] = {
+                                key:          `${local.codigo_tienda}||${caja}||${mk}`,
+                                codigo_tienda: local.codigo_tienda,
+                                local:         local.local,
+                                competidor:    local.competidor,
+                                caja,
+                                mes:           parseInt(mes),
+                                ano:           parseInt(ano),
+                                mk,
+                                tasa:          null,
+                                tipo:          'GAP',
+                            };
+                        }
+                    }
+                }
+            }
+
             cacheMatrix.data = {
                 meses:   mesesSorted,
                 locales: Object.values(localMap).sort((a,b) => a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local)),
             };
             cacheMatrix.fetchedAt = new Date().toISOString();
-            console.log(`[/api/estimation-matrix] Built: ${cacheMatrix.data.locales.length} locales, ${mesesSorted.length} meses.`);
+
+            const totalGaps = Object.values(localMap).reduce((acc, l) =>
+                acc + Object.values(l.celdas).filter(c => c.tipo === 'GAP').length, 0);
+            console.log(`[/api/estimation-matrix] Built: ${cacheMatrix.data.locales.length} locales, ${mesesSorted.length} meses, ${totalGaps} GAPs detectados.`);
         }
 
         let { locales, meses: mesesAll } = cacheMatrix.data;

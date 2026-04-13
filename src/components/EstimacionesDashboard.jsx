@@ -205,28 +205,16 @@ function Celda({ cell, puntos, puntosLoading, onSave, pendingEdit, onStartEdit, 
 
 // ── Fila de un local (expandible) ─────────────────────────────────────────────
 function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle }) {
-  const [puntos, setPuntos]   = useState({});   // caja+mes+ano → []
-  const [puntosLoad, setPuntosLoad] = useState({});
 
-  const fetchPuntos = useCallback(async (cell) => {
-    const k = `${cell.caja}-${cell.mes}-${cell.ano}`;
-    if (puntos[k] || puntosLoad[k]) return;
-    setPuntosLoad(p => ({ ...p, [k]: true }));
-    try {
-      const url = `${API}/api/gap-lookup?codigo_tienda=${encodeURIComponent(local.codigo_tienda)}&mes=${cell.mes}&ano=${cell.ano}`;
-      const d = await fetch(url).then(r => r.json());
-      setPuntos(p => ({ ...p, [k]: d.puntos || [] }));
-    } catch(e) {
-      console.error('gap-lookup error', e);
-    } finally {
-      setPuntosLoad(p => ({ ...p, [k]: false }));
-    }
-  }, [local.codigo_tienda, puntos, puntosLoad]);
-
-  const handleStartEdit = (cell) => {
-    onStartEdit(cell);
-    fetchPuntos(cell);
-  };
+  // Derivar puntos históricos por caja directo de la matriz (sin llamada extra a la API)
+  // Así el preview es siempre por CAJA específica, no por el local completo
+  const getPuntosCaja = useCallback((caja) => {
+    return meses
+      .map(mk => local.celdas[`${caja}||${mk}`])
+      .filter(cell => cell && cell.tipo !== 'GAP' && cell.tasa != null && cell.tasa > 0)
+      .map(cell => ({ tasa: cell.tasa, tipo: cell.tipo, mes: cell.mes, ano: cell.ano }))
+      .sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes);
+  }, [local.celdas, meses]);
 
   // Calcular totales por mes
   const totalesPorMes = useMemo(() => {
@@ -303,16 +291,17 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                 tipo: 'GAP',
                 tasa: null,
               };
-              const pKey = `${caja}-${cell.mes}-${cell.ano}`;
+              // Puntos de historial de ESA caja específica para el preview
+              const puntosCaja = getPuntosCaja(caja);
               return (
                 <Celda
                   key={mk}
                   cell={cell}
-                  puntos={puntos[pKey]}
-                  puntosLoading={puntosLoad[pKey]}
+                  puntos={puntosCaja}
+                  puntosLoading={false}
                   onSave={onSave}
                   pendingEdit={pendingEdit}
-                  onStartEdit={handleStartEdit}
+                  onStartEdit={onStartEdit}
                   onCancelEdit={onCancelEdit}
                 />
               );
