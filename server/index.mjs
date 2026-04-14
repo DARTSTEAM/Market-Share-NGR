@@ -28,6 +28,78 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOG
 
 const bigquery = new BigQuery(bqOptions);
 
+// ── Activity Log ────────────────────────────────────────────────────────────
+let activityLogTableReady = false;
+async function ensureActivityLogTable() {
+    if (activityLogTableReady) return;
+    const Q = `
+        CREATE TABLE IF NOT EXISTS \`${PROJECT_ID}.${DATASET_ID}.activity_log\` (
+            id             STRING,
+            evento         STRING,
+            descripcion    STRING,
+            usuario        STRING,
+            usuario_nombre STRING,
+            metadata       STRING,
+            timestamp      TIMESTAMP
+        )
+    `;
+    const [job] = await bigquery.createQueryJob({ query: Q });
+    await job.getQueryResults();
+    activityLogTableReady = true;
+}
+
+async function appendLog(evento, descripcion, usuario, usuario_nombre, metadata = {}) {
+    try {
+        await ensureActivityLogTable();
+        const INSERT_Q = `
+            INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.activity_log\`
+            (id, evento, descripcion, usuario, usuario_nombre, metadata, timestamp)
+            VALUES (GENERATE_UUID(), @evento, @descripcion, @usuario, @usuario_nombre, @metadata, CURRENT_TIMESTAMP())
+        `;
+        const [job] = await bigquery.createQueryJob({
+            query: INSERT_Q,
+            params: {
+                evento,
+                descripcion,
+                usuario:        usuario || 'desconocido',
+                usuario_nombre: usuario_nombre || usuario || 'desconocido',
+                metadata:       JSON.stringify(metadata),
+            },
+        });
+        await job.getQueryResults();
+    } catch(e) {
+        console.warn('[appendLog] Failed:', e.message);
+    }
+}
+
+// GET /api/activity-log
+app.get('/api/activity-log', async (req, res) => {
+    const limit = Math.min(parseInt(req.query.limit || '300'), 500);
+    try {
+        await ensureActivityLogTable();
+        const [rows] = await bigquery.query({
+            query: `SELECT id, evento, descripcion, usuario, usuario_nombre, metadata, timestamp
+                    FROM \`${PROJECT_ID}.${DATASET_ID}.activity_log\`
+                    ORDER BY timestamp DESC
+                    LIMIT @limit`,
+            params: { limit },
+            types: { limit: 'INT64' },
+        });
+        res.json({ logs: rows });
+    } catch(err) {
+        console.error('[/api/activity-log GET] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/activity-log  (client-side events: login, etc.)
+app.post('/api/activity-log', async (req, res) => {
+    const { evento, descripcion, usuario, usuario_nombre, metadata } = req.body;
+    if (!evento) return res.status(400).json({ error: 'evento es requerido' });
+    await appendLog(evento, descripcion || '', usuario, usuario_nombre, metadata || {});
+    res.json({ success: true });
+});
+
 // ── In-memory cache ──────────────────────────────────────────────────────────
 let cache = {
     data: null,
@@ -201,7 +273,7 @@ app.post('/api/refresh', async (req, res) => {
 
 // POST /api/update-ticket — BigQuery DML update
 app.post('/api/update-ticket', async (req, res) => {
-    const { filename, ticket, importe, fecha, caja, local, competidor, codigoTienda } = req.body;
+    const { filename, ticket, importe, fecha, caja, local, competidor, codigoTienda, usuario, usuario_nombre } = req.body;
 
     if (!filename) return res.status(400).json({ error: 'Filename is required' });
 
@@ -248,6 +320,7 @@ app.post('/api/update-ticket', async (req, res) => {
         // Invalidate cache so next /api/data call returns fresh data
         cache.fetchedAt = null;
         ts('DONE — sending response');
+        appendLog('TICKET_CORREGIDO', `Ticket corregido: ${local || codigoTienda} · Caja ${caja} · $${importe}`, usuario, usuario_nombre, { filename, ticket, importe, caja, local, competidor, codigoTienda }).catch(() => {});
         res.json({ success: true, message: 'Ticket updated in BigQuery' });
     } catch (err) {
         console.error('[/api/update-ticket] Error:', err.message);
@@ -423,16 +496,83 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 });
             }
 
-            // ── GAP detection ──────────────────────────────────────────────────
-            // Meses de rutina: noviembre 2025 en adelante (sin incluir noviembre en el histórico)
+            // ── Meses de rutina ──────────────────────────────────────────────────────
             const CUTOFF_KEY = 202511; // ano*100 + mes > 202511 → desde Dic 2025 inclusive
-
             const mesesRutina = mesesSorted.filter(mk => {
                 const [a, m] = mk.split('-');
                 return parseInt(a) * 100 + parseInt(m) > CUTOFF_KEY;
             });
 
-            // Para cada local, detectar GAPs por caja en meses de rutina
+            // ── Inject cajas from cajas_config that have no data yet ──────────────────
+            // Una caja recién registrada en cajas_config no tiene datos aún → la mostramos como GAP
+            try {
+                const [cajasRows] = await bigquery.query({
+                    query: `SELECT codigo_tienda, caja, local, competidor, status
+                            FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
+                            WHERE status != 'DISCONTINUADA'`,
+                });
+                for (const cfg of cajasRows) {
+                    const ct   = cfg.codigo_tienda;
+                    const caja = String(cfg.caja);
+                    if (localMap[ct]) {
+                        const cajaSet = new Set(localMap[ct].cajas);
+                        if (!cajaSet.has(caja)) {
+                            localMap[ct].cajas.push(caja);
+                            for (const mk of mesesRutina) {
+                                const ck = `${caja}||${mk}`;
+                                if (!localMap[ct].celdas[ck]) {
+                                    const [ano, mes] = mk.split('-');
+                                    localMap[ct].celdas[ck] = {
+                                        key:           `${ct}||${caja}||${mk}`,
+                                        codigo_tienda: ct,
+                                        local:         localMap[ct].local,
+                                        competidor:    localMap[ct].competidor,
+                                        caja,
+                                        mes:           parseInt(mes),
+                                        ano:           parseInt(ano),
+                                        mk,
+                                        tasa:          null,
+                                        tipo:          'GAP',
+                                    };
+                                }
+                            }
+                        }
+                    } else if (cfg.local && cfg.competidor) {
+                        localMap[ct] = {
+                            codigo_tienda: ct,
+                            local:         cfg.local,
+                            competidor:    cfg.competidor,
+                            cajas:         [caja],
+                            celdas:        {},
+                        };
+                        for (const mk of mesesRutina) {
+                            const [ano, mes] = mk.split('-');
+                            localMap[ct].celdas[`${caja}||${mk}`] = {
+                                key:           `${ct}||${caja}||${mk}`,
+                                codigo_tienda: ct,
+                                local:         cfg.local,
+                                competidor:    cfg.competidor,
+                                caja,
+                                mes:           parseInt(mes),
+                                ano:           parseInt(ano),
+                                mk,
+                                tasa:          null,
+                                tipo:          'GAP',
+                            };
+                        }
+                    }
+                }
+                // Re-sort cajas after injection
+                for (const local of Object.values(localMap)) {
+                    if (Array.isArray(local.cajas)) {
+                        local.cajas = [...new Set(local.cajas)].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+                    }
+                }
+            } catch(e) {
+                console.warn('[estimation-matrix] cajas_config inject failed:', e.message.slice(0, 100));
+            }
+
+            // ── GAP detection: para cajas ya existentes sin datos en meses de rutina ──
             for (const local of Object.values(localMap)) {
                 for (const caja of local.cajas) {
                     for (const mk of mesesRutina) {
@@ -570,6 +710,12 @@ app.post('/api/save-estimation', async (req, res) => {
         // Invalidate matrix cache so next fetch picks up the manual
         cacheMatrix.fetchedAt = null;
 
+        const aprobadoLabel = aprobadoBool ? 'APROBADA' : 'PENDIENTE';
+        appendLog(
+            aprobadoBool ? 'ESTIMACION_APROBADA' : 'ESTIMACION_GUARDADA',
+            `Estimación ${aprobadoLabel}: ${local || codigo_tienda} · Caja ${caja} · ${mes}/${ano} → ${trx_diarias} tx/día (${metodo || 'manual'})`,
+            usuario, usuario_nombre, { codigo_tienda, caja, mes, ano, trx_diarias, metodo, aprobado: aprobadoBool }
+        ).catch(() => {});
         console.log(`[/api/save-estimation] Saved: ${codigo_tienda} caja=${caja} ${mes}/${ano} → ${trx_diarias} tx/día (${metodo}) by ${usuario || 'dashboard'}`);
         res.json({ success: true });
     } catch (err) {
@@ -793,10 +939,21 @@ const CAJAS_CONFIG_ENSURE = `
     )
 `;
 
-// Ensure table at startup (best-effort)
+// Ensure table + manual column at startup (best-effort)
 bigquery.createQueryJob({ query: CAJAS_CONFIG_ENSURE })
     .then(([j]) => j.getQueryResults())
-    .catch(e => console.warn('[startup] cajas_config table creation:', e.message.slice(0, 80)));
+    .then(() => bigquery.createQueryJob({
+        query: `ALTER TABLE \`${PROJECT_ID}.${DATASET_ID}.cajas_config\` ADD COLUMN IF NOT EXISTS manual BOOL`
+    }))
+    .then(([j]) => j.getQueryResults())
+    // Fix: silenced cajas (via matrix bell) should always be manual=FALSE
+    .then(() => bigquery.createQueryJob({
+        query: `UPDATE \`${PROJECT_ID}.${DATASET_ID}.cajas_config\` SET manual = FALSE WHERE status = 'SIN_ALARMAS' AND (manual IS TRUE OR manual IS NULL)`
+    }))
+    .then(([j]) => j.getQueryResults())
+    // Also fix NULL ACTIVA rows that were not manually added (they have no transaction data to identify, so leave for future)
+    .then(() => { cajasConfigCache.fetchedAt = null; })
+    .catch(e => console.warn('[startup] cajas_config setup:', e.message.slice(0, 80)));
 
 // Cache for cajas config (short TTL)
 let cajasConfigCache = { data: null, fetchedAt: null };
@@ -806,7 +963,7 @@ async function getCajasConfig(force = false) {
     const age = cajasConfigCache.fetchedAt ? Date.now() - new Date(cajasConfigCache.fetchedAt).getTime() : Infinity;
     if (force || age > CAJAS_TTL || !cajasConfigCache.data) {
         const [job] = await bigquery.createQueryJob({
-            query: `SELECT codigo_tienda, caja, local, competidor, status, notas, usuario, updated_at FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\` ORDER BY competidor, local, caja`
+            query: `SELECT codigo_tienda, caja, local, competidor, status, notas, usuario, IFNULL(manual, false) AS manual, updated_at FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\` ORDER BY competidor, local, caja`
         });
         const [rows] = await job.getQueryResults();
         cajasConfigCache.data = rows.map(r => ({
@@ -817,6 +974,7 @@ async function getCajasConfig(force = false) {
             status:        r.status || 'ACTIVA',
             notas:         r.notas || '',
             usuario:       r.usuario || '',
+            manual:        r.manual === true,
             updated_at:    r.updated_at?.value || '',
         }));
         cajasConfigCache.fetchedAt = new Date().toISOString();
@@ -837,7 +995,7 @@ app.get('/api/cajas-config', async (req, res) => {
 
 // POST /api/cajas-config — upsert status for a caja
 app.post('/api/cajas-config', async (req, res) => {
-    const { codigo_tienda, caja, local, competidor, status, notas, usuario } = req.body;
+    const { codigo_tienda, caja, local, competidor, status, notas, usuario, manual } = req.body;
     if (!codigo_tienda || !caja || !status) {
         return res.status(400).json({ error: 'codigo_tienda, caja, status son requeridos' });
     }
@@ -864,10 +1022,11 @@ app.post('/api/cajas-config', async (req, res) => {
                 local      = S.local,
                 competidor = S.competidor,
                 usuario    = S.usuario,
+                manual     = ${manual !== undefined ? String(Boolean(manual)) : 'T.manual'},
                 updated_at = CURRENT_TIMESTAMP()
             WHEN NOT MATCHED THEN INSERT
-                (codigo_tienda, caja, local, competidor, status, notas, usuario, updated_at)
-                VALUES (S.codigo_tienda, S.caja, S.local, S.competidor, S.status, S.notas, S.usuario, CURRENT_TIMESTAMP())
+                (codigo_tienda, caja, local, competidor, status, notas, usuario, manual, updated_at)
+                VALUES (S.codigo_tienda, S.caja, S.local, S.competidor, S.status, S.notas, S.usuario, FALSE, CURRENT_TIMESTAMP())
         `;
         const [job] = await bigquery.createQueryJob({
             query: MERGE_Q,
@@ -880,6 +1039,9 @@ app.post('/api/cajas-config', async (req, res) => {
         await job.getQueryResults();
         cajasConfigCache.fetchedAt = null; // invalidate
         cache.fetchedAt = null;            // invalidate main cache so alarms update
+        const cajaLabel = caja === '__LOCAL__' ? 'local completo' : `caja ${caja}`;
+        const statusLabel = status === 'SIN_ALARMAS' ? 'silenciada' : status === 'ACTIVA' ? 'reactivada' : status;
+        appendLog('CAJA_CONFIGURADA', `Alarma ${statusLabel}: ${local || codigo_tienda} · ${cajaLabel}`, usuario, '', { codigo_tienda, caja, local, competidor, status }).catch(() => {});
         console.log(`[/api/cajas-config] Updated: ${codigo_tienda} caja=${caja} → ${status}`);
         res.json({ success: true });
     } catch (err) {
@@ -909,8 +1071,8 @@ app.post('/api/add-caja', async (req, res) => {
 
         const INSERT_Q = `
             INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
-                (codigo_tienda, caja, local, competidor, status, notas, usuario, updated_at)
-            VALUES (@codigo_tienda, @caja, @local, @competidor, 'ACTIVA', @notas, @usuario, CURRENT_TIMESTAMP())
+                (codigo_tienda, caja, local, competidor, status, notas, usuario, manual, updated_at)
+            VALUES (@codigo_tienda, @caja, @local, @competidor, 'ACTIVA', @notas, @usuario, TRUE, CURRENT_TIMESTAMP())
         `;
         const [job] = await bigquery.createQueryJob({
             query: INSERT_Q,
@@ -922,6 +1084,8 @@ app.post('/api/add-caja', async (req, res) => {
         });
         await job.getQueryResults();
         cajasConfigCache.fetchedAt = null;
+        cacheMatrix.fetchedAt = null; // force matrix rebuild so new caja appears immediately
+        appendLog('CAJA_AGREGADA', `Caja agregada: ${local || codigo_tienda} · Caja ${caja}`, usuario, '', { codigo_tienda, caja, local, competidor }).catch(() => {});
         console.log(`[/api/add-caja] Added: ${codigo_tienda} caja=${caja} (${local})`);
         res.json({ success: true });
     } catch (err) {
@@ -930,7 +1094,33 @@ app.post('/api/add-caja', async (req, res) => {
     }
 });
 
-// ── Alarmas revisadas ────────────────────────────────────────────────────────
+// DELETE /api/cajas-config — permanently remove a caja registration
+app.delete('/api/cajas-config', async (req, res) => {
+    const { codigo_tienda, caja, usuario } = req.body;
+    if (!codigo_tienda || !caja) {
+        return res.status(400).json({ error: 'codigo_tienda y caja son requeridos' });
+    }
+    try {
+        const DEL_Q = `
+            DELETE FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
+            WHERE codigo_tienda = @codigo_tienda AND caja = @caja
+        `;
+        const [job] = await bigquery.createQueryJob({
+            query: DEL_Q,
+            params: { codigo_tienda, caja: String(caja) },
+        });
+        await job.getQueryResults();
+        cajasConfigCache.fetchedAt = null;
+        cacheMatrix.fetchedAt = null;
+        appendLog('CAJA_ELIMINADA', `Caja eliminada: ${codigo_tienda} · Caja ${caja}`, usuario, '', { codigo_tienda, caja }).catch(() => {});
+        console.log(`[/api/cajas-config DELETE] Removed: ${codigo_tienda} caja=${caja}`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[/api/cajas-config DELETE] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 let revisadasCache = { data: null, fetchedAt: null };
 const REVISADAS_TTL = 2 * 60 * 1000; // 2 min
 
@@ -1022,7 +1212,9 @@ app.post('/api/alarmas-revisadas', async (req, res) => {
             });
             await job.getQueryResults();
         }
-        revisadasCache.fetchedAt = null; // invalidate
+        revisadasCache.fetchedAt = null;
+        const revLabel = accion === 'QUITAR' ? 'Revisión quitada' : 'Alarma marcada revisada';
+        appendLog('ALARMA_REVISADA', `${revLabel}: ${codigo_tienda} · Caja ${caja} · ${mes}/${ano}`, revisado_por, '', { codigo_tienda, caja, mes, ano, accion }).catch(() => {});
         console.log(`[/api/alarmas-revisadas] ${accion || 'MARCAR'}: ${codigo_tienda} caja=${caja} ${mes}/${ano}`);
         res.json({ success: true });
     } catch (err) {

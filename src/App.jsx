@@ -7,6 +7,7 @@ import ComparativosDashboard from './components/ComparativosDashboard';
 import TicketsDashboard from './components/TicketsDashboard';
 import AlarmasDashboard from './components/AlarmasDashboard';
 import EstimacionesDashboard from './components/EstimacionesDashboard';
+import ActivityLogDashboard from './components/ActivityLogDashboard';
 import ClientesDashboard from './components/ClientesDashboard';
 import PuntosCompartidosDashboard from './components/PuntosCompartidosDashboard';
 import CustomSelect from './components/common/CustomSelect';
@@ -483,13 +484,33 @@ export default function App({ user, onSignOut }) {
   const [tickets, setTickets] = useState([]);
   const [cajasConfig, setCajasConfig] = useState([]);        // [{codigo_tienda, caja, status, ...}]
   const [alarmasRevisadas, setAlarmasRevisadas] = useState([]); // [{codigo_tienda, caja, mes, ano, ...}]
-  // Initial data fetch to sync with BigQuery on load
+
+  // Log de login (se ejecuta una vez cuando el usuario está disponible)
+  const loginLoggedRef = useRef(false);
+  useEffect(() => {
+    if (user && !loginLoggedRef.current) {
+      loginLoggedRef.current = true;
+      fetch(`${API_BASE_URL}/api/activity-log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evento:         'LOGIN',
+          descripcion:    `Ingresó al dashboard: ${user.displayName || user.email}`,
+          usuario:        user.email,
+          usuario_nombre: user.displayName || user.email,
+          metadata:       {},
+        }),
+      }).catch(() => {});
+    }
+  }, [user]);
+
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [dataRes, cajasRes] = await Promise.all([
+        const [dataRes, cajasRes, revisadasRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/data`),
           fetch(`${API_BASE_URL}/api/cajas-config`).catch(() => null),
+          fetch(`${API_BASE_URL}/api/alarmas-revisadas`).catch(() => null),
         ]);
         if (dataRes.ok) {
           const data = await dataRes.json();
@@ -499,6 +520,10 @@ export default function App({ user, onSignOut }) {
         if (cajasRes?.ok) {
           const cajasData = await cajasRes.json();
           if (cajasData.cajas) setCajasConfig(cajasData.cajas);
+        }
+        if (revisadasRes?.ok) {
+          const rev = await revisadasRes.json();
+          if (rev.revisadas) setAlarmasRevisadas(rev.revisadas);
         }
       } catch (error) {
         console.error('Error fetching initial data:', error);
@@ -1343,11 +1368,14 @@ export default function App({ user, onSignOut }) {
           {/* Integrated Navbar */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-2">
             <div className="flex gap-2 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
-              {[
-                { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
-                { id: 'tickets', icon: Ticket, label: 'Tickets' },
-                { id: 'clientes', icon: Users, label: 'Clientes' },
-              ].map(cat => (
+              {
+                [
+                  { id: 'marketshare',  icon: PieChartIcon,   label: 'Market Share' },
+                  { id: 'tickets',      icon: Ticket,         label: 'Tickets' },
+                  { id: 'clientes',     icon: Users,          label: 'Clientes' },
+                  { id: 'estimaciones', icon: ClipboardEdit,  label: 'Estimaciones' },
+                  { id: 'actividad',    icon: Activity,       label: 'Actividad' },
+                ].map(cat => (
                 <button
                   key={cat.id}
                   onClick={() => {
@@ -1393,9 +1421,8 @@ export default function App({ user, onSignOut }) {
                   { id: 'comparativos', icon: GitCompare, label: 'Comparativos' },
                   { id: 'puntos_compartidos', icon: MapPin, label: 'Puntos Compartidos' },
                 ] : [
-                  { id: 'tickets',  icon: Ticket,      label: 'Tickets' },
-                  { id: 'alarmas',  icon: ShieldAlert,  label: 'Alarmas' },
-                  { id: 'estimaciones', icon: ClipboardEdit, label: 'Estimaciones' },
+                  { id: 'tickets', icon: Ticket,      label: 'Tickets' },
+                  { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' },
                 ]).map(sub => (
                   <button
                     key={sub.id}
@@ -1413,7 +1440,18 @@ export default function App({ user, onSignOut }) {
 
 
         <AnimatePresence mode="wait">
-          {activeCategory === 'clientes' ? (
+          {activeCategory === 'estimaciones' ? (
+            <EstimacionesDashboard
+              key="estimaciones"
+              user={user}
+              cajasConfig={cajasConfig}
+              onCajasConfigChange={setCajasConfig}
+              alarmasRevisadas={alarmasRevisadas}
+              onAlarmasRevisadasChange={setAlarmasRevisadas}
+            />
+          ) : activeCategory === 'actividad' ? (
+            <ActivityLogDashboard key="actividad" user={user} />
+          ) : activeCategory === 'clientes' ? (
             <ClientesDashboard
               key="clientes"
               records={records}
@@ -1474,13 +1512,6 @@ export default function App({ user, onSignOut }) {
                 onCajasConfigChange={setCajasConfig}
                 onUpdateTicket={handleUpdateTicket}
                 isRefreshing={isRefreshing}
-              />
-            ) : activeSubTab === 'estimaciones' ? (
-              <EstimacionesDashboard
-                key="estimaciones"
-                user={user}
-                cajasConfig={cajasConfig}
-                onCajasConfigChange={setCajasConfig}
               />
             ) : (
               <TicketsDashboard

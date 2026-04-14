@@ -4,7 +4,7 @@ import {
   ClipboardEdit, RefreshCw, AlertTriangle, CheckCircle2,
   Loader2, ChevronDown, ChevronRight, Search,
   TrendingDown, Wifi, Database, Info, X, Check, Pencil,
-  ShieldCheck, Clock, Settings2, Plus, Power, BellOff, Store, Bell
+  ShieldCheck, Clock, Settings2, Plus, Power, BellOff, Store, Bell, Trash2
 } from 'lucide-react';
 
 const API = window.location.hostname === 'localhost'
@@ -64,6 +64,54 @@ const METODOS = [
   { key: 'IGUAL_ANTERIOR', label: 'Igual al anterior',  desc: 'Mismo valor que el mes inmediatamente anterior',      calc: calcularIgualAnterior },
   { key: 'PROM_PONDERADO', label: 'Prom. ponderado',    desc: 'Más peso a los meses recientes (decay exponencial)',  calc: calcularPromPonderado },
 ];
+
+// ── Botón desregistrar (quita manual=false, saca del panel sin borrar de BQ) ─
+function DesregistrarButton({ cfg, user, onCajasConfigChange, notify }) {
+  const [loading, setLoading] = useState(false);
+  const handle = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/cajas-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo_tienda: cfg.codigo_tienda,
+          caja: String(cfg.caja),
+          local: cfg.local,
+          competidor: cfg.competidor,
+          status: 'ACTIVA',
+          usuario: user?.email || 'dashboard',
+          manual: false,
+        }),
+      });
+      const r = await res.json();
+      if (!r.success && r.error) throw new Error(r.error);
+      onCajasConfigChange?.(prev =>
+        prev.map(c =>
+          c.codigo_tienda === cfg.codigo_tienda && c.caja === cfg.caja
+            ? { ...c, manual: false }
+            : c
+        )
+      );
+      notify('success', `Caja ${cfg.caja} quitada del panel`);
+    } catch(e) {
+      notify('error', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <Tip label="Quitar del panel · No es manual">
+      <button
+        onClick={handle}
+        disabled={loading}
+        className="p-1 rounded-lg text-slate-300 dark:text-white/20 hover:text-violet-500 hover:bg-violet-50 dark:hover:bg-violet-500/10 transition-colors disabled:opacity-50"
+      >
+        {loading ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+      </button>
+    </Tip>
+  );
+}
 
 // ── Panel de edición para un GAP ──────────────────────────────────────────────
 function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
@@ -228,7 +276,7 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
 
 
 // ── Celda individual ──────────────────────────────────────────────────────────
-function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit }) {
+function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, isRevisada, onMarkRevisada }) {
   const isEditing = pendingEdit?.key === cell.key;
 
   if (cell.tipo === 'GAP') {
@@ -275,11 +323,17 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit })
 
   // APROBADO, REAL, HISTORIAL: mostrar con su color
   const cfg = TIPO_CONFIG[cell.tipo] || TIPO_CONFIG.REAL;
+
+  // ── Alarma por caída + estado revisado ──
   const esCaidaAlarm = cell.caida_pct != null && cell.caida_pct <= -20;
+  const revisada = isRevisada && esCaidaAlarm;
+
   return (
     <td
       className={`px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-colors ${
-        esCaidaAlarm ? 'bg-red-500/5' : 'hover:bg-slate-100/60 dark:hover:bg-white/[0.04]'
+        revisada         ? 'bg-emerald-500/5    hover:bg-emerald-500/10' :
+        esCaidaAlarm     ? 'bg-red-500/5'       :
+                           'hover:bg-slate-100/60 dark:hover:bg-white/[0.04]'
       }`}
       onClick={e => { e.stopPropagation(); onStartEdit(cell); }}
     >
@@ -289,8 +343,11 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit })
         </div>
       )}
       <div className="flex items-center justify-end gap-1.5">
-        {esCaidaAlarm && <AlertTriangle size={9} className="text-red-400 shrink-0" />}
-        <span className={`font-mono font-black text-[12px] ${esCaidaAlarm ? 'text-red-400' : 'text-slate-800 dark:text-white/90'}`}>
+        {esCaidaAlarm && !revisada && <AlertTriangle size={9} className="text-red-400 shrink-0" />}
+        {revisada && <Check size={9} className="text-emerald-400 shrink-0" />}
+        <span className={`font-mono font-black text-[12px] ${
+          revisada ? 'text-emerald-400' : esCaidaAlarm ? 'text-red-400' : 'text-slate-800 dark:text-white/90'
+        }`}>
           {fmt(cell.tasa)}
         </span>
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
@@ -298,8 +355,26 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit })
           <Pencil size={7} className="opacity-0 group-hover:opacity-30 text-slate-400 transition-opacity shrink-0 -mr-0.5" />
         }
       </div>
+      {/* Porcentaje de caída + check de revisión */}
       {esCaidaAlarm && (
-        <div className="text-[8px] text-red-400 font-black text-right">{cell.caida_pct?.toFixed(0)}%</div>
+        <div className="flex items-center justify-end gap-1">
+          <span className={`text-[8px] font-black ${ revisada ? 'text-emerald-400/70' : 'text-red-400'}`}>
+            {cell.caida_pct?.toFixed(0)}%
+          </span>
+          {onMarkRevisada && (
+            <button
+              title={revisada ? 'Click para quitar revisión' : 'Marcar como revisado y OK'}
+              onClick={e => { e.stopPropagation(); onMarkRevisada(cell, !revisada); }}
+              className={`transition-all rounded-full p-0.5 ${
+                revisada
+                  ? 'opacity-100 text-emerald-400 hover:text-red-400'
+                  : 'opacity-0 group-hover:opacity-80 text-slate-400 hover:text-emerald-500'
+              }`}
+            >
+              <Check size={9} strokeWidth={3} />
+            </button>
+          )}
+        </div>
       )}
     </td>
   );
@@ -308,8 +383,85 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit })
 // Competidores que NO necesitan desglose por caja
 const NO_CAJA_DETAIL = new Set(['DOMINOS', "DOMINO'S", 'LITTLE CAESARS', "LITTLE CAESAR'S"]);
 
-// ── Fila de un local ──────────────────────────────────────────────────────────
-function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal }) {
+// ── Tooltip ─────────────────────────────────────────────────────────────────
+function Tip({ label, children, placement = 'top' }) {
+  const [show, setShow] = useState(false);
+  const posClass = placement === 'bottom'
+    ? 'top-full mt-1.5 left-1/2 -translate-x-1/2'
+    : 'bottom-full mb-1.5 left-1/2 -translate-x-1/2';
+  return (
+    <div className="relative inline-flex" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      {children}
+      {show && (
+        <div className={`pointer-events-none absolute z-50 ${posClass} whitespace-nowrap px-2 py-1 rounded-lg bg-slate-800 dark:bg-slate-700 text-white text-[8px] font-bold shadow-xl`}>
+          {label}
+          <span className={`absolute left-1/2 -translate-x-1/2 ${placement === 'bottom' ? '-top-1 border-b-slate-800 dark:border-b-slate-700 border-x-transparent border-x-4 border-b-4' : '-bottom-1 border-t-slate-800 dark:border-t-slate-700 border-x-transparent border-x-4 border-t-4'} w-0 h-0 border-solid`} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DeleteCajaButton({ cfg, user, onDeleted, onError }) {
+  const [confirm, setConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleDelete = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/cajas-config`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo_tienda: cfg.codigo_tienda,
+          caja:          String(cfg.caja),
+          usuario:       user?.email || 'dashboard',
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
+      onDeleted?.();
+    } catch(e) {
+      onError?.(e.message);
+    } finally {
+      setLoading(false);
+      setConfirm(false);
+    }
+  };
+
+  if (confirm) {
+    return (
+      <div className="flex items-center gap-1 shrink-0">
+        <span className="text-[8px] font-black text-red-500 whitespace-nowrap">¿Eliminar?</span>
+        <button
+          onClick={handleDelete}
+          disabled={loading}
+          className="px-1.5 py-0.5 bg-red-500 text-white rounded text-[8px] font-black disabled:opacity-50"
+        >
+          {loading ? '…' : 'Sí'}
+        </button>
+        <button
+          onClick={() => setConfirm(false)}
+          className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/50 rounded text-[8px] font-black"
+        >
+          No
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      title="Eliminar caja"
+      onClick={() => setConfirm(true)}
+      className="shrink-0 p-1.5 rounded-lg text-slate-300 dark:text-white/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+    >
+      <Trash2 size={12} />
+    </button>
+  );
+}
+
+function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal, revisadasMap = {}, onMarkRevisada }) {
   const esDesglose = !NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
   const RUTINA_DESDE = '2025-12';
   const esRutina = (mk) => mk >= RUTINA_DESDE;
@@ -428,17 +580,18 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
             )}
             {/* Toggle silenciar local entero — al extremo derecho */}
             {onToggleLocal && (
-              <button
-                title={isLocalSilenciado ? 'Local silenciado — click para reactivar' : 'Silenciar todas las alarmas de este local'}
-                onClick={e => { e.stopPropagation(); onToggleLocal(local, isLocalSilenciado ? 'ACTIVA' : 'SIN_ALARMAS'); }}
-                className={`ml-auto flex items-center gap-1 transition-all shrink-0 ${
-                  isLocalSilenciado
-                    ? 'opacity-100 text-amber-400'
-                    : 'opacity-0 group-hover/localrow:opacity-60 text-slate-400 hover:text-amber-400'
-                }`}
-              >
-                {isLocalSilenciado ? <BellOff size={12} /> : <Bell size={12} />}
-              </button>
+              <Tip label={isLocalSilenciado ? 'Reactivar alarmas del local' : 'Silenciar todas las alarmas del local'} placement="top">
+                <button
+                  onClick={e => { e.stopPropagation(); onToggleLocal(local, isLocalSilenciado ? 'ACTIVA' : 'SIN_ALARMAS'); }}
+                  className={`ml-auto flex items-center gap-1 transition-all shrink-0 ${
+                    isLocalSilenciado
+                      ? 'opacity-100 text-amber-400'
+                      : 'opacity-0 group-hover/localrow:opacity-60 text-slate-400 hover:text-amber-400'
+                  }`}
+                >
+                  {isLocalSilenciado ? <BellOff size={12} /> : <Bell size={12} />}
+                </button>
+              </Tip>
             )}
           </div>
         </td>
@@ -456,6 +609,8 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                   pendingEdit={pendingEdit}
                   onStartEdit={onStartEdit}
                   onCancelEdit={onCancelEdit}
+                  isRevisada={!!revisadasMap[`${editCell.codigo_tienda}||${editCell.caja}||${editCell.mes}||${editCell.ano}`]}
+                  onMarkRevisada={onMarkRevisada}
                 />
               );
             }
@@ -496,17 +651,18 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                   const ck = `${local.codigo_tienda}||${caja}`;
                   const silenciada = (cajaStatusMap[ck] || 'ACTIVA') === 'SIN_ALARMAS';
                   return (
-                    <button
-                      title={silenciada ? 'Alarmas silenciadas — click para reactivar' : 'Click para silenciar alarmas de esta caja'}
-                      onClick={e => { e.stopPropagation(); onToggleCaja(local, caja, silenciada ? 'ACTIVA' : 'SIN_ALARMAS'); }}
-                      className={`flex items-center gap-1 transition-all shrink-0 ${
-                        silenciada
-                          ? 'opacity-100 text-amber-400'
-                          : 'opacity-0 group-hover/cajacell:opacity-60 text-slate-400 hover:text-amber-400'
-                      }`}
-                    >
-                      {silenciada ? <BellOff size={11} /> : <Bell size={11} />}
-                    </button>
+                    <Tip label={silenciada ? 'Reactivar alarmas de esta caja' : 'Silenciar alarmas de esta caja'} placement="top">
+                      <button
+                        onClick={e => { e.stopPropagation(); onToggleCaja(local, caja, silenciada ? 'ACTIVA' : 'SIN_ALARMAS'); }}
+                        className={`flex items-center gap-1 transition-all shrink-0 ${
+                          silenciada
+                            ? 'opacity-100 text-amber-400'
+                            : 'opacity-0 group-hover/cajacell:opacity-60 text-slate-400 hover:text-amber-400'
+                        }`}
+                      >
+                        {silenciada ? <BellOff size={11} /> : <Bell size={11} />}
+                      </button>
+                    </Tip>
                   );
                 })()}
               </div>
@@ -558,6 +714,8 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                   pendingEdit={pendingEdit}
                   onStartEdit={onStartEdit}
                   onCancelEdit={onCancelEdit}
+                  isRevisada={!!revisadasMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
+                  onMarkRevisada={onMarkRevisada}
                 />
               );
             })}
@@ -569,7 +727,7 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────
-export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasConfigChange }) {
+export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasConfigChange, alarmasRevisadas = [], onAlarmasRevisadasChange }) {
   const [matrix, setMatrix]                 = useState([]);
   const [meses, setMeses]                   = useState([]);
   const [loading, setLoading]               = useState(false);
@@ -666,6 +824,13 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
       acc + l.cajas.filter(c => !isSilenciada(l.codigo_tienda, c)).length, 0),
     [matrix, cajaStatusMap]
   );
+
+  // Lookup rápido de alarmas revisadas: `codigo_tienda||caja||mes||ano` → true
+  const revisadasMap = useMemo(() => {
+    const m = {};
+    alarmasRevisadas.forEach(r => { m[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`] = true; });
+    return m;
+  }, [alarmasRevisadas]);
 
   // Filtrado + orden (excluye cajas silenciadas del filtro de gaps)
   const localesFiltrados = useMemo(() => {
@@ -846,6 +1011,40 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
     }
   }, [user, onCajasConfigChange]);
 
+  // Marcar/desmarcar alarma de caída como revisada
+  const handleMarkRevisada = useCallback(async (cell, marcar) => {
+    // Optimistic update
+    onAlarmasRevisadasChange?.(prev =>
+      marcar
+        ? [...prev, { codigo_tienda: cell.codigo_tienda, caja: String(cell.caja), mes: cell.mes, ano: cell.ano, revisado_por: user?.email || 'dashboard' }]
+        : prev.filter(r => !(r.codigo_tienda === cell.codigo_tienda && String(r.caja) === String(cell.caja) && r.mes === cell.mes && r.ano === cell.ano))
+    );
+    try {
+      const res = await fetch(`${API}/api/alarmas-revisadas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo_tienda: cell.codigo_tienda,
+          caja:          String(cell.caja),
+          mes:           cell.mes,
+          ano:           cell.ano,
+          revisado_por:  user?.email || 'dashboard',
+          accion:        marcar ? 'MARCAR' : 'QUITAR',
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
+      notify('success', marcar ? '✓ Alarma marcada como revisada' : 'Revisión quitada');
+    } catch(e) {
+      onAlarmasRevisadasChange?.(prev =>
+        marcar
+          ? prev.filter(r => !(r.codigo_tienda === cell.codigo_tienda && String(r.caja) === String(cell.caja) && r.mes === cell.mes && r.ano === cell.ano))
+          : [...prev, { codigo_tienda: cell.codigo_tienda, caja: String(cell.caja), mes: cell.mes, ano: cell.ano, revisado_por: user?.email || 'dashboard' }]
+      );
+      notify('error', `Error: ${e.message}`);
+    }
+  }, [user, onAlarmasRevisadasChange]);
+
   return (
     <div className="space-y-5 px-1" onClick={e => e.stopPropagation()}>
 
@@ -938,33 +1137,69 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                         <Plus size={11} /> Registrar nueva caja
                       </p>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {/* Selector código tienda */}
-                        <div className="col-span-2 sm:col-span-1">
+                        {/* Buscador código tienda — combobox */}
+                        <div className="col-span-2 sm:col-span-1 relative">
                           <label className="text-[7px] font-black uppercase tracking-widest text-slate-400 mb-1 block">Código tienda</label>
-                          <select
-                            value={newCaja.codigo_tienda}
-                            onChange={e => {
-                              const ct = e.target.value;
-                              const local = matrix.find(l => l.codigo_tienda === ct);
-                              setNewCaja(prev => ({
-                                ...prev,
-                                codigo_tienda: ct,
-                                _local:      local?.local      || '',
-                                _competidor: local?.competidor || '',
-                              }));
-                            }}
-                            className="w-full px-2.5 py-1.5 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-bold text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
-                          >
-                            <option value="">Seleccionar…</option>
-                            {[...new Map(matrix.map(l => [l.codigo_tienda, l])).values()]
-                              .sort((a, b) => a.local?.localeCompare(b.local))
-                              .map(l => (
-                                <option key={l.codigo_tienda} value={l.codigo_tienda}>
-                                  {l.codigo_tienda} — {l.local}
-                                </option>
-                              ))
-                            }
-                          </select>
+                          {(() => {
+                            const tiendas = [...new Map(matrix.map(l => [l.codigo_tienda, l])).values()]
+                              .sort((a, b) => a.local?.localeCompare(b.local));
+                            const q = newCaja._tiendaSearch ?? newCaja.codigo_tienda;
+                            const filtered = q
+                              ? tiendas.filter(l =>
+                                  l.codigo_tienda?.toLowerCase().includes(q.toLowerCase()) ||
+                                  l.local?.toLowerCase().includes(q.toLowerCase()))
+                              : tiendas;
+                            return (
+                              <>
+                                <div className="relative">
+                                  <Search size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                                  <input
+                                    type="text"
+                                    placeholder="Buscar código o local…"
+                                    value={newCaja._tiendaSearch ?? newCaja.codigo_tienda}
+                                    onFocus={() => setNewCaja(prev => ({ ...prev, _tiendaOpen: true, _tiendaSearch: prev._tiendaSearch ?? '' }))}
+                                    onChange={e => setNewCaja(prev => ({
+                                      ...prev,
+                                      _tiendaSearch: e.target.value,
+                                      _tiendaOpen: true,
+                                      ...(e.target.value === '' ? { codigo_tienda: '', _local: '', _competidor: '' } : {}),
+                                    }))}
+                                    onBlur={() => setTimeout(() => setNewCaja(prev => ({ ...prev, _tiendaOpen: false })), 150)}
+                                    className="w-full pl-7 pr-2.5 py-1.5 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-bold text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
+                                  />
+                                </div>
+                                {newCaja._tiendaOpen && (
+                                  <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-30 max-h-52 overflow-y-auto">
+                                    {filtered.length === 0 ? (
+                                      <p className="px-3 py-3 text-[9px] text-slate-400 font-bold">Sin resultados</p>
+                                    ) : filtered.map(l => (
+                                      <button
+                                        key={l.codigo_tienda}
+                                        type="button"
+                                        onMouseDown={e => e.preventDefault()}
+                                        onClick={() => setNewCaja(prev => ({
+                                          ...prev,
+                                          codigo_tienda: l.codigo_tienda,
+                                          _local:        l.local || '',
+                                          _competidor:   l.competidor || '',
+                                          _tiendaSearch: undefined,
+                                          _tiendaOpen:   false,
+                                        }))}
+                                        className={`w-full text-left px-3 py-2 text-[10px] transition-colors ${
+                                          newCaja.codigo_tienda === l.codigo_tienda
+                                            ? 'bg-accent-orange/10 text-accent-orange font-black'
+                                            : 'text-slate-700 dark:text-white/80 hover:bg-slate-50 dark:hover:bg-white/[0.04]'
+                                        }`}
+                                      >
+                                        <span className="font-black">{l.codigo_tienda}</span>
+                                        <span className="text-slate-400 dark:text-white/30 ml-1.5">— {l.local}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                         {/* Local (auto-fill) */}
                         <div>
@@ -1022,6 +1257,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                                   competidor: newCaja._competidor || '',
                                   status: 'ACTIVA',
                                   notas: newCaja.notas || '',
+                                  manual: true,
                                 };
                                 onCajasConfigChange?.(prev => [...prev, newEntry]);
                                 setNewCaja({ codigo_tienda: '', caja: '', notas: '' });
@@ -1044,31 +1280,127 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                   )}
                 </AnimatePresence>
 
-                {/* ── Resumen de cajas silenciadas ── */}
+                {/* ── Cajas: silenciadas + registradas manualmente ── */}
                 {(() => {
-                  const silenciadas = cajasConfig.filter(c => c.status === 'SIN_ALARMAS');
-                  return silenciadas.length === 0 ? (
-                    <div className="px-4 py-4 text-slate-400 text-[10px] font-bold flex items-center gap-2">
-                      <Bell size={11} className="text-slate-300" />
-                      Ninguna caja silenciada — usá el ícono 🔔 en cada fila de caja para silenciar alarmas
+                  // Mostrar si está silenciada O fue registrada manualmente
+                  const visible = cajasConfig.filter(c => c.manual || c.status === 'SIN_ALARMAS');
+                  const silCount = visible.filter(c => c.status === 'SIN_ALARMAS').length;
+                  const manCount = visible.filter(c => c.manual).length;
+
+                  if (visible.length === 0) return (
+                    <div className="px-4 py-5 flex items-center gap-2 text-slate-400 text-[10px] font-bold">
+                      <Bell size={11} className="text-slate-300 dark:text-white/20" />
+                      Todo activo — ninguna alarma silenciada ni cajas registradas manualmente.
                     </div>
-                  ) : (
-                    <div className="px-4 py-3">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-amber-500 mb-2 flex items-center gap-1.5">
-                        <BellOff size={10} /> {silenciadas.length} {silenciadas.length === 1 ? 'caja silenciada' : 'cajas silenciadas'}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {silenciadas.map(cfg => (
-                          <div key={`${cfg.codigo_tienda}||${cfg.caja}`} className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[9px] font-black text-amber-500">
-                            <BellOff size={9} />
-                            <span>{cfg.local || cfg.codigo_tienda} · Caja {cfg.caja}</span>
-                            <button
-                              onClick={() => handleToggleCaja(cfg, cfg.caja, 'ACTIVA')}
-                              title="Reactivar alarmas"
-                              className="ml-1 text-amber-400 hover:text-amber-600 transition-colors"
-                            ><X size={9} /></button>
-                          </div>
-                        ))}
+                  );
+
+                  return (
+                    <div className="px-4 py-4">
+                      {/* Contador rápido */}
+                      <div className="flex items-center gap-3 mb-3">
+                        {silCount > 0 && (
+                          <span className="flex items-center gap-1 text-[7px] font-black uppercase tracking-widest text-amber-500">
+                            <BellOff size={9} /> {silCount} silenciada{silCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {manCount > 0 && (
+                          <span className="flex items-center gap-1 text-[7px] font-black uppercase tracking-widest text-violet-500">
+                            <Store size={9} /> {manCount} manual{manCount > 1 ? 'es' : ''}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Grid de cards */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {visible.map(cfg => {
+                          const isSil = cfg.status === 'SIN_ALARMAS';
+                          return (
+                            <div
+                              key={`${cfg.codigo_tienda}||${cfg.caja}`}
+                              className={`relative group rounded-xl border p-2.5 flex flex-col gap-1.5 ${
+                                isSil
+                                  ? 'bg-amber-50 dark:bg-amber-500/5 border-amber-200 dark:border-amber-500/15'
+                                  : 'bg-white dark:bg-white/[0.025] border-slate-200 dark:border-white/8'
+                              }`}
+                            >
+                              {/* Header: competidor + caja */}
+                              <div className="flex items-start justify-between gap-1">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[9px] font-black text-slate-800 dark:text-white leading-tight truncate">
+                                    {cfg.local || cfg.codigo_tienda}
+                                  </p>
+                                  <p className="text-[8px] text-slate-400 dark:text-white/30 font-mono leading-none mt-0.5">
+                                    {cfg.codigo_tienda}
+                                  </p>
+                                </div>
+                                {/* Badge "manual" */}
+                                {cfg.manual && (
+                                  <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-violet-400 mt-0.5" title="Registrada manualmente" />
+                                )}
+                              </div>
+
+                              {/* Caja num */}
+                              <p className="text-[11px] font-black text-slate-600 dark:text-white/60">
+                                Caja {cfg.caja}
+                              </p>
+
+                              {/* Footer: status + actions */}
+                              <div className="flex items-center justify-between gap-1 mt-auto pt-1 border-t border-black/5 dark:border-white/5">
+                                <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${
+                                  isSil
+                                    ? 'bg-amber-200 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                                    : 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                                }`}>
+                                  {isSil ? '🔕 Silenciada' : '🔔 Activa'}
+                                </span>
+
+                                <div className="flex items-center gap-0.5">
+                                  {/* Toggle silencio */}
+                                  <Tip label={isSil ? 'Reactivar alarmas de esta caja' : 'Silenciar alarmas de esta caja'}>
+                                    <button
+                                      onClick={() => handleToggleCaja(cfg, cfg.caja, isSil ? 'ACTIVA' : 'SIN_ALARMAS')}
+                                      className={`p-1 rounded-lg transition-colors ${
+                                        isSil
+                                          ? 'text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-500/15'
+                                          : 'text-slate-300 dark:text-white/20 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10'
+                                      }`}
+                                    >
+                                      {isSil ? <BellOff size={11} /> : <Bell size={11} />}
+                                    </button>
+                                  </Tip>
+
+                                  {/* Desregistrar / Eliminar — solo para manuales */}
+                                  {cfg.manual && (
+                                    <>
+                                      {/* Desregistrar: quita del panel sin borrar de BQ */}
+                                      {!isSil && <DesregistrarButton cfg={cfg} user={user} onCajasConfigChange={onCajasConfigChange} notify={notify} />}
+                                      {/* Eliminar: borra de BQ y de matrix */}
+                                      <Tip label="Eliminar caja permanentemente">
+                                        <DeleteCajaButton
+                                          cfg={cfg}
+                                          user={user}
+                                          compact
+                                          onDeleted={() => {
+                                            onCajasConfigChange?.(prev =>
+                                              prev.filter(c => !(c.codigo_tienda === cfg.codigo_tienda && c.caja === cfg.caja))
+                                            );
+                                            setMatrix([]);
+                                            fetch(`${API}/api/estimation-matrix`).then(r => r.json()).then(d => {
+                                              if (d.locales) setMatrix(d.locales);
+                                              if (d.meses)   setMeses(d.meses);
+                                            }).catch(() => {});
+                                            notify('success', `Caja ${cfg.caja} eliminada`);
+                                          }}
+                                          onError={e => notify('error', e)}
+                                        />
+                                      </Tip>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -1263,6 +1595,8 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                     cajaStatusMap={cajaStatusMap}
                     onToggleCaja={handleToggleCaja}
                     onToggleLocal={handleToggleLocal}
+                    revisadasMap={revisadasMap}
+                    onMarkRevisada={handleMarkRevisada}
                   />
                 ))}
               </tbody>
