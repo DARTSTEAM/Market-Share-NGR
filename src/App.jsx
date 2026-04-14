@@ -963,12 +963,30 @@ export default function App({ user, onSignOut }) {
       totalsByComp[r.competidor] += (parseFloat(r.transacciones) || 0);
     });
 
-    const palette = ['#ff5e00', '#0070f3', '#ccff00', '#7000f3', '#00f3a0'];
-    return Object.entries(totalsByComp).map(([name, value], i) => ({
-      name,
-      value,
-      color: palette[i % palette.length]
-    })).sort((a, b) => b.value - a.value);
+    const BRAND_COLORS = {
+      'KFC':           '#E4002B',
+      'MCDONALDS':     '#FFC72C',
+      "MCDONALD'S":    '#FFC72C',
+      'BURGER KING':   '#FF8C00',
+      'DOMINOS':       '#006491',
+      "DOMINO'S":      '#006491',
+      'PIZZA HUT':     '#EE3A24',
+      'LITTLE CAESARS':  '#6D1F7E',
+      "LITTLE CAESAR'S": '#6D1F7E',
+      'WANTA':         '#00B4A0',
+      'POPEYES':       '#F26522',
+      'SUBWAY':        '#009B48',
+    };
+    const FALLBACK = ['#64748b','#94a3b8','#475569','#6366f1','#0ea5e9','#14b8a6'];
+    let fallbackIdx = 0;
+
+    return Object.entries(totalsByComp)
+      .map(([name, value]) => {
+        const key = name?.toUpperCase().trim();
+        const color = BRAND_COLORS[key] || FALLBACK[fallbackIdx++ % FALLBACK.length];
+        return { name, value, color };
+      })
+      .sort((a, b) => b.value - a.value);
   }, [marketShareRecords]);
 
   // 3b. Reactive Share Data (For Competitor Analysis - based on facturas_v2)
@@ -976,15 +994,33 @@ export default function App({ user, onSignOut }) {
     const totalsByComp = {};
     filteredTickets.forEach(t => {
       if (!totalsByComp[t.competidor]) totalsByComp[t.competidor] = 0;
-      totalsByComp[t.competidor] += 1; // Count of tickets
+      totalsByComp[t.competidor] += 1;
     });
 
-    const palette = ['#ff5e00', '#0070f3', '#ccff00', '#7000f3', '#00f3a0'];
-    return Object.entries(totalsByComp).map(([name, value], i) => ({
-      name,
-      value,
-      color: palette[i % palette.length]
-    })).sort((a, b) => b.value - a.value);
+    const BRAND_COLORS = {
+      'KFC':           '#E4002B',
+      'MCDONALDS':     '#FFC72C',
+      "MCDONALD'S":    '#FFC72C',
+      'BURGER KING':   '#FF8C00',
+      'DOMINOS':       '#006491',
+      "DOMINO'S":      '#006491',
+      'PIZZA HUT':     '#EE3A24',
+      'LITTLE CAESARS':  '#6D1F7E',
+      "LITTLE CAESAR'S": '#6D1F7E',
+      'WANTA':         '#00B4A0',
+      'POPEYES':       '#F26522',
+      'SUBWAY':        '#009B48',
+    };
+    const FALLBACK = ['#64748b','#94a3b8','#475569','#6366f1','#0ea5e9','#14b8a6'];
+    let fallbackIdx = 0;
+
+    return Object.entries(totalsByComp)
+      .map(([name, value]) => {
+        const key = name?.toUpperCase().trim();
+        const color = BRAND_COLORS[key] || FALLBACK[fallbackIdx++ % FALLBACK.length];
+        return { name, value, color };
+      })
+      .sort((a, b) => b.value - a.value);
   }, [filteredTickets]);
 
   // 4. Reactive Trend Data (Market Share - OK records + HISTORIAL overlay)

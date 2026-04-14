@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ClipboardEdit, RefreshCw, AlertTriangle, CheckCircle2,
@@ -276,10 +277,12 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
 
 
 // ── Celda individual ──────────────────────────────────────────────────────────
-function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, isRevisada, onMarkRevisada }) {
+function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, isRevisada, onMarkRevisada, isGapRevisado, onToggleGapRevisado }) {
   const isEditing = pendingEdit?.key === cell.key;
 
   if (cell.tipo === 'GAP') {
+    const gapKey = `${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`;
+    const gapOk  = isGapRevisado;
     return (
       <td className="px-1.5 py-1.5 align-middle relative" style={{ minWidth: 90 }} onClick={e => e.stopPropagation()}>
         {isEditing && (
@@ -287,13 +290,44 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
             <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
           </div>
         )}
-        <button
-          onClick={() => onStartEdit(cell)}
-          className="w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 transition-all group"
-        >
-          <AlertTriangle size={9} className="text-red-400 shrink-0" />
-          <span className="text-[10px] font-black text-red-400">GAP</span>
-        </button>
+        {gapOk ? (
+          /* GAP revisado: muestra guión verde + check, ya no es error */
+          <div className="group w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-500/5 border border-emerald-500/15 cursor-default">
+            <Check size={9} className="text-emerald-400 shrink-0" />
+            <span className="text-[10px] font-black text-emerald-400">OK</span>
+            {onToggleGapRevisado && (
+              <Tip label="Quitar revisión">
+                <button
+                  onClick={e => { e.stopPropagation(); onToggleGapRevisado(cell, false); }}
+                  className="ml-0.5 opacity-0 group-hover:opacity-60 hover:!opacity-100 p-0.5 rounded text-slate-400 hover:text-red-400 transition-all"
+                >
+                  <X size={8} />
+                </button>
+              </Tip>
+            )}
+          </div>
+        ) : (
+          /* GAP normal: rojo + botón check en hover */
+          <div className="group w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 hover:border-red-500/35 transition-all">
+            <button
+              onClick={() => onStartEdit(cell)}
+              className="flex items-center gap-1"
+            >
+              <AlertTriangle size={9} className="text-red-400 shrink-0" />
+              <span className="text-[10px] font-black text-red-400">GAP</span>
+            </button>
+            {onToggleGapRevisado && (
+              <Tip label="Marcar como revisado — ya no es un error">
+                <button
+                  onClick={e => { e.stopPropagation(); onToggleGapRevisado(cell, true); }}
+                  className="ml-0.5 opacity-0 group-hover:opacity-60 hover:!opacity-100 p-0.5 rounded text-slate-400 hover:text-emerald-500 transition-all"
+                >
+                  <Check size={9} strokeWidth={3} />
+                </button>
+              </Tip>
+            )}
+          </div>
+        )}
       </td>
     );
   }
@@ -403,7 +437,7 @@ function Tip({ label, children, placement = 'top' }) {
 }
 
 function DeleteCajaButton({ cfg, user, onDeleted, onError }) {
-  const [confirm, setConfirm] = useState(false);
+  const [open, setOpen]       = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleDelete = async () => {
@@ -420,48 +454,89 @@ function DeleteCajaButton({ cfg, user, onDeleted, onError }) {
       });
       const result = await res.json();
       if (!result.success) throw new Error(result.error);
+      setOpen(false);
       onDeleted?.();
     } catch(e) {
       onError?.(e.message);
     } finally {
       setLoading(false);
-      setConfirm(false);
     }
   };
 
-  if (confirm) {
-    return (
-      <div className="flex items-center gap-1 shrink-0">
-        <span className="text-[8px] font-black text-red-500 whitespace-nowrap">¿Eliminar?</span>
-        <button
-          onClick={handleDelete}
-          disabled={loading}
-          className="px-1.5 py-0.5 bg-red-500 text-white rounded text-[8px] font-black disabled:opacity-50"
-        >
-          {loading ? '…' : 'Sí'}
-        </button>
-        <button
-          onClick={() => setConfirm(false)}
-          className="px-1.5 py-0.5 bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-white/50 rounded text-[8px] font-black"
-        >
-          No
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <button
-      title="Eliminar caja"
-      onClick={() => setConfirm(true)}
-      className="shrink-0 p-1.5 rounded-lg text-slate-300 dark:text-white/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
-    >
-      <Trash2 size={12} />
-    </button>
+    <>
+      {/* Trigger */}
+      <button
+        onClick={() => setOpen(true)}
+        className="shrink-0 p-1.5 rounded-lg text-slate-300 dark:text-white/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+      >
+        <Trash2 size={12} />
+      </button>
+
+      {/* Modal de advertencia */}
+      {open && ReactDOM.createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+          {/* Panel */}
+          <div className="relative z-10 w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden">
+            {/* Header rojo */}
+            <div className="bg-red-50 dark:bg-red-500/10 px-5 py-4 border-b border-red-100 dark:border-red-500/20 flex items-start gap-3">
+              <div className="shrink-0 w-9 h-9 rounded-xl bg-red-100 dark:bg-red-500/20 flex items-center justify-center text-red-500">
+                <Trash2 size={17} />
+              </div>
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-widest text-red-600 dark:text-red-400">Eliminar caja</p>
+                <p className="text-[13px] font-black text-slate-800 dark:text-white mt-0.5">
+                  {cfg.local || cfg.codigo_tienda} · Caja {cfg.caja}
+                </p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-[12px] text-slate-600 dark:text-white/70 leading-relaxed">
+                Esto va a <span className="font-black text-red-500">eliminar permanentemente</span> el registro de esta caja de la base de datos.
+              </p>
+              <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl p-3 flex items-start gap-2">
+                <AlertTriangle size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed font-medium">
+                  Se van a perder <span className="font-black">todas las estimaciones manuales</span> ingresadas para esta caja. Si la caja tiene datos reales en el sistema, va a reaparecer automáticamente en la matriz.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 pb-5 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setOpen(false)}
+                disabled={loading}
+                className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-white/50 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={loading}
+                className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {loading ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                {loading ? 'Eliminando…' : 'Sí, eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
-function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal, revisadasMap = {}, onMarkRevisada }) {
+function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal, revisadasMap = {}, onMarkRevisada, gapsRevisadosMap = {}, onToggleGapRevisado }) {
   const esDesglose = !NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
   const RUTINA_DESDE = '2025-12';
   const esRutina = (mk) => mk >= RUTINA_DESDE;
@@ -495,9 +570,21 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
   };
   const isLocalSilenciado = (cajaStatusMap[`${local.codigo_tienda}||__LOCAL__`] || 'ACTIVA') === 'SIN_ALARMAS';
 
-  const gapCount = local.cajas.reduce((acc, c) =>
-    isCajaSilenciada(c) ? acc :
-    acc + meses.filter(mk => esRutina(mk) && local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length, 0);
+  const gapKey = (caja, mk) => `${local.codigo_tienda}||${caja}||${mk.split('-')[1]}||${mk.split('-')[0]}`;
+
+  const gapCount = !esDesglose
+    ? meses.filter(mk =>
+        esRutina(mk) &&
+        local.cajas.every(c => (local.celdas[`${c}||${mk}`]?.tipo ?? 'GAP') === 'GAP') &&
+        local.cajas.every(c => !gapsRevisadosMap[gapKey(c, mk)])
+      ).length
+    : local.cajas.reduce((acc, c) =>
+        isCajaSilenciada(c) ? acc :
+        acc + meses.filter(mk =>
+          esRutina(mk) &&
+          local.celdas[`${c}||${mk}`]?.tipo === 'GAP' &&
+          !gapsRevisadosMap[gapKey(c, mk)]
+        ).length, 0);
   const pendienteCount = local.cajas.reduce((acc, c) =>
     acc + meses.filter(mk => esRutina(mk) && local.celdas[`${c}||${mk}`]?.tipo === 'PENDIENTE').length, 0);
   const tieneGaps = gapCount > 0;
@@ -716,6 +803,8 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                   onCancelEdit={onCancelEdit}
                   isRevisada={!!revisadasMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
                   onMarkRevisada={onMarkRevisada}
+                  isGapRevisado={!!gapsRevisadosMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
+                  onToggleGapRevisado={onToggleGapRevisado}
                 />
               );
             })}
@@ -740,11 +829,17 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
   const [pendingEdit, setPendingEdit]       = useState(null);
   const [saving, setSaving]                 = useState(false);
   const [notification, setNotification]     = useState(null);
-  const [showGestion, setShowGestion]       = useState(false);  // panel de gestiΓ³n de cajas
-  const [addCajaOpen, setAddCajaOpen]       = useState(false);  // mini form agregar caja
-  const [savingCaja, setSavingCaja]         = useState(null);   // key de caja guardΓ'ndose
+  const [showGestion, setShowGestion]       = useState(false);
+  const [addCajaOpen, setAddCajaOpen]       = useState(false);
+  const [savingCaja, setSavingCaja]         = useState(null);
   const [newCaja, setNewCaja]               = useState({ codigo_tienda: '', caja: '', notas: '' });
   const [addingCaja, setAddingCaja]         = useState(false);
+  const [showGapPct, setShowGapPct]         = useState(false); // toggle % / cant en KPI gaps
+  // GAPs revisados (persistido en localStorage)
+  const [gapsRevisados, setGapsRevisados]   = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ngr_gaps_revisados') || '[]'); }
+    catch { return []; }
+  });
 
   const RUTINA_DESDE_GLOBAL = '2025-12';
 
@@ -792,12 +887,25 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
 
   // Conteos (excluye cajas silenciadas del total de gaps)
   const totalGaps = useMemo(() =>
-    matrix.reduce((acc, local) =>
-      acc + local.cajas.reduce((a, c) => {
+    matrix.reduce((acc, local) => {
+      const noDesglose = NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
+      if (noDesglose) {
+        return acc + meses.filter(mk =>
+          mk >= RUTINA_DESDE_GLOBAL &&
+          local.cajas.every(c => (local.celdas[`${c}||${mk}`]?.tipo ?? 'GAP') === 'GAP') &&
+          local.cajas.every(c => !gapsRevisadosMap[`${local.codigo_tienda}||${c}||${mk.split('-')[1]}||${mk.split('-')[0]}`])
+        ).length;
+      }
+      return acc + local.cajas.reduce((a, c) => {
         if (isSilenciada(local.codigo_tienda, c)) return a;
-        return a + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length;
-      }, 0), 0),
-    [matrix, meses, cajaStatusMap]
+        return a + meses.filter(mk =>
+          mk >= RUTINA_DESDE_GLOBAL &&
+          local.celdas[`${c}||${mk}`]?.tipo === 'GAP' &&
+          !gapsRevisadosMap[`${local.codigo_tienda}||${c}||${mk.split('-')[1]}||${mk.split('-')[0]}`]
+        ).length;
+      }, 0);
+    }, 0),
+    [matrix, meses, cajaStatusMap, gapsRevisadosMap]
   );
 
   const totalPendientes = useMemo(() =>
@@ -813,6 +921,24 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
         a + meses.filter(mk => local.celdas[`${c}||${mk}`]?.tipo === 'APROBADO').length, 0), 0),
     [matrix, meses]
   );
+
+  // Total de celdas de rutina (excluyendo silenciadas) — denominador del porcentaje
+  const totalCeldas = useMemo(() => {
+    const rutinaMeses = meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL);
+    return matrix.reduce((acc, local) => {
+      const noDesglose = NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
+      if (noDesglose) return acc + rutinaMeses.length; // 1 fila × N meses
+      return acc + local.cajas.filter(c => !isSilenciada(local.codigo_tienda, c)).length * rutinaMeses.length;
+    }, 0);
+  }, [matrix, meses, cajaStatusMap]);
+
+  const pctEstimacion = totalCeldas > 0
+    ? Math.round((totalAprobados + totalPendientes + (totalCeldas - totalGaps - totalAprobados - totalPendientes)) / totalCeldas * 100)
+    : 0;
+  // Más preciso: % de celdas que YA tienen algún dato (no GAP)
+  const pctCubierto = totalCeldas > 0
+    ? Math.round((totalCeldas - totalGaps) / totalCeldas * 100)
+    : 0;
 
   // KPIs de actividad (monitorización de cajas/locales silenciados)
   const localesActivos = useMemo(() =>
@@ -831,6 +957,26 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
     alarmasRevisadas.forEach(r => { m[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`] = true; });
     return m;
   }, [alarmasRevisadas]);
+
+  // Lookup rápido de GAPs revisados
+  const gapsRevisadosMap = useMemo(() => {
+    const m = {};
+    gapsRevisados.forEach(r => { m[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`] = true; });
+    return m;
+  }, [gapsRevisados]);
+
+  // Marcar/desmarcar GAP como revisado
+  const handleToggleGapRevisado = useCallback((cell, marcar) => {
+    const key = `${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`;
+    setGapsRevisados(prev => {
+      const next = marcar
+        ? [...prev.filter(r => `${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}` !== key),
+           { codigo_tienda: cell.codigo_tienda, caja: String(cell.caja), mes: cell.mes, ano: cell.ano }]
+        : prev.filter(r => `${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}` !== key);
+      try { localStorage.setItem('ngr_gaps_revisados', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
 
   // Filtrado + orden (excluye cajas silenciadas del filtro de gaps)
   const localesFiltrados = useMemo(() => {
@@ -1344,6 +1490,23 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                                 Caja {cfg.caja}
                               </p>
 
+                              {/* Notas + usuario */}
+                              {(cfg.notas || cfg.usuario) && (
+                                <div className="flex flex-col gap-0.5">
+                                  {cfg.notas && (
+                                    <p className="text-[9px] text-slate-500 dark:text-white/40 italic leading-tight line-clamp-2">
+                                      "{cfg.notas}"
+                                    </p>
+                                  )}
+                                  {cfg.usuario && (
+                                    <p className="text-[8px] text-slate-400 dark:text-white/25 font-mono flex items-center gap-1">
+                                      <span className="text-[7px]">👤</span>
+                                      {cfg.usuario}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+
                               {/* Footer: status + actions */}
                               <div className="flex items-center justify-between gap-1 mt-auto pt-1 border-t border-black/5 dark:border-white/5">
                                 <span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest ${
@@ -1413,10 +1576,43 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
 
 
       <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
+        {/* ── Card Gaps: toggle cant / % ── */}
+        <button
+          onClick={() => { setFilterSoloGaps(true); setFilterPendientes(false); }}
+          className="pwa-card p-4 flex items-center gap-4 text-left hover:ring-2 hover:ring-accent-orange/20 transition-all relative overflow-hidden"
+        >
+          <div className="p-2.5 rounded-xl bg-white/5 text-red-400"><AlertTriangle size={18} /></div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+                {showGapPct ? '% Sin cubrir' : 'Gaps sin cubrir'}
+              </p>
+              {/* Toggle % / # */}
+              <button
+                onClick={e => { e.stopPropagation(); setShowGapPct(v => !v); }}
+                className="shrink-0 px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest bg-slate-100 dark:bg-white/8 text-slate-400 dark:text-white/30 hover:bg-slate-200 dark:hover:bg-white/15 transition-colors"
+              >
+                {showGapPct ? '#' : '%'}
+              </button>
+            </div>
+            <p className="text-xl font-black text-red-400 mt-0.5">
+              {loading ? '—' : showGapPct ? `${100 - pctCubierto}%` : totalGaps}
+            </p>
+            {!loading && showGapPct && (
+              <div className="mt-1.5 h-1 w-full rounded-full bg-slate-100 dark:bg-white/8 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-400 transition-all"
+                  style={{ width: `${pctCubierto}%` }}
+                />
+              </div>
+            )}
+          </div>
+        </button>
+
+        {/* ── Pendientes + Aprobados ── */}
         {[
-          { label: 'Gaps sin cubrir',         value: loading ? '—' : totalGaps,       color: 'text-red-400',    icon: AlertTriangle, filter: () => { setFilterSoloGaps(true); setFilterPendientes(false); } },
-          { label: 'Pendientes de aprobación', value: loading ? '—' : totalPendientes, color: 'text-amber-400',  icon: Clock,         filter: () => { setFilterSoloGaps(false); setFilterPendientes(true); } },
-          { label: 'Aprobados y publicados',   value: loading ? '—' : totalAprobados,  color: 'text-violet-400', icon: ShieldCheck,   filter: () => { setFilterSoloGaps(false); setFilterPendientes(false); } },
+          { label: 'Pendientes de aprobación', value: loading ? '—' : totalPendientes, color: 'text-amber-400',  icon: Clock,      filter: () => { setFilterSoloGaps(false); setFilterPendientes(true); } },
+          { label: 'Aprobados y publicados',   value: loading ? '—' : totalAprobados,  color: 'text-violet-400', icon: ShieldCheck, filter: () => { setFilterSoloGaps(false); setFilterPendientes(false); } },
         ].map(c => (
           <button
             key={c.label}
@@ -1430,6 +1626,25 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
             </div>
           </button>
         ))}
+
+        {/* ── % Estimación cubierta ── */}
+        <div className="pwa-card p-4 flex items-center gap-4">
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400"><ShieldCheck size={18} /></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">% Estimación</p>
+            <p className="text-xl font-black text-emerald-400 mt-0.5">
+              {loading ? '—' : `${pctCubierto}%`}
+            </p>
+            {!loading && (
+              <div className="mt-1.5 h-1 w-full rounded-full bg-slate-100 dark:bg-white/8 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-400 transition-all"
+                  style={{ width: `${pctCubierto}%` }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
         {/* Locales activos */}
         <div className="pwa-card p-4 flex items-center gap-4">
           <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400"><Store size={18} /></div>
@@ -1597,6 +1812,8 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                     onToggleLocal={handleToggleLocal}
                     revisadasMap={revisadasMap}
                     onMarkRevisada={handleMarkRevisada}
+                     gapsRevisadosMap={gapsRevisadosMap}
+                     onToggleGapRevisado={handleToggleGapRevisado}
                   />
                 ))}
               </tbody>
