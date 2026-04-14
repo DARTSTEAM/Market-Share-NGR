@@ -14,6 +14,7 @@ import CustomSelect from './components/common/CustomSelect';
 import FilterBar from './components/filters/FilterBar';
 
 const COMPETITOR_TO_CATEGORY = {
+  // Competition brands
   'KFC': 'Pollo Frito',
   'MCDONALD\'S': 'Hamburguesa',
   'MCDONALDS': 'Hamburguesa',
@@ -23,6 +24,12 @@ const COMPETITOR_TO_CATEGORY = {
   'DOMINO\'S': 'Pizza',
   'LITTLE CAESARS': 'Pizza',
   'PIZZA HUT': 'Pizza',
+  // NGR own brands
+  'POPEYES':    'Pollo Frito',
+  'Bembos':     'Hamburguesa',
+  'Papa Johns': 'Pizza',
+  'PAPA JOHNS': 'Pizza',
+  'CHINAWOK':   'Chifas',
 };
 
 const API_BASE_URL = window.location.hostname === 'localhost'
@@ -715,13 +722,13 @@ export default function App({ user, onSignOut }) {
 
     const competitorItems = filteredComps.map(c => ({ value: c, label: c }));
 
-    // Add NGR own brands as selectable options (only if data loaded)
-    const ngrBrands = ['POPEYES', 'Bembos', 'Papa Johns', 'CHINAWOK'];
-    const ngrItems = ngrBrands
-      .filter(b => !filteredComps.includes(b)) // avoid dupes if already in pipeline
-      .map(b => ({ value: `NGR:${b}`, label: `★ ${b}` }));
+    // NGR own brands — plain name as value so filtering works correctly
+    const NGR_BRANDS = ['POPEYES', 'Bembos', 'Papa Johns', 'CHINAWOK'];
+    const ngrItems = NGR_BRANDS
+      .filter(b => !filteredComps.some(c => c.toUpperCase() === b.toUpperCase()))
+      .map(b => ({ value: b, label: `${b} (propio)` }));
 
-    return [...baseOptions, ...competitorItems, ...(ngrItems.length > 0 ? [{ value: '__divider__', label: '── Locales NGR ──', disabled: true }, ...ngrItems] : [])];
+    return [...baseOptions, ...competitorItems, ...ngrItems];
   }, [competitorsArr, filters.category]);
 
   const latestYear = useMemo(() => {
@@ -797,7 +804,8 @@ export default function App({ user, onSignOut }) {
     { value: "all", label: "Todas las Categorias" },
     { value: "Pollo Frito", label: "🍗 Pollo Frito" },
     { value: "Hamburguesa", label: "🍔 Hamburguesa" },
-    { value: "Pizza", label: "🍕 Pizza" },
+    { value: "Pizza",       label: "🍕 Pizza" },
+    { value: "Chifas",      label: "🥡 Chifas" },
   ];
 
   const handleFilterChange = (key, value) => {
@@ -840,27 +848,47 @@ export default function App({ user, onSignOut }) {
     });
   };
 
-  // 1. Core Data Filtering (Full routine for auditing)
+  // NGR own brands — these come from ngrLocales not from records pipeline
+  const NGR_OWN_BRANDS = useMemo(() => new Set(['POPEYES', 'Bembos', 'Papa Johns', 'CHINAWOK']), []);
+  const isNGRFilter = NGR_OWN_BRANDS.has(filters.competitor);
+
+  // Map ngrLocales to competition-record format so the filter pipeline works transparently
+  const ngrMappedRecords = useMemo(() => {
+    if (!ngrLocales.length) return [];
+    return ngrLocales.map(r => ({
+      competidor:       r.marca,
+      local:            r.local,
+      transacciones:    r.trx_total,
+      promedio:         r.trx_promedio,
+      mes:              String(r.mes),
+      ano:              String(r.ano),
+      region:           r.region  || '',
+      distrito:         r.distrito || '',
+      zona:             r.zona    || '',
+      punto_compartido: r.punto_compartido ? r.local : null,
+      status_busqueda:  'HISTORIAL',
+      caja:             null,
+      codigo_tienda:    r.store_num || '',
+      _isNGR:           true,
+    }));
+  }, [ngrLocales]);
+
+  // 1. Core Data Filtering — when an NGR brand is selected, source from ngrMappedRecords
   const filteredRecords = useMemo(() => {
-    return records.filter(rec => {
-      // Prioritize mes/ano columns if present
+    // If filter is an NGR-only brand, use ngrMappedRecords instead of records
+    const sourceRecords = isNGRFilter ? ngrMappedRecords : records;
+
+    return sourceRecords.filter(rec => {
       let mMatch = filters.month === 'all';
       let yMatch = filters.year === 'all';
 
       if (!mMatch) {
-        if (rec.mes) {
-          mMatch = (parseInt(rec.mes) - 1).toString() === filters.month;
-        } else if (rec.fecha) {
-          mMatch = new Date(rec.fecha).getMonth().toString() === filters.month;
-        }
+        if (rec.mes) mMatch = (parseInt(rec.mes) - 1).toString() === filters.month;
+        else if (rec.fecha) mMatch = new Date(rec.fecha).getMonth().toString() === filters.month;
       }
-
       if (!yMatch) {
-        if (rec.ano) {
-          yMatch = rec.ano.toString() === filters.year;
-        } else if (rec.fecha) {
-          yMatch = new Date(rec.fecha).getFullYear().toString() === filters.year;
-        }
+        if (rec.ano) yMatch = rec.ano.toString() === filters.year;
+        else if (rec.fecha) yMatch = new Date(rec.fecha).getFullYear().toString() === filters.year;
       }
 
       const cMatch = filters.competitor === 'all' || rec.competidor === filters.competitor;
@@ -872,12 +900,14 @@ export default function App({ user, onSignOut }) {
 
       return mMatch && yMatch && cMatch && lMatch && ctMatch && catMatch && rMatch && dMatch;
     });
-  }, [records, filters]);
+  }, [records, ngrMappedRecords, isNGRFilter, filters]);
 
   // 1b. Market Share Specific Filtering (status OK + HISTORIAL, sin solapamiento)
+  // When isNGRFilter, bypass recordInScope — NGR records are always valid
   const marketShareRecords = useMemo(() => {
+    if (isNGRFilter) return filteredRecords; // NGR records don't need CUTOFF_KEY check
     return filteredRecords.filter(recordInScope);
-  }, [filteredRecords]);
+  }, [filteredRecords, isNGRFilter]);
 
   // 1b2. Puntos Compartidos evolution records — last 12 months, ignores date filter
   const pcEvolutionRecords = useMemo(() => {
@@ -1093,14 +1123,30 @@ export default function App({ user, onSignOut }) {
       });
 
     const allKeys = [...new Set([...Object.keys(okData), ...Object.keys(histData)])].sort();
+
+    // When includeNGR: compute NGR trx by month (same period filter)
+    const ngrData = {};
+    if (includeNGR && ngrLocales.length > 0) {
+      const periodSet = new Set(
+        [...Object.keys(okData), ...Object.keys(histData)]
+      );
+      ngrLocales.forEach(r => {
+        const key = `${r.ano}-${String(r.mes).padStart(2, '0')}`;
+        if (!periodSet.size || periodSet.has(key)) {
+          ngrData[key] = (ngrData[key] || 0) + (r.trx_total || 0);
+        }
+      });
+    }
+
     return allKeys.map(key => ({
       name:          key,
       tickets:       okData[key]    ?? null,
       historial:     histData[key]  ?? null,
       promedio:      okProm[key]    ?? null,
       historialProm: histProm[key]  ?? null,
+      ngrTrx:        ngrData[key]   ?? null,  // NGR trx total for that month
     }));
-  }, [marketShareRecords, filteredRecords]);
+  }, [marketShareRecords, filteredRecords, includeNGR, ngrLocales]);
 
 
   // 4b. Reactive Trend Data (For Competitor Analysis - based on facturas_v2)
@@ -1338,6 +1384,12 @@ export default function App({ user, onSignOut }) {
     />
   );
 
+  // Merge NGR records into competition records for Clientes tab
+  const recordsWithNGR = useMemo(() => {
+    if (!ngrMappedRecords.length) return records;
+    return [...records, ...ngrMappedRecords];
+  }, [records, ngrMappedRecords]);
+
   return (
     <div className="min-h-screen relative p-6 md:p-12 text-slate-900 dark:text-white overflow-x-hidden selection:bg-accent-orange/30">
       <div className="pwa-mesh">
@@ -1535,8 +1587,9 @@ export default function App({ user, onSignOut }) {
           ) : activeCategory === 'clientes' ? (
             <ClientesDashboard
               key="clientes"
-              records={records}
+              records={recordsWithNGR}
               competitorToCategory={COMPETITOR_TO_CATEGORY}
+              ngrLocales={ngrLocales}
             />
           ) : activeCategory === 'competitor' ? (
             <CompetitorAnalysis

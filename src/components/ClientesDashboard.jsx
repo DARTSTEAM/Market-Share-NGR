@@ -7,7 +7,8 @@ import html2canvas from 'html2canvas';
 const CATEGORY_EMOJI = {
     'Pollo Frito': '🍗',
     'Hamburguesa': '🍔',
-    'Pizza': '🍕',
+    'Pizza':       '🍕',
+    'Chifas':      '🥡',
 };
 
 const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -20,21 +21,24 @@ const COMPETITOR_COLORS = [
 // ─── Brand color palette ───────────────────────────────────────────────
 const BRAND_COLORS = {
     // — Hamburguesa —
-    'mcdonald':    '#FFC72C',   // dorado - Golden Arches (distinto al rojo de KFC/BK)
-    'burger king': '#FF7A00',   // naranja llama
+    'mcdonald':    '#FFC72C',
+    'burger king': '#FF7A00',
     'bembos':      '#CC1F1F',
     'hermanos':    '#A52020',
     // — Pollo Frito —
-    'kfc':         '#F40027',   // rojo primario
-    'popeyes':     '#0055A5',   // azul
+    'kfc':         '#F40027',
+    'popeyes':     '#F26522',
     'church':      '#8B0000',
-    'norkys':      '#F0A500',   // ámbar
-    'pardos':      '#7B3F00',   // marrón tostado
+    'norkys':      '#F0A500',
+    'pardos':      '#7B3F00',
     // — Pizza —
-    'pizza hut':   '#8B1A1A',   // granate oscuro
-    'domino':      '#006AAD',   // azul Domino's
-    'papa john':   '#007743',   // verde
+    'pizza hut':   '#8B1A1A',
+    'domino':      '#006AAD',
+    'papa john':   '#007743',
     'telepizza':   '#C00D0D',
+    // — Chifas —
+    'chinawok':    '#F0A500',
+    'china wok':   '#F0A500',
 };
 
 // Find best brand color by partial-matching the competitor name
@@ -116,7 +120,7 @@ const SectionTable = ({ title, headerColor = '#1e3a5f', rows, months, renderCell
 );
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const ClientesDashboard = ({ records, competitorToCategory }) => {
+const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) => {
     const [selectedCategories, setSelectedCategories] = useState(['Hamburguesa']);
     const [selectedCompetitors, setSelectedCompetitors] = useState([]);
     const [filterCompetidor, setFilterCompetidor] = useState('all');
@@ -239,7 +243,7 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
             setExporting(false);
         }
     }, [exportSelections, selectedCategories, EXPORT_SECTIONS]);
-    const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza'];
+    const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza', 'Chifas'];
     const allCatsSelected = selectedCategories.length === categories.length;
 
     // Confidence dot colors for ESTIMADO-* rows
@@ -1062,6 +1066,104 @@ const ClientesDashboard = ({ records, competitorToCategory }) => {
                     </div>
                 )}
             </div>
+
+            {/* ── NGR Locales Propios ────────────────────────────────────────── */}
+            {ngrLocales.length > 0 && (() => {
+                // Build pivot: marca+local × month using trx_promedio and trx_total
+                const NGR_COLORS = {
+                    'POPEYES':    '#F26522',
+                    'Bembos':     '#CC1F1F',
+                    'Papa Johns': '#007743',
+                    'CHINAWOK':   '#F0A500',
+                };
+
+                const filtered = ngrLocales.filter(r => {
+                    if (filterYear !== 'all' && String(r.ano) !== filterYear) return false;
+                    if (r.estado !== 'Activa') return false;
+                    return true;
+                });
+
+                if (filtered.length === 0) return null;
+
+                const monthSet = {};
+                const pivotRows = {}; // `${marca}||${local}` → { marca, local, months: {mk: trx_total}, proms: {mk: trx_promedio} }
+
+                filtered.forEach(r => {
+                    const mk = `${r.ano}-${String(r.mes).padStart(2, '0')}`;
+                    if (!monthSet[mk]) monthSet[mk] = { key: mk, label: `${MONTH_SHORT[r.mes - 1]}-${String(r.ano).slice(2)}` };
+                    const rowKey = `${r.marca}||${r.local}`;
+                    if (!pivotRows[rowKey]) pivotRows[rowKey] = { marca: r.marca, local: r.local, months: {}, proms: {} };
+                    pivotRows[rowKey].months[mk] = (pivotRows[rowKey].months[mk] || 0) + r.trx_total;
+                    pivotRows[rowKey].proms[mk]  = (pivotRows[rowKey].proms[mk]  || 0) + r.trx_promedio;
+                });
+
+                const ngrMonths = Object.values(monthSet).sort((a, b) => a.key.localeCompare(b.key));
+                const ngrRows   = Object.values(pivotRows).sort((a, b) =>
+                    a.marca.localeCompare(b.marca) || a.local.localeCompare(b.local)
+                );
+
+                return (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3 pt-4">
+                            <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">★ NGR</span>
+                            <h3 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">
+                                Locales Propios NGR
+                            </h3>
+                        </div>
+
+                        {/* Prom diario por local */}
+                        <div className="overflow-x-auto rounded-2xl border border-orange-500/20 shadow-lg">
+                            <table className="w-full text-left whitespace-nowrap text-[11px]">
+                                <thead>
+                                    <tr>
+                                        <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center"
+                                            style={{ backgroundColor: '#7c2d12' }} colSpan={ngrMonths.length + 2}>
+                                            Prom. Diario por Local
+                                        </th>
+                                    </tr>
+                                    <tr className="bg-orange-50 dark:bg-orange-900/10">
+                                        <th className="px-4 py-2 font-black uppercase tracking-widest text-orange-700 dark:text-orange-400" style={{ minWidth: 110 }}>Marca</th>
+                                        <th className="px-4 py-2 font-black uppercase tracking-widest text-orange-700 dark:text-orange-400" style={{ minWidth: 180 }}>Local</th>
+                                        {ngrMonths.map(m => (
+                                            <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-orange-700 dark:text-orange-400 text-right" style={{ minWidth: 80 }}>
+                                                {m.label}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-orange-100 dark:divide-orange-900/20">
+                                    {ngrRows.map((row, i) => {
+                                        const color = NGR_COLORS[row.marca] || '#94a3b8';
+                                        return (
+                                            <tr key={i} className="hover:bg-orange-50/50 dark:hover:bg-orange-900/5 transition-colors">
+                                                <td className="px-4 py-2.5">
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                                                        <span className="font-black text-[10px] uppercase" style={{ color }}>{row.marca}</span>
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
+                                                {ngrMonths.map(m => {
+                                                    const v = row.proms[m.key];
+                                                    return (
+                                                        <td key={m.key} className="px-4 py-2.5 text-right font-mono">
+                                                            {v != null
+                                                                ? <span className="font-black">{v.toFixed(0)}</span>
+                                                                : <span className="text-slate-300 dark:text-white/15">-</span>
+                                                            }
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                );
+            })()}
+
         </motion.div>
     );
 };

@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey:            'AIzaSyAHBf6z6TRhBpqPm2to073VtiHJ7ZyXGv4',
@@ -10,7 +10,19 @@ const firebaseConfig = {
   appId:             '1:966549276703:web:683e642618d1f52d62ed2a',
 };
 
-const app      = initializeApp(firebaseConfig);
-export const auth     = getAuth(app);
-export const provider = new GoogleAuthProvider();
-provider.setCustomParameters({ prompt: 'select_account' });
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+
+// Google provider
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+// Microsoft provider (accepts corporate M365 accounts like franco.victorio@ngr.com.pe)
+export const microsoftProvider = new OAuthProvider('microsoft.com');
+microsoftProvider.setCustomParameters({
+  prompt: 'select_account',
+  tenant: 'common', // accepts any Azure AD tenant OR personal Microsoft accounts
+});
+
+// Legacy export so existing code that uses `provider` doesn’t break
+export const provider = googleProvider;

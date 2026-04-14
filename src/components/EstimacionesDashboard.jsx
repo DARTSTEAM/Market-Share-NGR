@@ -717,103 +717,153 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
         })}
       </tr>
 
-      {/* Filas de cajas */}
+      {/* ── Transposed detail: rows=months, cols=cajas ─────────────────── */}
       <AnimatePresence>
-        {esDesglose && expandido && local.cajas.map(caja => (
-          <motion.tr
-            key={caja}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="bg-slate-50/60 dark:bg-white/[0.015] border-t border-slate-100 dark:border-white/[0.03]"
-          >
-            <td className="pl-10 pr-4 py-2 sticky left-0 bg-slate-50/80 dark:bg-slate-950/80 z-10">
-              {/* Texto de caja + campana al extremo derecho */}
-              <div className="flex items-center justify-between w-full group/cajacell">
-                <span className="text-[10px] font-black text-slate-500 dark:text-white/40 uppercase tracking-widest">
-                  Caja {caja}
-                </span>
-                {/* Toggle de alarmas: extremo derecho */}
-                {onToggleCaja && (() => {
-                  const ck = `${local.codigo_tienda}||${caja}`;
-                  const silenciada = (cajaStatusMap[ck] || 'ACTIVA') === 'SIN_ALARMAS';
-                  return (
-                    <Tip label={silenciada ? 'Reactivar alarmas de esta caja' : 'Silenciar alarmas de esta caja'} placement="top">
-                      <button
-                        onClick={e => { e.stopPropagation(); onToggleCaja(local, caja, silenciada ? 'ACTIVA' : 'SIN_ALARMAS'); }}
-                        className={`flex items-center gap-1 transition-all shrink-0 ${
-                          silenciada
-                            ? 'opacity-100 text-amber-400'
-                            : 'opacity-0 group-hover/cajacell:opacity-60 text-slate-400 hover:text-amber-400'
-                        }`}
-                      >
-                        {silenciada ? <BellOff size={11} /> : <Bell size={11} />}
-                      </button>
-                    </Tip>
-                  );
-                })()}
-              </div>
-            </td>
-            {meses.map(mk => {
-              const existing = local.celdas[`${caja}||${mk}`];
-              const silenciada = isCajaSilenciada(caja);
+        {esDesglose && expandido && (() => {
+          // Sort cajas: 1..16 numerically, 99 always last
+          const sortedCajas = [...local.cajas].sort((a, b) => {
+            const na = parseInt(a), nb = parseInt(b);
+            if (na === 99 && nb !== 99) return 1;
+            if (nb === 99 && na !== 99) return -1;
+            return na - nb;
+          });
+          // Show last 6 months from meses array
+          const desgloseMeses = meses.slice(-6);
 
-              // Caja silenciada: GAPs se muestran como guión (sin badge rojo)
-              if (silenciada && (!existing && esRutina(mk))) {
-                return (
-                  <td key={mk} className="px-3 py-2 text-right">
-                    <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
-                  </td>
-                );
-              }
-              if (silenciada && existing?.tipo === 'GAP') {
-                return (
-                  <td key={mk} className="px-3 py-2 text-right">
-                    <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
-                  </td>
-                );
-              }
+          return (
+            <motion.tr
+              key="transposed"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.15 }}
+            >
+              <td colSpan={meses.length + 1} className="p-0 border-t-2 border-accent-orange/20">
+                <div className="overflow-x-auto bg-slate-50/70 dark:bg-white/[0.015]">
+                  <table className="w-full text-xs" style={{ minWidth: `${100 + sortedCajas.length * 90 + 80}px` }}>
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/[0.03]">
+                        {/* Mes column */}
+                        <th className="pl-10 pr-4 py-2 text-left text-[8px] font-black uppercase tracking-widest text-slate-400 sticky left-0 bg-slate-100 dark:bg-slate-950 z-10"
+                            style={{ minWidth: 80 }}>
+                          Mes
+                        </th>
+                        {/* One column per caja */}
+                        {sortedCajas.map(caja => {
+                          const ck = `${local.codigo_tienda}||${caja}`;
+                          const silenciada = (cajaStatusMap[ck] || 'ACTIVA') === 'SIN_ALARMAS';
+                          return (
+                            <th key={caja}
+                                className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-slate-400"
+                                style={{ minWidth: 88 }}>
+                              <div className="flex items-center justify-end gap-1">
+                                <span>Caja {caja}</span>
+                                {/* Bell toggle inside header */}
+                                {onToggleCaja && (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); onToggleCaja(local, caja, silenciada ? 'ACTIVA' : 'SIN_ALARMAS'); }}
+                                    className={`transition-colors ${silenciada ? 'text-amber-400' : 'text-slate-300 dark:text-white/15 hover:text-amber-400'}`}
+                                  >
+                                    {silenciada ? <BellOff size={9} /> : <Bell size={9} />}
+                                  </button>
+                                )}
+                              </div>
+                            </th>
+                          );
+                        })}
+                        {/* Total column */}
+                        <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-slate-600 dark:text-white/40"
+                            style={{ minWidth: 80 }}>
+                          Total
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {desgloseMeses.map(mk => {
+                        const [ano, mes] = mk.split('-');
+                        const esRutinaMk = esRutina(mk);
+                        return (
+                          <tr key={mk}
+                              className={`border-t border-slate-100 dark:border-white/[0.03] ${esRutinaMk ? '' : 'opacity-70'}`}>
+                            {/* Month label */}
+                            <td className="pl-10 pr-4 py-2 sticky left-0 bg-slate-50/90 dark:bg-slate-950/90 z-10">
+                              <div className="flex items-center gap-1.5">
+                                {esRutinaMk && <span className="w-1.5 h-1.5 rounded-full bg-accent-orange shrink-0" />}
+                                <span className={`font-black text-[10px] uppercase tracking-widest ${esRutinaMk ? 'text-accent-orange' : 'text-slate-500 dark:text-white/40'}`}>
+                                  {MESES[parseInt(mes)]} {ano.slice(2)}
+                                </span>
+                              </div>
+                            </td>
+                            {/* One cell per caja */}
+                            {sortedCajas.map(caja => {
+                              const existing = local.celdas[`${caja}||${mk}`];
+                              const silenciada = isCajaSilenciada(caja);
 
-              if (!existing && !esRutina(mk)) {
-                return (
-                  <td key={mk} className="px-3 py-2 text-right">
-                    <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
-                  </td>
-                );
-              }
-              const cell = existing || {
-                key: `${local.codigo_tienda}||${caja}||${mk}`,
-                codigo_tienda: local.codigo_tienda,
-                local: local.local,
-                competidor: local.competidor,
-                caja,
-                mes: parseInt(mk.split('-')[1]),
-                ano: parseInt(mk.split('-')[0]),
-                tipo: 'GAP',
-                tasa: null,
-              };
-              return (
-                <Celda
-                  key={mk}
-                  cell={cell}
-                  puntos={getPuntosCaja(caja)}
-                  onSave={onSave}
-                  pendingEdit={pendingEdit}
-                  onStartEdit={onStartEdit}
-                  onCancelEdit={onCancelEdit}
-                  isRevisada={!!revisadasMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
-                  onMarkRevisada={onMarkRevisada}
-                  isGapRevisado={!!gapsRevisadosMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
-                  onToggleGapRevisado={onToggleGapRevisado}
-                />
-              );
-            })}
-          </motion.tr>
-        ))}
+                              if (silenciada && (!existing || existing?.tipo === 'GAP')) {
+                                return (
+                                  <td key={caja} className="px-3 py-2 text-right">
+                                    <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
+                                  </td>
+                                );
+                              }
+                              if (!existing && !esRutinaMk) {
+                                return (
+                                  <td key={caja} className="px-3 py-2 text-right">
+                                    <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
+                                  </td>
+                                );
+                              }
+                              const cell = existing || {
+                                key: `${local.codigo_tienda}||${caja}||${mk}`,
+                                codigo_tienda: local.codigo_tienda,
+                                local: local.local,
+                                competidor: local.competidor,
+                                caja,
+                                mes: parseInt(mes),
+                                ano: parseInt(ano),
+                                tipo: 'GAP',
+                                tasa: null,
+                              };
+                              return (
+                                <Celda
+                                  key={caja}
+                                  cell={cell}
+                                  puntos={getPuntosCaja(caja)}
+                                  onSave={onSave}
+                                  pendingEdit={pendingEdit}
+                                  onStartEdit={onStartEdit}
+                                  onCancelEdit={onCancelEdit}
+                                  isRevisada={!!revisadasMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
+                                  onMarkRevisada={onMarkRevisada}
+                                  isGapRevisado={!!gapsRevisadosMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
+                                  onToggleGapRevisado={onToggleGapRevisado}
+                                />
+                              );
+                            })}
+                            {/* Total for month */}
+                            <td className="px-3 py-2 text-right">
+                              <span className="font-black text-[12px] text-slate-700 dark:text-white/70">
+                                {totalesPorMes[mk] > 0
+                                  ? fmt(totalesPorMes[mk])
+                                  : <span className="text-slate-300 dark:text-white/15">—</span>
+                                }
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </motion.tr>
+          );
+        })()}
       </AnimatePresence>
     </>
   );
 }
+
 
 // ── Main Component ──────────────────────────────────────────────────────────
 export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasConfigChange, alarmasRevisadas = [], onAlarmasRevisadasChange }) {

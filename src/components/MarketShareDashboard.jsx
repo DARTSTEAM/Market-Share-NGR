@@ -10,7 +10,7 @@ import {
     Filter,
     BookOpen,
 } from 'lucide-react';
-import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, AreaChart, Area, XAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
+import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
 import CustomSelect from './common/CustomSelect';
 
 const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
@@ -55,6 +55,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
     const [onlyEstimados, setOnlyEstimados] = useState(false);
 
     const [chartMetric, setChartMetric] = useState('prom_diario');
+    const [ngrChartMode, setNgrChartMode] = useState('sum'); // 'sum' | 'share'
 
     // Filter trend data
     const chartData = useMemo(() => {
@@ -184,69 +185,161 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                 <section className="pwa-card p-8 space-y-6 border-slate-200 dark:border-white/5 flex flex-col">
                     <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
                         <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
-                            <div className="w-1.5 h-6 bg-accent-orange rounded-full" />
-                            Evolución Transacciones Registradas
+                            <div className={`w-1.5 h-6 rounded-full ${includeNGR ? 'bg-orange-400' : 'bg-accent-orange'}`} />
+                            {includeNGR ? 'NGR vs Competencia' : 'Evolución Transacciones Registradas'}
                         </h3>
-                    <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
+                        <div className="flex items-center gap-2">
+                            {/* Suma / Share toggle — only when NGR is active */}
+                            {includeNGR && (
+                                <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-white/[0.04] rounded-lg border border-slate-200 dark:border-white/10">
+                                    {[{ k: 'sum', label: 'Suma' }, { k: 'share', label: 'Share %' }].map(({ k, label }) => (
+                                        <button
+                                            key={k}
+                                            onClick={() => setNgrChartMode(k)}
+                                            className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${
+                                                ngrChartMode === k
+                                                    ? 'bg-orange-500 text-white shadow-sm'
+                                                    : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                            }`}
+                                        >{label}</button>
+                                    ))}
+                                </div>
+                            )}
+                            <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
+                        </div>
                     </div>
 
 
                     <div className="flex-1 w-full mt-2" style={{ minHeight: '320px' }}>
                         <ResponsiveContainer width="100%" height={320}>
-                            <AreaChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
-                                <defs>
-                                    <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#ff5e00" stopOpacity={0.8} />
-                                        <stop offset="95%" stopColor="#ff5e00" stopOpacity={0} />
-                                    </linearGradient>
-                                    <linearGradient id="colorHistorial" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.4} />
-                                        <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <XAxis
-                                    dataKey="name"
-                                    stroke={theme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"}
-                                    fontSize={10}
-                                    tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
-                                    interval={showHistorial ? Math.floor(chartData.length / 10) : 0}
-                                    tickFormatter={(str) => {
-                                        if (!str || !str.includes('-')) return str;
-                                        const [y, m] = str.split('-');
-                                        const months = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
-                                        return `${months[parseInt(m) - 1]} ${y.slice(-2)}`;
-                                    }}
-                                />
-                                <RechartsTooltip
-                                    contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.9)' : '#fff', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '12px', fontWeight: 'bold' }}
-                                    formatter={(value, name) => [
-                                        value != null ? value.toLocaleString('es-PE') : '—',
-                                        name === 'historial' ? 'Historial campo' : 'Mediciones OK'
-                                    ]}
-                                    itemStyle={{ color: '#ff5e00' }}
-                                />
-                                {/* Historial area — rendered behind OK area */}
-                                {showHistorial && chartMetric === 'trx' && (
-                                    <Area type="monotone" dataKey="historial" name="historial"
-                                        stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 3"
-                                        fillOpacity={1} fill="url(#colorHistorial)" connectNulls />
-                                )}
-                                {showHistorial && chartMetric === 'prom_diario' && (
-                                    <Area type="monotone" dataKey="historialProm" name="historialProm"
-                                        stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 3"
-                                        fillOpacity={1} fill="url(#colorHistorial)" connectNulls />
-                                )}
-                                {/* Main data area */}
-                                {chartMetric === 'trx' ? (
-                                    <Area type="monotone" dataKey="tickets" name="tickets"
-                                        stroke="#ff5e00" strokeWidth={2}
-                                        fillOpacity={1} fill="url(#colorTrend)" connectNulls />
-                                ) : (
-                                    <Area type="monotone" dataKey="promedio" name="promedio"
-                                        stroke="#ff5e00" strokeWidth={2}
-                                        fillOpacity={1} fill="url(#colorTrend)" connectNulls />
-                                )}
-                            </AreaChart>
+                            {includeNGR ? (
+                                /* NGR vs Competencia — stacked (sum) or 100% share */
+                                <AreaChart
+                                    data={chartData.map(d => {
+                                        const comp = d.tickets ?? d.historial ?? 0;
+                                        const ngr  = d.ngrTrx ?? 0;
+                                        const total = comp + ngr;
+                                        if (ngrChartMode === 'share') {
+                                            return {
+                                                ...d,
+                                                competencia: total > 0 ? Math.round(comp / total * 1000) / 10 : 0,
+                                                ngr:         total > 0 ? Math.round(ngr  / total * 1000) / 10 : 0,
+                                                _rawComp: comp, _rawNgr: ngr, _total: total,
+                                            };
+                                        }
+                                        return { ...d, competencia: comp, ngr };
+                                    })}
+                                    margin={{ top: 10, right: 20, left: 10, bottom: 20 }}
+                                >
+                                    <defs>
+                                        <linearGradient id="colorNGR" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%"  stopColor="#F26522" stopOpacity={0.85} />
+                                            <stop offset="95%" stopColor="#F26522" stopOpacity={0.1} />
+                                        </linearGradient>
+                                        <linearGradient id="colorComp" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
+                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.05} />
+                                        </linearGradient>
+                                    </defs>
+                                    <XAxis
+                                        dataKey="name"
+                                        stroke={theme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"}
+                                        fontSize={10}
+                                        tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
+                                        interval={Math.floor(chartData.length / 10)}
+                                        tickFormatter={(str) => {
+                                            if (!str || !str.includes('-')) return str;
+                                            const [y, m] = str.split('-');
+                                            const months = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+                                            return `${months[parseInt(m) - 1]} ${y.slice(-2)}`;
+                                        }}
+                                    />
+                                    <YAxis
+                                        fontSize={9}
+                                        tick={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)' }}
+                                        tickFormatter={v =>
+                                            ngrChartMode === 'share'
+                                                ? `${v}%`
+                                                : v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : v
+                                        }
+                                        domain={ngrChartMode === 'share' ? [0, 100] : ['auto', 'auto']}
+                                    />
+                                    <RechartsTooltip
+                                        contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.92)' : '#fff', border: '1px solid rgba(249,115,22,0.3)', borderRadius: '12px', fontWeight: 'bold' }}
+                                        formatter={(value, name, props) => {
+                                            const label = name === 'ngr' ? '★ NGR Propio' : 'Competencia';
+                                            if (ngrChartMode === 'share') {
+                                                const rawVal = name === 'ngr' ? props.payload._rawNgr : props.payload._rawComp;
+                                                return [
+                                                    `${value.toFixed(1)}%  (${rawVal != null ? rawVal.toLocaleString('es-PE') : '—'} trx)`,
+                                                    label
+                                                ];
+                                            }
+                                            return [value != null ? value.toLocaleString('es-PE') : '—', label];
+                                        }}
+                                    />
+                                    <Area type="monotone" dataKey="competencia" name="competencia"
+                                        stroke="#8b5cf6" strokeWidth={1.5}
+                                        fillOpacity={1} fill="url(#colorComp)" connectNulls stackId="a" />
+                                    <Area type="monotone" dataKey="ngr" name="ngr"
+                                        stroke="#F26522" strokeWidth={2}
+                                        fillOpacity={1} fill="url(#colorNGR)" connectNulls stackId="a" />
+                                </AreaChart>
+                            ) : (
+                                /* Original single-area chart */
+                                <AreaChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
+                                    <defs>
+                                        <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%"  stopColor="#ff5e00" stopOpacity={0.8} />
+                                            <stop offset="95%" stopColor="#ff5e00" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorHistorial" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
+                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <XAxis
+                                        dataKey="name"
+                                        stroke={theme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"}
+                                        fontSize={10}
+                                        tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
+                                        interval={showHistorial ? Math.floor(chartData.length / 10) : 0}
+                                        tickFormatter={(str) => {
+                                            if (!str || !str.includes('-')) return str;
+                                            const [y, m] = str.split('-');
+                                            const months = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+                                            return `${months[parseInt(m) - 1]} ${y.slice(-2)}`;
+                                        }}
+                                    />
+                                    <RechartsTooltip
+                                        contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.9)' : '#fff', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '12px', fontWeight: 'bold' }}
+                                        formatter={(value, name) => [
+                                            value != null ? value.toLocaleString('es-PE') : '—',
+                                            name === 'historial' ? 'Historial campo' : 'Mediciones OK'
+                                        ]}
+                                        itemStyle={{ color: '#ff5e00' }}
+                                    />
+                                    {showHistorial && chartMetric === 'trx' && (
+                                        <Area type="monotone" dataKey="historial" name="historial"
+                                            stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 3"
+                                            fillOpacity={1} fill="url(#colorHistorial)" connectNulls />
+                                    )}
+                                    {showHistorial && chartMetric === 'prom_diario' && (
+                                        <Area type="monotone" dataKey="historialProm" name="historialProm"
+                                            stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 3"
+                                            fillOpacity={1} fill="url(#colorHistorial)" connectNulls />
+                                    )}
+                                    {chartMetric === 'trx' ? (
+                                        <Area type="monotone" dataKey="tickets" name="tickets"
+                                            stroke="#ff5e00" strokeWidth={2}
+                                            fillOpacity={1} fill="url(#colorTrend)" connectNulls />
+                                    ) : (
+                                        <Area type="monotone" dataKey="promedio" name="promedio"
+                                            stroke="#ff5e00" strokeWidth={2}
+                                            fillOpacity={1} fill="url(#colorTrend)" connectNulls />
+                                    )}
+                                </AreaChart>
+                            )}
                         </ResponsiveContainer>
                     </div>
                 </section>
