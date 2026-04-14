@@ -485,6 +485,10 @@ export default function App({ user, onSignOut }) {
   const [cajasConfig, setCajasConfig] = useState([]);        // [{codigo_tienda, caja, status, ...}]
   const [alarmasRevisadas, setAlarmasRevisadas] = useState([]); // [{codigo_tienda, caja, mes, ano, ...}]
 
+  // NGR own-store data (loaded once from /api/ngr-locales)
+  const [ngrLocales, setNgrLocales] = useState([]);
+  const [includeNGR, setIncludeNGR] = useState(false);
+
   // Log de login (se ejecuta una vez cuando el usuario está disponible)
   const loginLoggedRef = useRef(false);
   useEffect(() => {
@@ -507,10 +511,11 @@ export default function App({ user, onSignOut }) {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [dataRes, cajasRes, revisadasRes] = await Promise.all([
+        const [dataRes, cajasRes, revisadasRes, ngrRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/data`),
           fetch(`${API_BASE_URL}/api/cajas-config`).catch(() => null),
           fetch(`${API_BASE_URL}/api/alarmas-revisadas`).catch(() => null),
+          fetch(`${API_BASE_URL}/api/ngr-locales`).catch(() => null),
         ]);
         if (dataRes.ok) {
           const data = await dataRes.json();
@@ -524,6 +529,10 @@ export default function App({ user, onSignOut }) {
         if (revisadasRes?.ok) {
           const rev = await revisadasRes.json();
           if (rev.revisadas) setAlarmasRevisadas(rev.revisadas);
+        }
+        if (ngrRes?.ok) {
+          const ngr = await ngrRes.json();
+          if (ngr.locales) setNgrLocales(ngr.locales);
         }
       } catch (error) {
         console.error('Error fetching initial data:', error);
@@ -699,12 +708,20 @@ export default function App({ user, onSignOut }) {
   }, [yearsArr]);
 
   const competitorOptions = useMemo(() => {
-    const baseOptions = [{ value: 'all', label: 'Todos los Competidores' }];
+    const baseOptions = [{ value: 'all', label: 'Todas las Cadenas' }];
     const filteredComps = filters.category === 'all'
       ? competitorsArr
       : competitorsArr.filter(c => COMPETITOR_TO_CATEGORY[c] === filters.category);
 
-    return [...baseOptions, ...filteredComps.map(c => ({ value: c, label: c }))];
+    const competitorItems = filteredComps.map(c => ({ value: c, label: c }));
+
+    // Add NGR own brands as selectable options (only if data loaded)
+    const ngrBrands = ['POPEYES', 'Bembos', 'Papa Johns', 'CHINAWOK'];
+    const ngrItems = ngrBrands
+      .filter(b => !filteredComps.includes(b)) // avoid dupes if already in pipeline
+      .map(b => ({ value: `NGR:${b}`, label: `★ ${b}` }));
+
+    return [...baseOptions, ...competitorItems, ...(ngrItems.length > 0 ? [{ value: '__divider__', label: '── Locales NGR ──', disabled: true }, ...ngrItems] : [])];
   }, [competitorsArr, filters.category]);
 
   const latestYear = useMemo(() => {
@@ -955,27 +972,55 @@ export default function App({ user, onSignOut }) {
     };
   }, [filteredRecords, marketShareRecords, filteredTickets, tickets, filters.competitor]);
 
-  // 3. Reactive Share Data (Exclusive for Market Share - based on Routine OK)
+  // 3. Reactive Share Data (Exclusive for Market Share)
+  // When includeNGR=true, NGR brands are added to the share pool
+  // using trx_promedio summed over the same date window as marketShareRecords.
   const reactiveShareDataRoutine = useMemo(() => {
+    // --- Competitor totals from pipeline records ---
     const totalsByComp = {};
     marketShareRecords.forEach(r => {
       if (!totalsByComp[r.competidor]) totalsByComp[r.competidor] = 0;
       totalsByComp[r.competidor] += (parseFloat(r.transacciones) || 0);
     });
 
+    // --- Optional: add NGR brands ---
+    if (includeNGR && ngrLocales.length > 0) {
+      // Match EXACT year-month combinations present in marketShareRecords
+      // (using Set for precision instead of min/max range)
+      const periodSet = new Set(
+        marketShareRecords
+          .filter(r => r.ano && r.mes)
+          .map(r => `${Number(r.ano)}-${Number(r.mes)}`)
+      );
+
+      ngrLocales
+        .filter(r => periodSet.has(`${r.ano}-${r.mes}`))
+        .forEach(r => {
+          if (!totalsByComp[r.marca]) totalsByComp[r.marca] = 0;
+          // trx_total = total mensual (comparable con transacciones_diferencial de competencia)
+          totalsByComp[r.marca] += (r.trx_total || 0);
+        });
+    }
+
     const BRAND_COLORS = {
-      'KFC':           '#E4002B',
-      'MCDONALDS':     '#FFC72C',
-      "MCDONALD'S":    '#FFC72C',
-      'BURGER KING':   '#FF8C00',
-      'DOMINOS':       '#006491',
-      "DOMINO'S":      '#006491',
-      'PIZZA HUT':     '#EE3A24',
-      'LITTLE CAESARS':  '#6D1F7E',
-      "LITTLE CAESAR'S": '#6D1F7E',
-      'WANTA':         '#00B4A0',
-      'POPEYES':       '#F26522',
-      'SUBWAY':        '#009B48',
+      'KFC':            '#E4002B',
+      'MCDONALDS':      '#FFC72C',
+      "MCDONALD'S":     '#FFC72C',
+      'BURGER KING':    '#FF8C00',
+      'DOMINOS':        '#006491',
+      "DOMINO'S":       '#006491',
+      'PIZZA HUT':      '#EE3A24',
+      'LITTLE CAESARS': '#6D1F7E',
+      "LITTLE CAESAR'S":'#6D1F7E',
+      'WANTA':          '#00B4A0',
+      'POPEYES':        '#F26522',
+      'SUBWAY':         '#009B48',
+      // NGR own brands
+      'Bembos':         '#CC1F1F',
+      'BEMBOS':         '#CC1F1F',
+      'Papa Johns':     '#007743',
+      'PAPA JOHNS':     '#007743',
+      'CHINAWOK':       '#F0A500',
     };
     const FALLBACK = ['#64748b','#94a3b8','#475569','#6366f1','#0ea5e9','#14b8a6'];
     let fallbackIdx = 0;
@@ -983,11 +1028,11 @@ export default function App({ user, onSignOut }) {
     return Object.entries(totalsByComp)
       .map(([name, value]) => {
         const key = name?.toUpperCase().trim();
-        const color = BRAND_COLORS[key] || FALLBACK[fallbackIdx++ % FALLBACK.length];
-        return { name, value, color };
+        const color = BRAND_COLORS[name] || BRAND_COLORS[key] || FALLBACK[fallbackIdx++ % FALLBACK.length];
+        return { name, value, color, isNGR: !!(includeNGR && ['POPEYES','Bembos','Papa Johns','CHINAWOK'].includes(name)) };
       })
       .sort((a, b) => b.value - a.value);
-  }, [marketShareRecords]);
+  }, [marketShareRecords, includeNGR, ngrLocales]);
 
   // 3b. Reactive Share Data (For Competitor Analysis - based on facturas_v2)
   const reactiveShareDataTickets = useMemo(() => {
@@ -1524,6 +1569,7 @@ export default function App({ user, onSignOut }) {
                 allRecords={marketShareRecords}
                 evolutionRecords={pcEvolutionRecords}
                 shareData={reactiveShareDataRoutine}
+                ngrLocales={ngrLocales}
               />
             ) : (
               <MarketShareDashboard
@@ -1536,6 +1582,8 @@ export default function App({ user, onSignOut }) {
                 trendData={reactiveTrendDataRoutine}
                 filteredTableData={sortedTableDataRoutine}
                 allRecords={marketShareRecords}
+                includeNGR={includeNGR}
+                onToggleNGR={() => setIncludeNGR(v => !v)}
               />
             )
           ) : (

@@ -7,19 +7,31 @@ import {
 import {
     ResponsiveContainer, PieChart, Pie, Cell, Tooltip as ReTooltip,
     LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+    AreaChart, Area,
 } from 'recharts';
 import CustomSelect from './common/CustomSelect';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const PALETTE = ['#ff5e00', '#0070f3', '#ccff00', '#7000f3', '#00f3a0', '#f30070', '#f3a000', '#00d4f3'];
+const PALETTE = ['#ff5e00', '#0070f3', '#7c3aed', '#00b4a0', '#f59e0b', '#e11d48', '#0ea5e9', '#84cc16'];
 const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 const BRAND_COLORS = {
-    'mcdonald': '#FFC72C', 'burger king': '#FF7A00', 'bembos': '#CC1F1F',
-    'hermanos': '#A52020', 'kfc': '#F40027', 'popeyes': '#0055A5',
-    'church': '#8B0000', 'norkys': '#F0A500', 'pardos': '#7B3F00',
-    'pizza hut': '#8B1A1A', 'domino': '#006AAD', 'papa john': '#007743',
-    'telepizza': '#C00D0D', 'little caesars': '#9B1C1C',
+    'kfc':           '#E4002B',
+    'mcdonald':      '#FFC72C',
+    'burger king':   '#FF8C00',
+    'domino':        '#006491',
+    'pizza hut':     '#EE3A24',
+    'little caesars': '#6D1F7E',
+    'popeyes':       '#F26522',
+    'subway':        '#009B48',
+    'bembos':        '#CC1F1F',
+    'norkys':        '#F0A500',
+    'pardos':        '#7B3F00',
+    'papa john':     '#007743',
+    'wanta':         '#00B4A0',
+    'hermanos':      '#A52020',
+    'church':        '#8B0000',
+    'telepizza':     '#C00D0D',
 };
 
 function colorFor(name) {
@@ -186,13 +198,73 @@ const EvolutionChart = ({ monthData, competitors }) => {
     );
 };
 
+// ─── Share Tooltip (module-level — avoids TDZ error en bundle minificado) ────
+const ShareTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+        <div className="bg-slate-900/95 border border-white/10 rounded-xl p-3 shadow-2xl text-[10px] min-w-[150px]">
+            <p className="font-black uppercase tracking-widest text-white/50 mb-2">{label}</p>
+            {[...payload].reverse().map((p, i) => (
+                <div key={i} className="flex justify-between gap-4 items-center">
+                    <span className="font-bold" style={{ color: p.color }}>{p.name}</span>
+                    <span className="font-black font-mono text-white">{p.value?.toFixed(1)}%</span>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+// ─── Share % Evolution Chart (100% stacked area) ─────────────────────────────
+const ShareEvolutionChart = ({ monthData, competitors }) => {
+    const data = Object.entries(monthData || {})
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([mk, byComp]) => {
+            const [ano, mes] = mk.split('-');
+            const label = `${MONTH_SHORT[parseInt(mes) - 1]}-${ano.slice(2)}`;
+            const total = competitors.reduce((s, c) => s + (byComp[c] ?? 0), 0);
+            const row = { name: label };
+            competitors.forEach(c => {
+                row[c] = total > 0 ? Math.round((byComp[c] ?? 0) / total * 1000) / 10 : 0;
+            });
+            return row;
+        });
+
+    if (data.length < 2) return (
+        <div className="flex items-center justify-center h-40 text-[10px] text-slate-400 dark:text-white/30 font-bold uppercase tracking-widest">
+            Insuficiente historia para mostrar evolutivo
+        </div>
+    );
+
+    return (
+        <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }} stackOffset="expand">
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
+                <XAxis dataKey="name" fontSize={8} tick={{ fill: 'rgba(100,116,139,0.7)', fontWeight: 900 }} />
+                <YAxis fontSize={8} tick={{ fill: 'rgba(100,116,139,0.6)' }}
+                    tickFormatter={v => `${Math.round(v * 100)}%`} domain={[0, 1]} width={36} />
+                <ReTooltip content={ShareTooltip} />
+                <Legend iconSize={7} iconType="circle"
+                    formatter={v => <span style={{ fontSize: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{v}</span>} />
+                {competitors.map(comp => (
+                    <Area key={comp} type="monotone" dataKey={comp}
+                        stackId="1"
+                        stroke={colorFor(comp)} strokeWidth={1.5}
+                        fill={colorFor(comp)} fillOpacity={0.75}
+                        connectNulls />
+                ))}
+            </AreaChart>
+        </ResponsiveContainer>
+    );
+};
+
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
-const PCDetailPanel = ({ pc, evolutionData, onClose, allPCs, currentIndex, onNavigate }) => {
+const PCDetailPanel = ({ pc, evolutionData, onClose, allPCs, currentIndex, onNavigate, ngrForPC = [] }) => {
     if (!pc) return null;
     const isCC = !!pc.cc_nombre;
     const hasPrev = currentIndex > 0;
     const hasNext = currentIndex < allPCs.length - 1;
     const totalProm = pc.byComp.reduce((s, d) => s + (d.prom || 0), 0);
+    const [chartTab, setChartTab] = React.useState('trx'); // 'trx' | 'share'
 
     React.useEffect(() => {
         const handler = (e) => {
@@ -323,18 +395,73 @@ const PCDetailPanel = ({ pc, evolutionData, onClose, allPCs, currentIndex, onNav
                     </div>
                 </div>
 
-                {/* Evolution Line Chart */}
-                <div className="border-t border-slate-200 dark:border-white/10 pt-6">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Activity className="w-4 h-4 text-accent-orange" />
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
-                            Evolutivo mensual — Promedio de transacciones diarias por competidor
-                        </p>
+                {/* NGR proprio performance block */}
+                {ngrForPC.length > 0 && (
+                    <div className="border-t border-orange-500/20 pt-5">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">★ NGR</span>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Locales propios NGR en este punto</p>
+                        </div>
+                        <div className="space-y-2">
+                            {ngrForPC.map((ngr, i) => {
+                                const maxNgr = Math.max(...ngrForPC.map(n => n.trx_promedio));
+                                const pct = maxNgr > 0 ? (ngr.trx_promedio / maxNgr) * 100 : 0;
+                                return (
+                                    <div key={i} className="flex items-center gap-3">
+                                        <div className="w-24 text-right flex-shrink-0">
+                                            <span className="text-[9px] font-black uppercase" style={{ color: colorFor(ngr.marca) }}>{ngr.marca}</span>
+                                        </div>
+                                        <div className="flex-1 h-2 bg-slate-100 dark:bg-white/[0.04] rounded-full overflow-hidden">
+                                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: colorFor(ngr.marca) }} />
+                                        </div>
+                                        <span className="text-[9px] font-black font-mono text-slate-700 dark:text-white/70 w-12 text-right">{ngr.trx_promedio.toFixed(0)}</span>
+                                        <span className="text-[8px] text-slate-400 dark:text-white/25">/día</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                    <EvolutionChart
-                        monthData={evolutionData || {}}
-                        competitors={pc.byComp.map(c => c.name)}
-                    />
+                )}
+
+                {/* Evolution charts with tab toggle */}
+                <div className="border-t border-slate-200 dark:border-white/10 pt-6">
+                    <div className="flex items-center justify-between gap-2 mb-4">
+                        <div className="flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-accent-orange" />
+                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
+                                {chartTab === 'trx'
+                                    ? 'Evolutivo mensual — Prom. transacciones diarias'
+                                    : 'Evolutivo mensual — Share % por competidor'}
+                            </p>
+                        </div>
+                        {/* Tab toggle */}
+                        <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/[0.04] rounded-xl border border-slate-200 dark:border-white/8">
+                            {[{ id: 'trx', label: 'Trx' }, { id: 'share', label: 'Share %' }].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setChartTab(tab.id)}
+                                    className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
+                                        chartTab === tab.id
+                                            ? 'bg-accent-orange text-white shadow-sm'
+                                            : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white'
+                                    }`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    {chartTab === 'trx' ? (
+                        <EvolutionChart
+                            monthData={evolutionData || {}}
+                            competitors={pc.byComp.map(c => c.name)}
+                        />
+                    ) : (
+                        <ShareEvolutionChart
+                            monthData={evolutionData || {}}
+                            competitors={pc.byComp.map(c => c.name)}
+                        />
+                    )}
                 </div>
 
                 {/* Locales table */}
@@ -495,7 +622,7 @@ const MacroTable = ({ pcs, onSelectPC }) => {
 };
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function PuntosCompartidosDashboard({ allRecords, evolutionRecords, shareData }) {
+export default function PuntosCompartidosDashboard({ allRecords, evolutionRecords, shareData, ngrLocales = [] }) {
     const [selectedPC, setSelectedPC] = useState(null);
     const [filterTipo, setFilterTipo] = useState('all');
     const [filterCadena, setFilterCadena] = useState('all');
@@ -588,6 +715,36 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         });
         return map;
     }, [evolutionRecords, allRecords]);
+
+    // ─── NGR locales grouped by PC name (matched by local name) ─────────────
+    // Match: NGR 'local' (e.g. 'Jockey Plaza') == PC 'nombre' (e.g. 'Jockey Plaza')
+    // Uses normalized key (lowercase + no accents) for robustness
+    const ngrByPC = useMemo(() => {
+        const normalize = s => (s || '').toLowerCase().trim()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+            .replace(/\s+/g, ' ');
+
+        const map = {}; // normalizedName → { original, marcas: {marca → {total, count}} }
+        ngrLocales.forEach(r => {
+            if (!r.punto_compartido || !r.local) return;
+            const normKey = normalize(r.local);
+            if (!map[normKey]) map[normKey] = { original: r.local, marcas: {} };
+            if (!map[normKey].marcas[r.marca]) map[normKey].marcas[r.marca] = { total: 0, count: 0 };
+            map[normKey].marcas[r.marca].total += r.trx_promedio;
+            map[normKey].marcas[r.marca].count += 1;
+        });
+
+        // Build result keyed by BOTH original and normalized names for lookup
+        const result = {}; // pcName → [{ marca, trx_promedio }]
+        Object.entries(map).forEach(([normKey, data]) => {
+            const arr = Object.entries(data.marcas)
+                .map(([marca, d]) => ({ marca, trx_promedio: Math.round(d.total / d.count * 10) / 10 }))
+                .sort((a, b) => b.trx_promedio - a.trx_promedio);
+            result[data.original] = arr;   // exact original name
+            result[normKey] = arr;          // normalized (fallback)
+        });
+        return result;
+    }, [ngrLocales]);
 
     const cadenaOptions = useMemo(() => {
         const vals = [...new Set(pcData.map(p => p.grupos_cc).filter(Boolean))].sort();
@@ -796,6 +953,10 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                         allPCs={filteredPCs}
                         currentIndex={filteredPCs.findIndex(p => p.nombre === selectedPC.nombre)}
                         onNavigate={(idx) => setSelectedPC(filteredPCs[idx])}
+                        ngrForPC={(() => {
+                            const norm = s => (s || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+                            return ngrByPC[selectedPC.nombre] || ngrByPC[norm(selectedPC.nombre)] || [];
+                        })()}
                     />
                 )}
             </AnimatePresence>

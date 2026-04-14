@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import ReactDOM from 'react-dom';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ClipboardEdit, RefreshCw, AlertTriangle, CheckCircle2,
@@ -474,7 +474,7 @@ function DeleteCajaButton({ cfg, user, onDeleted, onError }) {
       </button>
 
       {/* Modal de advertencia */}
-      {open && ReactDOM.createPortal(
+      {open && createPortal(
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center p-4"
           onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}
@@ -885,6 +885,13 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
         || (cajaStatusMap[cajaKey]  || 'ACTIVA') === 'SIN_ALARMAS';
   };
 
+  // Lookup rápido de GAPs revisados (DEBE estar antes de totalGaps que lo usa como dep)
+  const gapsRevisadosMap = useMemo(() => {
+    const m = {};
+    gapsRevisados.forEach(r => { m[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`] = true; });
+    return m;
+  }, [gapsRevisados]);
+
   // Conteos (excluye cajas silenciadas del total de gaps)
   const totalGaps = useMemo(() =>
     matrix.reduce((acc, local) => {
@@ -957,13 +964,6 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
     alarmasRevisadas.forEach(r => { m[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`] = true; });
     return m;
   }, [alarmasRevisadas]);
-
-  // Lookup rápido de GAPs revisados
-  const gapsRevisadosMap = useMemo(() => {
-    const m = {};
-    gapsRevisados.forEach(r => { m[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`] = true; });
-    return m;
-  }, [gapsRevisados]);
 
   // Marcar/desmarcar GAP como revisado
   const handleToggleGapRevisado = useCallback((cell, marcar) => {

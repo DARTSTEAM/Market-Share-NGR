@@ -1223,6 +1223,57 @@ app.post('/api/alarmas-revisadas', async (req, res) => {
     }
 });
 
+// ── /api/ngr-locales ─────────────────────────────────────────────────────────
+// Devuelve histórico NGR (locales propios): POPEYES, Bembos, Papa Johns, CHINAWOK
+const cacheNGR = { data: null, fetchedAt: null };
+const NGR_TTL_MS = 30 * 60 * 1000; // 30 min
+
+app.get('/api/ngr-locales', async (req, res) => {
+    try {
+        const isStale = !cacheNGR.fetchedAt || (Date.now() - new Date(cacheNGR.fetchedAt).getTime()) > NGR_TTL_MS;
+        if (isStale || !cacheNGR.data) {
+            console.log('[/api/ngr-locales] Fetching from BigQuery...');
+            const [rows] = await bigquery.query(`
+                SELECT
+                    marca, local, store_num, codigo_interno,
+                    distrito, zona, region, formato, categoria,
+                    estado, es_sss, punto_compartido,
+                    ano, mes, mes_texto, dias_mes,
+                    trx_total, trx_promedio
+                FROM \`${PROJECT_ID}.${DATASET_ID}.historial_ngr\`
+                WHERE trx_total > 0
+                ORDER BY marca, local, ano, mes
+            `);
+            cacheNGR.data = rows.map(r => ({
+                marca:            r.marca || '',
+                local:            r.local || '',
+                store_num:        r.store_num || '',
+                codigo_interno:   r.codigo_interno || '',
+                distrito:         r.distrito || '',
+                zona:             r.zona || '',
+                region:           r.region || '',
+                formato:          r.formato || '',
+                categoria:        r.categoria || '',
+                estado:           r.estado || '',
+                es_sss:           !!r.es_sss,
+                punto_compartido: !!r.punto_compartido,
+                ano:              Number(r.ano),
+                mes:              Number(r.mes),
+                mes_texto:        r.mes_texto || '',
+                dias_mes:         Number(r.dias_mes),
+                trx_total:        Number(r.trx_total),
+                trx_promedio:     Number(r.trx_promedio),
+            }));
+            cacheNGR.fetchedAt = new Date().toISOString();
+            console.log(`[/api/ngr-locales] Loaded ${cacheNGR.data.length} rows.`);
+        }
+        res.json({ locales: cacheNGR.data, fetchedAt: cacheNGR.fetchedAt });
+    } catch (err) {
+        console.error('[/api/ngr-locales] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.listen(port, () => {
     console.log(`NGR Proxy server running at http://localhost:${port}`);
     console.log(`  Project: ${PROJECT_ID} | Dataset: ${DATASET_ID}`);
