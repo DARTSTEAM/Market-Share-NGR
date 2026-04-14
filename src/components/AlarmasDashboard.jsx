@@ -23,7 +23,8 @@ import {
     Monitor,
     Store,
     TrendingUp,
-    ArrowUpDown
+    ArrowUpDown,
+    BellOff
 } from 'lucide-react';
 import CustomSelect from './common/CustomSelect';
 
@@ -56,7 +57,7 @@ const ITEMS_PER_PAGE = 10;
 
 const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) => {
+const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigChange, onUpdateTicket, isRefreshing }) => {
     const [activeTab, setActiveTab] = useState('alarmas'); // 'alarmas' | 'estimados'
     const [selectedStatus, setSelectedStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -71,6 +72,21 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
     const [estFilterComp, setEstFilterComp] = useState('all');
     const [estSortBy, setEstSortBy] = useState('trx_desc');
 
+    // Build a fast lookup for caja config: `codigo_tienda||caja` → status
+    const cajaStatusMap = useMemo(() => {
+        const map = {};
+        cajasConfig.forEach(cfg => {
+            map[`${cfg.codigo_tienda}||${cfg.caja}`] = cfg.status;
+        });
+        return map;
+    }, [cajasConfig]);
+
+    const getCajaStatus = (r) => {
+        const cajaNum = String(r.caja || '').replace(/^0+/, '') || String(r.caja || '');
+        return cajaStatusMap[`${r.codigo_tienda}||${r.caja}`]
+            || cajaStatusMap[`${r.codigo_tienda}||${cajaNum}`]
+            || 'ACTIVA';
+    };
 
     // Dynamic filter options derived from records
     const mesOptions = useMemo(() => {
@@ -115,6 +131,10 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
             if (r.status_busqueda === 'HISTORIAL') return false;
             if (r.status_busqueda?.startsWith('ESTIMADO-')) return false; // handled in Estimados tab
 
+            // Cajas DISCONTINUADAS se ocultan completamente de alarmas
+            const cajaStatus = getCajaStatus(r);
+            if (cajaStatus === 'DISCONTINUADA') return false;
+
             const matchesStatus = selectedStatus === 'all' || r.status_busqueda === selectedStatus;
             const matchesMes = filterMes === 'all' || (r.mes && String(parseInt(r.mes)) === filterMes);
             const matchesCompetidor = filterCompetidor === 'all' || r.competidor === filterCompetidor;
@@ -139,7 +159,7 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
             if (sortBy === 'codigo_tienda') return (a.codigo_tienda || '').localeCompare(b.codigo_tienda || '');
             return 0;
         });
-    }, [records, selectedStatus, searchTerm, filterMes, filterCompetidor, filterLocal, sortBy]);
+    }, [records, cajasConfig, selectedStatus, searchTerm, filterMes, filterCompetidor, filterLocal, sortBy, getCajaStatus]);
 
     // Estimated gap records
     const estimatedRecords = useMemo(() => {
@@ -519,12 +539,21 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                             <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[11px]">
                                 {paginatedRecords.map((r, idx) => {
                                     const config = ALARM_STATUS_CONFIG[r.status_busqueda] || { label: r.status_busqueda, color: 'text-slate-400', bg: 'bg-slate-400/10', icon: Info };
+                                    const cajaStatus = getCajaStatus(r);
+                                    const sinAlarmas = cajaStatus === 'SIN_ALARMAS';
                                     return (
-                                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors">
+                                        <tr key={idx} className={`transition-colors ${sinAlarmas ? 'opacity-60 bg-amber-50/30 dark:bg-amber-900/5 hover:opacity-80' : 'hover:bg-slate-50 dark:hover:bg-white/[0.03]'}`}>
                                             <td className="px-6 py-4">
-                                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bg}`}>
-                                                    <config.icon size={12} className={config.color} />
-                                                    <span className={`font-black uppercase tracking-tighter ${config.color}`}>{config.label}</span>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bg}`}>
+                                                        <config.icon size={12} className={config.color} />
+                                                        <span className={`font-black uppercase tracking-tighter ${config.color}`}>{config.label}</span>
+                                                    </div>
+                                                    {sinAlarmas && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[8px] font-black uppercase tracking-wider">
+                                                            <BellOff size={8} /> Sin alarmas
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 font-mono font-bold text-slate-400">
@@ -560,6 +589,7 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                                         </tr>
                                     );
                                 })}
+
                             </tbody>
                         </table>
                     </div>

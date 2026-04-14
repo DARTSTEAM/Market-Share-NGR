@@ -481,7 +481,8 @@ export default function App({ user, onSignOut }) {
   // Use state for data to make it reactive to updates
   const [records, setRecords] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [cajasConfig, setCajasConfig] = useState([]);  // [{codigo_tienda, caja, status, ...}]
+  const [cajasConfig, setCajasConfig] = useState([]);        // [{codigo_tienda, caja, status, ...}]
+  const [alarmasRevisadas, setAlarmasRevisadas] = useState([]); // [{codigo_tienda, caja, mes, ano, ...}]
   // Initial data fetch to sync with BigQuery on load
   useEffect(() => {
     const fetchInitialData = async () => {

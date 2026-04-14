@@ -481,7 +481,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
 
 // POST /api/save-estimation — MERGE una estimación manual a BigQuery
 app.post('/api/save-estimation', async (req, res) => {
-    const { codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo, usuario, usuario_nombre } = req.body;
+    const { codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo, aprobado, usuario, usuario_nombre } = req.body;
     if (!codigo_tienda || !caja || !mes || !ano || trx_diarias == null) {
         return res.status(400).json({ error: 'codigo_tienda, caja, mes, ano, trx_diarias son requeridos' });
     }
@@ -926,6 +926,107 @@ app.post('/api/add-caja', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         console.error('[/api/add-caja] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── Alarmas revisadas ────────────────────────────────────────────────────────
+let revisadasCache = { data: null, fetchedAt: null };
+const REVISADAS_TTL = 2 * 60 * 1000; // 2 min
+
+async function ensureRevisadasTable() {
+    const CREATE_Q = `
+        CREATE TABLE IF NOT EXISTS \`${PROJECT_ID}.${DATASET_ID}.alarmas_revisadas\` (
+            codigo_tienda  STRING,
+            caja           STRING,
+            mes            INT64,
+            ano            INT64,
+            revisado_por   STRING,
+            revisado_at    TIMESTAMP
+        )
+    `;
+    const [job] = await bigquery.createQueryJob({ query: CREATE_Q });
+    await job.getQueryResults();
+}
+
+// GET /api/alarmas-revisadas
+app.get('/api/alarmas-revisadas', async (req, res) => {
+    const now = Date.now();
+    if (revisadasCache.data && now - revisadasCache.fetchedAt < REVISADAS_TTL) {
+        return res.json({ revisadas: revisadasCache.data });
+    }
+    try {
+        await ensureRevisadasTable();
+        const [rows] = await bigquery.query({
+            query: `SELECT codigo_tienda, caja, mes, ano, revisado_por, revisado_at
+                    FROM \`${PROJECT_ID}.${DATASET_ID}.alarmas_revisadas\`
+                    ORDER BY revisado_at DESC`,
+        });
+        revisadasCache = { data: rows, fetchedAt: now };
+        res.json({ revisadas: rows });
+    } catch (err) {
+        console.error('[/api/alarmas-revisadas GET] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/alarmas-revisadas — insert or delete (toggle)
+app.post('/api/alarmas-revisadas', async (req, res) => {
+    const { codigo_tienda, caja, mes, ano, revisado_por, accion } = req.body;
+    if (!codigo_tienda || !caja || !mes || !ano) {
+        return res.status(400).json({ error: 'codigo_tienda, caja, mes, ano son requeridos' });
+    }
+    try {
+        await ensureRevisadasTable();
+        if (accion === 'QUITAR') {
+            // Eliminar revisión
+            const DEL_Q = `
+                DELETE FROM \`${PROJECT_ID}.${DATASET_ID}.alarmas_revisadas\`
+                WHERE codigo_tienda = @codigo_tienda
+                  AND caja = @caja
+                  AND mes  = @mes
+                  AND ano  = @ano
+            `;
+            const [job] = await bigquery.createQueryJob({
+                query: DEL_Q,
+                params: { codigo_tienda, caja: String(caja), mes: parseInt(mes), ano: parseInt(ano) },
+                types: { mes: 'INT64', ano: 'INT64' },
+            });
+            await job.getQueryResults();
+        } else {
+            // Upsert revisión
+            const MERGE_Q = `
+                MERGE \`${PROJECT_ID}.${DATASET_ID}.alarmas_revisadas\` T
+                USING (SELECT
+                    @codigo_tienda AS codigo_tienda,
+                    @caja          AS caja,
+                    @mes           AS mes,
+                    @ano           AS ano,
+                    @revisado_por  AS revisado_por
+                ) S
+                ON T.codigo_tienda = S.codigo_tienda
+                   AND T.caja = S.caja
+                   AND T.mes  = S.mes
+                   AND T.ano  = S.ano
+                WHEN MATCHED THEN UPDATE SET
+                    revisado_por = S.revisado_por,
+                    revisado_at  = CURRENT_TIMESTAMP()
+                WHEN NOT MATCHED THEN INSERT
+                    (codigo_tienda, caja, mes, ano, revisado_por, revisado_at)
+                    VALUES (S.codigo_tienda, S.caja, S.mes, S.ano, S.revisado_por, CURRENT_TIMESTAMP())
+            `;
+            const [job] = await bigquery.createQueryJob({
+                query: MERGE_Q,
+                params: { codigo_tienda, caja: String(caja), mes: parseInt(mes), ano: parseInt(ano), revisado_por: revisado_por || 'dashboard' },
+                types: { mes: 'INT64', ano: 'INT64' },
+            });
+            await job.getQueryResults();
+        }
+        revisadasCache.fetchedAt = null; // invalidate
+        console.log(`[/api/alarmas-revisadas] ${accion || 'MARCAR'}: ${codigo_tienda} caja=${caja} ${mes}/${ano}`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[/api/alarmas-revisadas POST] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });

@@ -4,7 +4,7 @@ import {
   ClipboardEdit, RefreshCw, AlertTriangle, CheckCircle2,
   Loader2, ChevronDown, ChevronRight, Search,
   TrendingDown, Wifi, Database, Info, X, Check, Pencil,
-  ShieldCheck, Clock, Settings2, Plus, Power, BellOff, Store
+  ShieldCheck, Clock, Settings2, Plus, Power, BellOff, Store, Bell
 } from 'lucide-react';
 
 const API = window.location.hostname === 'localhost'
@@ -24,7 +24,34 @@ const TIPO_CONFIG = {
 
 const fmt = n => n != null ? Number(n).toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—';
 
-// ── Calcula "igual al anterior" dado el listado de puntos históricos ──────────
+// ── Calcula promedio simple de los últimos N meses ────────────────────────────
+function calcularProm6M(puntos) {
+  const disponibles = puntos
+    .filter(p => p.tipo !== 'GAP' && p.tasa != null && p.tasa > 0)
+    .sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes)
+    .slice(0, 6);
+  if (!disponibles.length) return null;
+  return disponibles.reduce((s, p) => s + p.tasa, 0) / disponibles.length;
+}
+
+// ── Promedio ponderado (más reciente = más peso, decay exponencial) ────────────
+function calcularPromPonderado(puntos) {
+  const disponibles = puntos
+    .filter(p => p.tipo !== 'GAP' && p.tasa != null && p.tasa > 0)
+    .sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes)
+    .slice(0, 6);
+  if (!disponibles.length) return null;
+  const decay = 0.75; // peso[i] = decay^i  (i=0 es el más reciente)
+  let sumW = 0, sumWV = 0;
+  disponibles.forEach((p, i) => {
+    const w = Math.pow(decay, i);
+    sumW  += w;
+    sumWV += w * p.tasa;
+  });
+  return sumWV / sumW;
+}
+
+// ── Calcula "igual al anterior" (el mes más reciente disponible) ──────────────
 function calcularIgualAnterior(puntos) {
   const disponibles = puntos
     .filter(p => p.tipo !== 'GAP' && p.tasa != null && p.tasa > 0)
@@ -32,71 +59,98 @@ function calcularIgualAnterior(puntos) {
   return disponibles[0]?.tasa ?? null;
 }
 
+const METODOS = [
+  { key: 'PROM_6M',        label: 'Prom. 6 meses',     desc: 'Media simple de los últimos 6 meses reales',          calc: calcularProm6M },
+  { key: 'IGUAL_ANTERIOR', label: 'Igual al anterior',  desc: 'Mismo valor que el mes inmediatamente anterior',      calc: calcularIgualAnterior },
+  { key: 'PROM_PONDERADO', label: 'Prom. ponderado',    desc: 'Más peso a los meses recientes (decay exponencial)',  calc: calcularPromPonderado },
+];
+
 // ── Panel de edición para un GAP ──────────────────────────────────────────────
-// Abre con el valor "igual al anterior" pre-cargado.
-// Requiere marcar "Aprobado" para guardarlo como aprobado = true.
 function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
-  const sugerido = useMemo(() => calcularIgualAnterior(puntos || []), [puntos]);
-  const [manualVal, setManualVal] = useState(sugerido != null ? String(Math.round(sugerido)) : '');
-  const [aprobado, setAprobado]   = useState(false);
-  const [saving, setSaving]       = useState(false);
+  const pts = puntos || [];
+
+  // Pre-calculamos los 3 métodos
+  const valores = useMemo(() => {
+    const v = {};
+    METODOS.forEach(m => { v[m.key] = m.calc(pts); });
+    return v;
+  }, [pts]);
+
+  // Método seleccionado (default: IGUAL_ANTERIOR si tiene valor, sino PROM_6M)
+  const defaultMetodo = valores.IGUAL_ANTERIOR != null ? 'IGUAL_ANTERIOR'
+    : valores.PROM_6M != null ? 'PROM_6M' : 'PROM_PONDERADO';
+
+  const [metodo,    setMetodo]    = useState(defaultMetodo);
+  const [manualVal, setManualVal] = useState('');
+  const [aprobado,  setAprobado]  = useState(false);
+  const [saving,    setSaving]    = useState(false);
   const inputRef = useRef(null);
 
-  // Si sugerido cambia (carga asíncrona), pre-cargarlo si el campo está vacío
+  // Cuando cambia el método, pre-cargar el valor calculado
   useEffect(() => {
-    if (sugerido != null && manualVal === '') {
-      setManualVal(String(Math.round(sugerido)));
-    }
-  }, [sugerido]);
+    const v = valores[metodo];
+    if (v != null) setManualVal(String(Math.round(v)));
+  }, [metodo, valores]);
 
+  // Al montar, pre-llenar con el método por defecto y enfocar
   useEffect(() => {
-    if (inputRef.current) inputRef.current.focus();
+    const v = valores[defaultMetodo];
+    if (v != null) setManualVal(String(Math.round(v)));
+    setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
-  const valor = parseFloat(manualVal);
+  const valor  = parseFloat(manualVal);
   const valido = !isNaN(valor) && valor > 0;
 
   const handleSave = async () => {
     if (!valido) return;
     setSaving(true);
     try {
-      await onSave({ ...cell, trx_diarias: valor, metodo: 'IGUAL_ANTERIOR', aprobado });
+      await onSave({ ...cell, trx_diarias: valor, metodo, aprobado });
       onCancelEdit();
     } finally {
       setSaving(false);
     }
   };
 
-  const isEsGap = cell.tipo === 'GAP';
-
   return (
     <div
-      className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/20 p-4 space-y-3 z-30"
+      className="absolute right-0 top-full mt-1 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/20 p-4 space-y-3 z-30"
       onClick={e => e.stopPropagation()}
     >
-      {/* Referencia: valor anterior */}
-      {sugerido != null ? (
-        <div className="flex items-center justify-between px-3 py-1.5 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10">
-          <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
-            {isEsGap ? 'Igual al anterior (sugerido)' : 'Valor actual'}
-          </span>
-          <span className="font-black text-sm text-slate-700 dark:text-white">
-            {fmt(cell.tipo !== 'GAP' ? cell.tasa : sugerido)}
-            <span className="text-[9px] font-bold text-slate-400 ml-1">tx/día</span>
-          </span>
+      {/* ── Selector de método ── */}
+      <div>
+        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Método de estimación</p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {METODOS.map(m => {
+            const v = valores[m.key];
+            const activo = metodo === m.key;
+            return (
+              <button
+                key={m.key}
+                title={m.desc}
+                onClick={() => setMetodo(m.key)}
+                className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl border text-center transition-all ${
+                  activo
+                    ? 'bg-accent-orange/10 border-accent-orange/40 text-accent-orange'
+                    : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:border-accent-orange/30 hover:text-slate-600 dark:hover:text-white/60'
+                }`}
+              >
+                <span className="text-[8px] font-black uppercase tracking-tighter leading-tight">{m.label}</span>
+                <span className={`text-[11px] font-black mt-0.5 ${activo ? 'text-accent-orange' : 'text-slate-500 dark:text-white/40'}`}>
+                  {v != null ? fmt(v) : '—'}
+                </span>
+                <span className={`text-[7px] font-bold ${activo ? 'text-accent-orange/70' : 'text-slate-300 dark:text-white/20'}`}>tx/día</span>
+              </button>
+            );
+          })}
         </div>
-      ) : (
-        <div className="px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30 rounded-xl">
-          <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold">
-            Sin historial previo — ingresá el valor manualmente
-          </p>
-        </div>
-      )}
+      </div>
 
-      {/* Input de valor */}
+      {/* ── Input manual (override) ── */}
       <div>
         <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1 block">
-          Trx / día estimadas
+          Trx / día estimadas <span className="font-normal normal-case tracking-normal">(editá si querés otro valor)</span>
         </label>
         <input
           ref={inputRef}
@@ -109,7 +163,7 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
         />
       </div>
 
-      {/* Checkbox de aprobación */}
+      {/* ── Checkbox aprobación ── */}
       <label
         className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none ${
           aprobado
@@ -135,12 +189,10 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
         </div>
       </label>
 
-      {/* Preview estado */}
+      {/* ── Preview estado ── */}
       {valido && (
         <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
-          aprobado
-            ? 'bg-violet-500/10 border-violet-500/20'
-            : 'bg-amber-500/10 border-amber-500/20'
+          aprobado ? 'bg-violet-500/10 border-violet-500/20' : 'bg-amber-500/10 border-amber-500/20'
         }`}>
           <span className={`text-[9px] font-black uppercase tracking-widest ${aprobado ? 'text-violet-500' : 'text-amber-500'}`}>
             {aprobado ? '✓ Se publicará en dashboard' : '⏳ Quedará pendiente de revisión'}
@@ -151,7 +203,7 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
         </div>
       )}
 
-      {/* Botones */}
+      {/* ── Botones ── */}
       <div className="flex gap-2 pt-1">
         <button
           onClick={onCancelEdit}
@@ -173,6 +225,7 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
     </div>
   );
 }
+
 
 // ── Celda individual ──────────────────────────────────────────────────────────
 function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit }) {
@@ -256,7 +309,7 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit })
 const NO_CAJA_DETAIL = new Set(['DOMINOS', "DOMINO'S", 'LITTLE CAESARS', "LITTLE CAESAR'S"]);
 
 // ── Fila de un local ──────────────────────────────────────────────────────────
-function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle }) {
+function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal }) {
   const esDesglose = !NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
   const RUTINA_DESDE = '2025-12';
   const esRutina = (mk) => mk >= RUTINA_DESDE;
@@ -282,7 +335,16 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
     return t;
   }, [local, meses]);
 
+  const isCajaSilenciada = (c) => {
+    const localKey = `${local.codigo_tienda}||__LOCAL__`;
+    const cajaKey  = `${local.codigo_tienda}||${c}`;
+    return (cajaStatusMap[localKey] || 'ACTIVA') === 'SIN_ALARMAS'
+        || (cajaStatusMap[cajaKey]  || 'ACTIVA') === 'SIN_ALARMAS';
+  };
+  const isLocalSilenciado = (cajaStatusMap[`${local.codigo_tienda}||__LOCAL__`] || 'ACTIVA') === 'SIN_ALARMAS';
+
   const gapCount = local.cajas.reduce((acc, c) =>
+    isCajaSilenciada(c) ? acc :
     acc + meses.filter(mk => esRutina(mk) && local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length, 0);
   const pendienteCount = local.cajas.reduce((acc, c) =>
     acc + meses.filter(mk => esRutina(mk) && local.celdas[`${c}||${mk}`]?.tipo === 'PENDIENTE').length, 0);
@@ -340,7 +402,7 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
       {/* Fila header del local */}
       <tr
         onClick={esDesglose ? onToggle : undefined}
-        className={`border-t border-slate-200 dark:border-white/5 transition-colors ${esDesglose ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`}
+        className={`border-t border-slate-200 dark:border-white/5 transition-colors group/localrow ${esDesglose ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`}
       >
         <td className="px-4 py-3 sticky left-0 bg-white dark:bg-slate-950 z-10">
           <div className="flex items-center gap-2">
@@ -363,6 +425,20 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
               <span className="ml-1 px-1.5 py-0.5 bg-red-500/15 text-red-400 border border-red-500/30 rounded text-[7px] font-black uppercase shrink-0">
                 {gapCount} gaps
               </span>
+            )}
+            {/* Toggle silenciar local entero — al extremo derecho */}
+            {onToggleLocal && (
+              <button
+                title={isLocalSilenciado ? 'Local silenciado — click para reactivar' : 'Silenciar todas las alarmas de este local'}
+                onClick={e => { e.stopPropagation(); onToggleLocal(local, isLocalSilenciado ? 'ACTIVA' : 'SIN_ALARMAS'); }}
+                className={`ml-auto flex items-center gap-1 transition-all shrink-0 ${
+                  isLocalSilenciado
+                    ? 'opacity-100 text-amber-400'
+                    : 'opacity-0 group-hover/localrow:opacity-60 text-slate-400 hover:text-amber-400'
+                }`}
+              >
+                {isLocalSilenciado ? <BellOff size={12} /> : <Bell size={12} />}
+              </button>
             )}
           </div>
         </td>
@@ -410,12 +486,51 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
             className="bg-slate-50/60 dark:bg-white/[0.015] border-t border-slate-100 dark:border-white/[0.03]"
           >
             <td className="pl-10 pr-4 py-2 sticky left-0 bg-slate-50/80 dark:bg-slate-950/80 z-10">
-              <span className="text-[10px] font-black text-slate-500 dark:text-white/40 uppercase tracking-widest">
-                Caja {caja}
-              </span>
+              {/* Texto de caja + campana al extremo derecho */}
+              <div className="flex items-center justify-between w-full group/cajacell">
+                <span className="text-[10px] font-black text-slate-500 dark:text-white/40 uppercase tracking-widest">
+                  Caja {caja}
+                </span>
+                {/* Toggle de alarmas: extremo derecho */}
+                {onToggleCaja && (() => {
+                  const ck = `${local.codigo_tienda}||${caja}`;
+                  const silenciada = (cajaStatusMap[ck] || 'ACTIVA') === 'SIN_ALARMAS';
+                  return (
+                    <button
+                      title={silenciada ? 'Alarmas silenciadas — click para reactivar' : 'Click para silenciar alarmas de esta caja'}
+                      onClick={e => { e.stopPropagation(); onToggleCaja(local, caja, silenciada ? 'ACTIVA' : 'SIN_ALARMAS'); }}
+                      className={`flex items-center gap-1 transition-all shrink-0 ${
+                        silenciada
+                          ? 'opacity-100 text-amber-400'
+                          : 'opacity-0 group-hover/cajacell:opacity-60 text-slate-400 hover:text-amber-400'
+                      }`}
+                    >
+                      {silenciada ? <BellOff size={11} /> : <Bell size={11} />}
+                    </button>
+                  );
+                })()}
+              </div>
             </td>
             {meses.map(mk => {
               const existing = local.celdas[`${caja}||${mk}`];
+              const silenciada = isCajaSilenciada(caja);
+
+              // Caja silenciada: GAPs se muestran como guión (sin badge rojo)
+              if (silenciada && (!existing && esRutina(mk))) {
+                return (
+                  <td key={mk} className="px-3 py-2 text-right">
+                    <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
+                  </td>
+                );
+              }
+              if (silenciada && existing?.tipo === 'GAP') {
+                return (
+                  <td key={mk} className="px-3 py-2 text-right">
+                    <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
+                  </td>
+                );
+              }
+
               if (!existing && !esRutina(mk)) {
                 return (
                   <td key={mk} className="px-3 py-2 text-right">
@@ -454,7 +569,7 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────
-export default function EstimacionesDashboard({ user }) {
+export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasConfigChange }) {
   const [matrix, setMatrix]                 = useState([]);
   const [meses, setMeses]                   = useState([]);
   const [loading, setLoading]               = useState(false);
@@ -467,6 +582,11 @@ export default function EstimacionesDashboard({ user }) {
   const [pendingEdit, setPendingEdit]       = useState(null);
   const [saving, setSaving]                 = useState(false);
   const [notification, setNotification]     = useState(null);
+  const [showGestion, setShowGestion]       = useState(false);  // panel de gestiΓ³n de cajas
+  const [addCajaOpen, setAddCajaOpen]       = useState(false);  // mini form agregar caja
+  const [savingCaja, setSavingCaja]         = useState(null);   // key de caja guardΓ'ndose
+  const [newCaja, setNewCaja]               = useState({ codigo_tienda: '', caja: '', notas: '' });
+  const [addingCaja, setAddingCaja]         = useState(false);
 
   const RUTINA_DESDE_GLOBAL = '2025-12';
 
@@ -497,12 +617,29 @@ export default function EstimacionesDashboard({ user }) {
     return () => document.removeEventListener('click', handler);
   }, []);
 
-  // Conteos
+  // ── Lookup rápido (debe estar ANTES de cualquier useMemo que lo use) ──
+  // Claves: `codigo_tienda||caja` o `codigo_tienda||__LOCAL__` (local entero silenciado)
+  const cajaStatusMap = useMemo(() => {
+    const m = {};
+    cajasConfig.forEach(c => { m[`${c.codigo_tienda}||${c.caja}`] = c.status; });
+    return m;
+  }, [cajasConfig]);
+
+  const isSilenciada = (codigoTienda, caja) => {
+    const localKey = `${codigoTienda}||__LOCAL__`;
+    const cajaKey  = `${codigoTienda}||${caja}`;
+    return (cajaStatusMap[localKey] || 'ACTIVA') === 'SIN_ALARMAS'
+        || (cajaStatusMap[cajaKey]  || 'ACTIVA') === 'SIN_ALARMAS';
+  };
+
+  // Conteos (excluye cajas silenciadas del total de gaps)
   const totalGaps = useMemo(() =>
     matrix.reduce((acc, local) =>
-      acc + local.cajas.reduce((a, c) =>
-        a + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length, 0), 0),
-    [matrix, meses]
+      acc + local.cajas.reduce((a, c) => {
+        if (isSilenciada(local.codigo_tienda, c)) return a;
+        return a + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${c}||${mk}`]?.tipo === 'GAP').length;
+      }, 0), 0),
+    [matrix, meses, cajaStatusMap]
   );
 
   const totalPendientes = useMemo(() =>
@@ -519,13 +656,25 @@ export default function EstimacionesDashboard({ user }) {
     [matrix, meses]
   );
 
-  // Filtrado + orden
+  // KPIs de actividad (monitorización de cajas/locales silenciados)
+  const localesActivos = useMemo(() =>
+    matrix.filter(l => (cajaStatusMap[`${l.codigo_tienda}||__LOCAL__`] || 'ACTIVA') !== 'SIN_ALARMAS').length,
+    [matrix, cajaStatusMap]
+  );
+  const cajasActivas = useMemo(() =>
+    matrix.reduce((acc, l) =>
+      acc + l.cajas.filter(c => !isSilenciada(l.codigo_tienda, c)).length, 0),
+    [matrix, cajaStatusMap]
+  );
+
+  // Filtrado + orden (excluye cajas silenciadas del filtro de gaps)
   const localesFiltrados = useMemo(() => {
     let d = matrix;
     if (filterSoloGaps) {
-      d = d.filter(local => local.cajas.some(c =>
-        meses.some(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${c}||${mk}`]?.tipo === 'GAP')
-      ));
+      d = d.filter(local => local.cajas.some(c => {
+        return !isSilenciada(local.codigo_tienda, c)
+          && meses.some(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${c}||${mk}`]?.tipo === 'GAP');
+      }));
     } else if (filterPendientes) {
       d = d.filter(local => local.cajas.some(c =>
         meses.some(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${c}||${mk}`]?.tipo === 'PENDIENTE')
@@ -537,8 +686,10 @@ export default function EstimacionesDashboard({ user }) {
     }
     d = [...d];
     if (sortBy === 'gaps') {
-      const gc = (l) => l.cajas.reduce((acc, c) =>
-        acc + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && l.celdas[`${c}||${mk}`]?.tipo === 'GAP').length, 0);
+      const gc = (l) => l.cajas.reduce((acc, c) => {
+        if (isSilenciada(l.codigo_tienda, c)) return acc;
+        return acc + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && l.celdas[`${c}||${mk}`]?.tipo === 'GAP').length;
+      }, 0);
       d.sort((a, b) => gc(b) - gc(a));
     } else if (sortBy === 'pendiente') {
       const pc = (l) => l.cajas.reduce((acc, c) =>
@@ -548,7 +699,8 @@ export default function EstimacionesDashboard({ user }) {
       d.sort((a, b) => a.local?.localeCompare(b.local));
     }
     return d;
-  }, [matrix, meses, filterSoloGaps, filterPendientes, search, sortBy]);
+  }, [matrix, meses, filterSoloGaps, filterPendientes, search, sortBy, cajaStatusMap]);
+
 
   const competidores = useMemo(() => [...new Set(matrix.map(l => l.competidor))].sort(), [matrix]);
 
@@ -620,6 +772,80 @@ export default function EstimacionesDashboard({ user }) {
   const expandAll  = () => setExpandidos(new Set(localesFiltrados.map(l => l.codigo_tienda)));
   const collapseAll = () => setExpandidos(new Set());
 
+  // Toggle silenciar/activar alarmas para una caja o local entero
+  const handleToggleCaja = useCallback(async (local, caja, newStatus) => {
+    const ck = `${local.codigo_tienda}||${caja}`;
+    // Optimistic update
+    onCajasConfigChange?.(prev => {
+      const exists = prev.find(c => c.codigo_tienda === local.codigo_tienda && c.caja === String(caja));
+      if (exists) return prev.map(c => c.codigo_tienda === local.codigo_tienda && c.caja === String(caja) ? { ...c, status: newStatus } : c);
+      return [...prev, { codigo_tienda: local.codigo_tienda, caja: String(caja), local: local.local, competidor: local.competidor, status: newStatus, notas: '' }];
+    });
+    try {
+      const res = await fetch(`${API}/api/cajas-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo_tienda: local.codigo_tienda,
+          caja:          String(caja),
+          local:         local.local,
+          competidor:    local.competidor,
+          status:        newStatus,
+          notas:         '',
+          usuario:       user?.email || 'dashboard',
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
+      const label = newStatus === 'SIN_ALARMAS' ? '🔕 Alarmas silenciadas' : '🔔 Alarmas reactivadas';
+      notify('success', `${label}: ${local.local} · Caja ${caja}`);
+    } catch(e) {
+      // Rollback on error
+      onCajasConfigChange?.(prev => prev.map(c =>
+        c.codigo_tienda === local.codigo_tienda && c.caja === String(caja)
+          ? { ...c, status: newStatus === 'SIN_ALARMAS' ? 'ACTIVA' : 'SIN_ALARMAS' }
+          : c
+      ));
+      notify('error', `Error: ${e.message}`);
+    }
+  }, [user, onCajasConfigChange]);
+
+  // Toggle silenciar/activar el local entero (usa caja='__LOCAL__' como clave)
+  const handleToggleLocal = useCallback(async (local, newStatus) => {
+    onCajasConfigChange?.(prev => {
+      const exists = prev.find(c => c.codigo_tienda === local.codigo_tienda && c.caja === '__LOCAL__');
+      const entry = { codigo_tienda: local.codigo_tienda, caja: '__LOCAL__', local: local.local, competidor: local.competidor, status: newStatus, notas: 'Local completo' };
+      if (exists) return prev.map(c => c.codigo_tienda === local.codigo_tienda && c.caja === '__LOCAL__' ? { ...c, status: newStatus } : c);
+      return [...prev, entry];
+    });
+    try {
+      const res = await fetch(`${API}/api/cajas-config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo_tienda: local.codigo_tienda,
+          caja:          '__LOCAL__',
+          local:         local.local,
+          competidor:    local.competidor,
+          status:        newStatus,
+          notas:         'Local completo',
+          usuario:       user?.email || 'dashboard',
+        }),
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error(result.error);
+      const label = newStatus === 'SIN_ALARMAS' ? '🔕 Local silenciado' : '🔔 Local reactivado';
+      notify('success', `${label}: ${local.local}`);
+    } catch(e) {
+      onCajasConfigChange?.(prev => prev.map(c =>
+        c.codigo_tienda === local.codigo_tienda && c.caja === '__LOCAL__'
+          ? { ...c, status: newStatus === 'SIN_ALARMAS' ? 'ACTIVA' : 'SIN_ALARMAS' }
+          : c
+      ));
+      notify('error', `Error: ${e.message}`);
+    }
+  }, [user, onCajasConfigChange]);
+
   return (
     <div className="space-y-5 px-1" onClick={e => e.stopPropagation()}>
 
@@ -664,10 +890,199 @@ export default function EstimacionesDashboard({ user }) {
         </button>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* ── Gestión de Cajas panel ─────────────────────────────────────── */}
+      <div className="pwa-card overflow-hidden">
+        <button
+          onClick={() => setShowGestion(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Settings2 size={13} className="text-accent-orange" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-white">Gestión de Cajas</span>
+            <span className="text-[8px] font-bold text-slate-400">
+              {cajasConfig.length > 0 ? `${cajasConfig.length} cajas configuradas` : 'Sin configuraciones'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={e => { e.stopPropagation(); setAddCajaOpen(v => !v); setShowGestion(true); }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-accent-orange/10 border border-accent-orange/30 text-accent-orange rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-accent-orange/20 transition-colors"
+            >
+              <Plus size={10} /> Agregar caja
+            </button>
+            {showGestion ? <ChevronDown size={13} className="text-slate-400" /> : <ChevronRight size={13} className="text-slate-400" />}
+          </div>
+        </button>
+
+        <AnimatePresence>
+          {showGestion && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="border-t border-slate-200 dark:border-white/5">
+
+                {/* ── Agregar caja mini-form ── */}
+                <AnimatePresence>
+                  {addCajaOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      className="p-4 bg-accent-orange/5 border-b border-accent-orange/20"
+                    >
+                      <p className="text-[9px] font-black uppercase tracking-widest text-accent-orange mb-3 flex items-center gap-1.5">
+                        <Plus size={11} /> Registrar nueva caja
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {/* Selector código tienda */}
+                        <div className="col-span-2 sm:col-span-1">
+                          <label className="text-[7px] font-black uppercase tracking-widest text-slate-400 mb-1 block">Código tienda</label>
+                          <select
+                            value={newCaja.codigo_tienda}
+                            onChange={e => {
+                              const ct = e.target.value;
+                              const local = matrix.find(l => l.codigo_tienda === ct);
+                              setNewCaja(prev => ({
+                                ...prev,
+                                codigo_tienda: ct,
+                                _local:      local?.local      || '',
+                                _competidor: local?.competidor || '',
+                              }));
+                            }}
+                            className="w-full px-2.5 py-1.5 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-bold text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
+                          >
+                            <option value="">Seleccionar…</option>
+                            {[...new Map(matrix.map(l => [l.codigo_tienda, l])).values()]
+                              .sort((a, b) => a.local?.localeCompare(b.local))
+                              .map(l => (
+                                <option key={l.codigo_tienda} value={l.codigo_tienda}>
+                                  {l.codigo_tienda} — {l.local}
+                                </option>
+                              ))
+                            }
+                          </select>
+                        </div>
+                        {/* Local (auto-fill) */}
+                        <div>
+                          <label className="text-[7px] font-black uppercase tracking-widest text-slate-400 mb-1 block">Local</label>
+                          <input
+                            readOnly
+                            value={newCaja._local || ''}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-black/10 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-bold text-slate-500 opacity-70"
+                          />
+                        </div>
+                        {/* N° de caja */}
+                        <div>
+                          <label className="text-[7px] font-black uppercase tracking-widest text-slate-400 mb-1 block">N° Caja</label>
+                          <input
+                            type="text"
+                            placeholder="ej. 3"
+                            value={newCaja.caja}
+                            onChange={e => setNewCaja(prev => ({ ...prev, caja: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-bold text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
+                          />
+                        </div>
+                        {/* Notas */}
+                        <div className="col-span-2 sm:col-span-1 flex items-end gap-2">
+                          <input
+                            type="text"
+                            placeholder="Notas opcionales"
+                            value={newCaja.notas || ''}
+                            onChange={e => setNewCaja(prev => ({ ...prev, notas: e.target.value }))}
+                            className="flex-1 px-2.5 py-1.5 bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-bold text-slate-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
+                          />
+                          <button
+                            disabled={!newCaja.codigo_tienda || !newCaja.caja || addingCaja}
+                            onClick={async () => {
+                              setAddingCaja(true);
+                              try {
+                                const res = await fetch(`${API}/api/add-caja`, {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    codigo_tienda: newCaja.codigo_tienda,
+                                    caja:          newCaja.caja,
+                                    local:         newCaja._local || '',
+                                    competidor:    newCaja._competidor || '',
+                                    notas:         newCaja.notas || '',
+                                    usuario:       user?.email || 'dashboard',
+                                  }),
+                                });
+                                const result = await res.json();
+                                if (!result.success) throw new Error(result.error);
+                                // Actualizar lista local
+                                const newEntry = {
+                                  codigo_tienda: newCaja.codigo_tienda,
+                                  caja: newCaja.caja,
+                                  local: newCaja._local || '',
+                                  competidor: newCaja._competidor || '',
+                                  status: 'ACTIVA',
+                                  notas: newCaja.notas || '',
+                                };
+                                onCajasConfigChange?.(prev => [...prev, newEntry]);
+                                setNewCaja({ codigo_tienda: '', caja: '', notas: '' });
+                                setAddCajaOpen(false);
+                                notify('success', `Caja ${newCaja.caja} registrada para ${newCaja._local || newCaja.codigo_tienda}`);
+                              } catch(e) {
+                                notify('error', e.message);
+                              } finally {
+                                setAddingCaja(false);
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-accent-orange text-white rounded-xl text-[9px] font-black uppercase tracking-widest disabled:opacity-40 flex items-center gap-1 whitespace-nowrap"
+                          >
+                            {addingCaja ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
+                            Agregar
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* ── Resumen de cajas silenciadas ── */}
+                {(() => {
+                  const silenciadas = cajasConfig.filter(c => c.status === 'SIN_ALARMAS');
+                  return silenciadas.length === 0 ? (
+                    <div className="px-4 py-4 text-slate-400 text-[10px] font-bold flex items-center gap-2">
+                      <Bell size={11} className="text-slate-300" />
+                      Ninguna caja silenciada — usá el ícono 🔔 en cada fila de caja para silenciar alarmas
+                    </div>
+                  ) : (
+                    <div className="px-4 py-3">
+                      <p className="text-[8px] font-black uppercase tracking-widest text-amber-500 mb-2 flex items-center gap-1.5">
+                        <BellOff size={10} /> {silenciadas.length} {silenciadas.length === 1 ? 'caja silenciada' : 'cajas silenciadas'}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {silenciadas.map(cfg => (
+                          <div key={`${cfg.codigo_tienda}||${cfg.caja}`} className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[9px] font-black text-amber-500">
+                            <BellOff size={9} />
+                            <span>{cfg.local || cfg.codigo_tienda} · Caja {cfg.caja}</span>
+                            <button
+                              onClick={() => handleToggleCaja(cfg, cfg.caja, 'ACTIVA')}
+                              title="Reactivar alarmas"
+                              className="ml-1 text-amber-400 hover:text-amber-600 transition-colors"
+                            ><X size={9} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
         {[
-          { label: 'Gaps sin cubrir',      value: loading ? '—' : totalGaps,       color: 'text-red-400',    icon: AlertTriangle,  filter: () => { setFilterSoloGaps(true); setFilterPendientes(false); } },
+          { label: 'Gaps sin cubrir',         value: loading ? '—' : totalGaps,       color: 'text-red-400',    icon: AlertTriangle, filter: () => { setFilterSoloGaps(true); setFilterPendientes(false); } },
           { label: 'Pendientes de aprobación', value: loading ? '—' : totalPendientes, color: 'text-amber-400',  icon: Clock,         filter: () => { setFilterSoloGaps(false); setFilterPendientes(true); } },
           { label: 'Aprobados y publicados',   value: loading ? '—' : totalAprobados,  color: 'text-violet-400', icon: ShieldCheck,   filter: () => { setFilterSoloGaps(false); setFilterPendientes(false); } },
         ].map(c => (
@@ -683,6 +1098,33 @@ export default function EstimacionesDashboard({ user }) {
             </div>
           </button>
         ))}
+        {/* Locales activos */}
+        <div className="pwa-card p-4 flex items-center gap-4">
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400"><Store size={18} /></div>
+          <div>
+            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Locales activos</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
+              {loading ? '—' : localesActivos}
+              {!loading && matrix.length > 0 && (
+                <span className="text-[9px] font-bold text-slate-400 ml-1.5">/ {matrix.length}</span>
+              )}
+            </p>
+          </div>
+        </div>
+        {/* Cajas activas */}
+        <div className="pwa-card p-4 flex items-center gap-4">
+          <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-400"><Bell size={18} /></div>
+          <div>
+            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Cajas activas</p>
+            <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
+              {loading ? '—' : cajasActivas}
+              {!loading && (() => {
+                const total = matrix.reduce((a, l) => a + l.cajas.length, 0);
+                return total > 0 ? <span className="text-[9px] font-bold text-slate-400 ml-1.5">/ {total}</span> : null;
+              })()}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Leyenda */}
@@ -818,6 +1260,9 @@ export default function EstimacionesDashboard({ user }) {
                     onSave={handleSave}
                     expandido={expandidos.has(local.codigo_tienda)}
                     onToggle={() => toggleExpandido(local.codigo_tienda)}
+                    cajaStatusMap={cajaStatusMap}
+                    onToggleCaja={handleToggleCaja}
+                    onToggleLocal={handleToggleLocal}
                   />
                 ))}
               </tbody>
