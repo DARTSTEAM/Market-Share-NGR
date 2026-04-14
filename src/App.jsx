@@ -481,15 +481,23 @@ export default function App({ user, onSignOut }) {
   // Use state for data to make it reactive to updates
   const [records, setRecords] = useState([]);
   const [tickets, setTickets] = useState([]);
+  const [cajasConfig, setCajasConfig] = useState([]);  // [{codigo_tienda, caja, status, ...}]
   // Initial data fetch to sync with BigQuery on load
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/data`);
-        if (response.ok) {
-          const data = await response.json();
+        const [dataRes, cajasRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/data`),
+          fetch(`${API_BASE_URL}/api/cajas-config`).catch(() => null),
+        ]);
+        if (dataRes.ok) {
+          const data = await dataRes.json();
           if (data.records) setRecords(data.records);
           if (data.tickets) setTickets(data.tickets);
+        }
+        if (cajasRes?.ok) {
+          const cajasData = await cajasRes.json();
+          if (cajasData.cajas) setCajasConfig(cajasData.cajas);
         }
       } catch (error) {
         console.error('Error fetching initial data:', error);
@@ -885,9 +893,25 @@ export default function App({ user, onSignOut }) {
     // Routine Stats - Always use full filteredRecords to show audit health
     const routineStats = filteredRecords.reduce((acc, r) => {
       if (r.status_busqueda === 'OK')        acc.cerradas++;
-      else if (r.status_busqueda !== 'HISTORIAL') acc.conError++; // no cuenta histórico como error
+      else if (r.status_busqueda !== 'HISTORIAL' && !r.status_busqueda?.startsWith('ESTIMADO-')) acc.conError++;
       return acc;
     }, { cerradas: 0, conError: 0 });
+
+    // Audit counts — count over ALL filteredRecords (not just marketShare scope)
+    const localesAnalizados = new Set(filteredRecords.map(r => r.local).filter(Boolean)).size;
+    const cajasAnalizadas   = new Set(filteredRecords.map(r => `${r.local}||${r.caja ?? ''}`)).size;
+
+    // "Sin registro": cajas (unique local+caja combos) that have at least one non-OK, non-HISTORIAL,
+    // non-ESTIMADO record — i.e. they are flagged with a real alarm status
+    const cajasConAlarma = new Set(
+      filteredRecords
+        .filter(r =>
+          r.status_busqueda !== 'OK' &&
+          r.status_busqueda !== 'HISTORIAL' &&
+          !r.status_busqueda?.startsWith('ESTIMADO-')
+        )
+        .map(r => `${r.local}||${r.caja ?? ''}`)
+    ).size;
 
     return {
       totalVentas: totalTransactions,
@@ -897,7 +921,11 @@ export default function App({ user, onSignOut }) {
       cajasCerradas: routineStats.cerradas,
       cajasConError: routineStats.conError,
       totalTransDailyAvg: totalDailyAvg,
-      avgTransPerLocal: totalTransactions / (new Set(marketShareRecords.map(r => r.local)).size || 1)
+      avgTransPerLocal: totalTransactions / (new Set(marketShareRecords.map(r => r.local)).size || 1),
+      // Audit summary
+      localesAnalizados,
+      cajasAnalizadas,
+      cajasSinRegistro: cajasConAlarma,
     };
   }, [filteredRecords, marketShareRecords, filteredTickets, tickets, filters.competitor]);
 
@@ -1441,6 +1469,8 @@ export default function App({ user, onSignOut }) {
                 key="alarmas"
                 records={records}
                 tickets={tickets}
+                cajasConfig={cajasConfig}
+                onCajasConfigChange={setCajasConfig}
                 onUpdateTicket={handleUpdateTicket}
                 isRefreshing={isRefreshing}
               />
@@ -1448,6 +1478,8 @@ export default function App({ user, onSignOut }) {
               <EstimacionesDashboard
                 key="estimaciones"
                 user={user}
+                cajasConfig={cajasConfig}
+                onCajasConfigChange={setCajasConfig}
               />
             ) : (
               <TicketsDashboard

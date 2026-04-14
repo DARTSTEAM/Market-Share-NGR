@@ -48,34 +48,35 @@ const QUERY_RECORDS = `
 
   UNION ALL
 
-  -- Gaps estimados: meses sin medición estimados por generar_estimaciones_mensuales
+  -- Estimaciones manuales APROBADAS: reemplazan a generar_estimaciones_mensuales
+  -- Solo se incluyen en el dashboard las que fueron explícitamente aprobadas
   SELECT
     competidor,
     codigo_tienda,
     local,
-    CAST(NULL AS STRING)                     AS caja,
-    CONCAT('ESTIMADO-', metodo_estimacion)   AS status_busqueda,
-    trx_totales_estimadas                    AS transacciones_diferencial,
-    CAST(NULL AS INT64)                      AS ticket_actual,
-    CAST(NULL AS INT64)                      AS ticket_anterior,
-    DATETIME(fecha_estimacion)               AS fecha_y_hora_registro,
-    CAST(fecha_anterior AS DATETIME)         AS fecha_anterior,
-    CAST(NULL AS STRING)                     AS filename_actual,
-    CAST(NULL AS STRING)                     AS filename_anterior,
-    delta_dias,
-    CAST(NULL AS INT64)                      AS ac,
-    trx_diarias_estimadas                    AS promedio_transacciones_diarias,
+    CAST(NULL AS STRING)                                      AS caja,
+    CONCAT('ESTIMADO-', IFNULL(metodo, 'MANUAL'))             AS status_busqueda,
+    CAST(ROUND(trx_diarias * 30) AS INT64)                    AS transacciones_diferencial,
+    CAST(NULL AS INT64)                                       AS ticket_actual,
+    CAST(NULL AS INT64)                                       AS ticket_anterior,
+    DATETIME(updated_at)                                      AS fecha_y_hora_registro,
+    CAST(NULL AS DATETIME)                                    AS fecha_anterior,
+    CAST(NULL AS STRING)                                      AS filename_actual,
+    CAST(NULL AS STRING)                                      AS filename_anterior,
+    CAST(30 AS INT64)                                         AS delta_dias,
+    CAST(NULL AS INT64)                                       AS ac,
+    trx_diarias                                               AS promedio_transacciones_diarias,
     mes,
     ano,
-    CAST(NULL AS STRING)                     AS region,
-    CAST(NULL AS STRING)                     AS distrito,
-    CAST(NULL AS STRING)                     AS punto_compartido,
-    CAST(NULL AS STRING)                     AS cc_punto_compartido,
-    CAST(NULL AS STRING)                     AS grupos_cc,
-    CAST(NULL AS STRING)                     AS marcas_en_pc,
-    CAST(NULL AS INT64)                      AS n_marcas_en_pc
-  FROM \`${PROJECT_ID}.${DATASET_ID}.generar_estimaciones_mensuales\`('2024-01-01')
-  WHERE metodo_estimacion != 'INSUFICIENTE_DATA'
+    CAST(NULL AS STRING)                                      AS region,
+    CAST(NULL AS STRING)                                      AS distrito,
+    CAST(NULL AS STRING)                                      AS punto_compartido,
+    CAST(NULL AS STRING)                                      AS cc_punto_compartido,
+    CAST(NULL AS STRING)                                      AS grupos_cc,
+    CAST(NULL AS STRING)                                      AS marcas_en_pc,
+    CAST(NULL AS INT64)                                       AS n_marcas_en_pc
+  FROM \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\`
+  WHERE aprobado = TRUE
 
   UNION ALL
 
@@ -312,7 +313,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 WHERE h.trx_promedio > 0
                   AND (h.ano < 2025 OR (h.ano = 2025 AND h.mes <= 11))
             `;
-            // 3. Estimados automáticos (post-cutoff) — misma normalización de caja
+            // 3. Estimaciones manuales (APROBADAS y PENDIENTES) — fuente única de estimados
             const Q_EST = `
                 SELECT
                     competidor,
@@ -321,22 +322,11 @@ app.get('/api/estimation-matrix', async (req, res) => {
                     CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
                     mes,
                     ano,
-                    ROUND(trx_diarias_estimadas, 1) AS tasa
-                FROM \`${PROJECT_ID}.${DATASET_ID}.generar_estimaciones_mensuales\`('2024-01-01')
-                WHERE metodo_estimacion != 'INSUFICIENTE_DATA'
-                  AND REGEXP_CONTAINS(caja, r'\\d')
-            `;
-            // 4. Estimados manuales (si existe la tabla)
-            const Q_MAN = `
-                SELECT
-                    competidor, codigo_tienda, local, caja,
-                    mes, ano,
                     ROUND(trx_diarias, 1) AS tasa,
-                    'MANUAL' AS tipo,
-                    DATE(updated_at) AS fecha_lectura
+                    IF(aprobado, 'APROBADO', 'PENDIENTE') AS tipo_manual
                 FROM \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\`
+                WHERE caja IS NOT NULL AND REGEXP_CONTAINS(caja, r'\\d')
             `;
-
             const runQ = async (q) => {
                 try {
                     const [job] = await bigquery.createQueryJob({ query: q });
@@ -348,21 +338,22 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 }
             };
 
-            const [rowsReal, rowsHist, rowsEst, rowsMan] = await Promise.all([
-                runQ(Q_REAL), runQ(Q_HIST), runQ(Q_EST), runQ(Q_MAN)
+            const [rowsReal, rowsHist, rowsEst] = await Promise.all([
+                runQ(Q_REAL), runQ(Q_HIST), runQ(Q_EST)
             ]);
 
             // Armar estructura plana
-            // HISTORIAL: renombrar caja_num → caja (alias alternativo usado en Q_HIST)
+            // Q_EST ahora devuelve APROBADO o PENDIENTE según el campo tipo_manual
+            // rowsMan ya no se usa (está integrado en Q_EST)
             const allRows = [
                 ...rowsReal.map(r => ({ ...r, tipo: 'REAL' })),
                 ...rowsHist.map(r => ({ ...r, caja: r.caja_num, tipo: 'HISTORIAL' })),
-                ...rowsEst.map(r => ({ ...r, tipo: 'ESTIMADO' })),
-                ...rowsMan.map(r => ({ ...r, tipo: 'MANUAL' })),
+                ...rowsEst.map(r => ({ ...r, tipo: r.tipo_manual || 'PENDIENTE' })),
+                // rowsMan is now merged into Q_EST (estimaciones_manuales)
             ];
 
-            // Deduplicar: prioridad REAL > MANUAL > ESTIMADO > HISTORIAL
-            const PRIO = { REAL: 4, MANUAL: 3, ESTIMADO: 2, HISTORIAL: 1 };
+            // Deduplicar: prioridad REAL > APROBADO > PENDIENTE > HISTORIAL
+            const PRIO = { REAL: 5, APROBADO: 4, PENDIENTE: 3, HISTORIAL: 2 };
             const cellMap = {}; // `codigo_tienda||caja||ano-mm` → row
             for (const r of allRows) {
                 const ano = r.ano?.value ?? r.ano;
@@ -495,7 +486,7 @@ app.post('/api/save-estimation', async (req, res) => {
         return res.status(400).json({ error: 'codigo_tienda, caja, mes, ano, trx_diarias son requeridos' });
     }
     try {
-        // Ensure table exists
+        // Ensure table exists (with aprobado field)
         const CREATE_Q = `
             CREATE TABLE IF NOT EXISTS \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\` (
                 codigo_tienda STRING,
@@ -506,24 +497,36 @@ app.post('/api/save-estimation', async (req, res) => {
                 ano           INT64,
                 trx_diarias   FLOAT64,
                 metodo        STRING,
+                aprobado      BOOL,
                 usuario       STRING,
+                usuario_nombre STRING,
                 updated_at    TIMESTAMP
             )
         `;
         await bigquery.createQueryJob({ query: CREATE_Q }).then(([j]) => j.getQueryResults());
 
-        // MERGE (upsert)
+        // Migrate: add columns that may be missing in pre-existing table (BigQuery DDL is idempotent-ish)
+        // We try silently — BQ returns an error if column already exists, which we ignore.
+        try {
+            const ALTER_Q = `ALTER TABLE \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\`
+                ADD COLUMN IF NOT EXISTS aprobado BOOL,
+                ADD COLUMN IF NOT EXISTS usuario_nombre STRING`;
+            await bigquery.createQueryJob({ query: ALTER_Q }).then(([j]) => j.getQueryResults());
+        } catch(_) { /* column already exists — fine */ }
+
+        // MERGE (upsert) — incluye campo aprobado
         const MERGE_Q = `
             MERGE \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\` T
             USING (SELECT
-                @codigo_tienda AS codigo_tienda,
-                @local         AS local,
-                @competidor    AS competidor,
-                @caja          AS caja,
-                @mes           AS mes,
-                @ano           AS ano,
-                @trx_diarias   AS trx_diarias,
-                @metodo        AS metodo,
+                @codigo_tienda  AS codigo_tienda,
+                @local          AS local,
+                @competidor     AS competidor,
+                @caja           AS caja,
+                @mes            AS mes,
+                @ano            AS ano,
+                @trx_diarias    AS trx_diarias,
+                @metodo         AS metodo,
+                @aprobado       AS aprobado,
                 @usuario        AS usuario,
                 @usuario_nombre AS usuario_nombre
             ) S
@@ -534,29 +537,33 @@ app.post('/api/save-estimation', async (req, res) => {
             WHEN MATCHED THEN UPDATE SET
                 trx_diarias    = S.trx_diarias,
                 metodo         = S.metodo,
+                aprobado       = S.aprobado,
                 local          = S.local,
                 competidor     = S.competidor,
                 usuario        = S.usuario,
+                usuario_nombre = S.usuario_nombre,
                 updated_at     = CURRENT_TIMESTAMP()
             WHEN NOT MATCHED THEN INSERT
-                (codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo, usuario, updated_at)
-                VALUES (S.codigo_tienda, S.local, S.competidor, S.caja, S.mes, S.ano, S.trx_diarias, S.metodo, S.usuario, CURRENT_TIMESTAMP())
+                (codigo_tienda, local, competidor, caja, mes, ano, trx_diarias, metodo, aprobado, usuario, usuario_nombre, updated_at)
+                VALUES (S.codigo_tienda, S.local, S.competidor, S.caja, S.mes, S.ano, S.trx_diarias, S.metodo, S.aprobado, S.usuario, S.usuario_nombre, CURRENT_TIMESTAMP())
         `;
+        const aprobadoBool = aprobado === true || aprobado === 'true';
         const [job] = await bigquery.createQueryJob({
             query: MERGE_Q,
             params: {
                 codigo_tienda,
-                local:      local || '',
-                competidor: competidor || '',
-                caja:       String(caja),
-                mes:        parseInt(mes),
-                ano:        parseInt(ano),
-                trx_diarias: parseFloat(trx_diarias),
-                metodo:         metodo || 'MANUAL',
+                local:          local || '',
+                competidor:     competidor || '',
+                caja:           String(caja),
+                mes:            parseInt(mes),
+                ano:            parseInt(ano),
+                trx_diarias:    parseFloat(trx_diarias),
+                metodo:         metodo || 'IGUAL_ANTERIOR',
+                aprobado:       aprobadoBool,
                 usuario:        usuario        || 'dashboard',
                 usuario_nombre: usuario_nombre || 'Dashboard',
             },
-            types: { mes: 'INT64', ano: 'INT64', trx_diarias: 'FLOAT64' },
+            types: { mes: 'INT64', ano: 'INT64', trx_diarias: 'FLOAT64', aprobado: 'BOOL' },
         });
         await job.getQueryResults();
 
@@ -761,6 +768,164 @@ app.get('/api/local-gap-detail', async (req, res) => {
         });
     } catch (err) {
         console.error('[/api/local-gap-detail] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ── CAJAS CONFIG ──────────────────────────────────────────────────────────────
+// Table: ngr.cajas_config (codigo_tienda, caja, local, competidor, status, updated_at)
+// status values: 'ACTIVA' | 'DISCONTINUADA' | 'SIN_ALARMAS'
+//
+// ACTIVA        → normal (default)
+// DISCONTINUADA → no aparece en alarmas ni en estimaciones, y se oculta
+// SIN_ALARMAS   → aparece en el dashboard pero no genera alarmas pulsantes
+
+const CAJAS_CONFIG_ENSURE = `
+    CREATE TABLE IF NOT EXISTS \`${PROJECT_ID}.${DATASET_ID}.cajas_config\` (
+        codigo_tienda STRING,
+        caja          STRING,
+        local         STRING,
+        competidor    STRING,
+        status        STRING,
+        notas         STRING,
+        usuario       STRING,
+        updated_at    TIMESTAMP
+    )
+`;
+
+// Ensure table at startup (best-effort)
+bigquery.createQueryJob({ query: CAJAS_CONFIG_ENSURE })
+    .then(([j]) => j.getQueryResults())
+    .catch(e => console.warn('[startup] cajas_config table creation:', e.message.slice(0, 80)));
+
+// Cache for cajas config (short TTL)
+let cajasConfigCache = { data: null, fetchedAt: null };
+const CAJAS_TTL = 2 * 60 * 1000; // 2 min
+
+async function getCajasConfig(force = false) {
+    const age = cajasConfigCache.fetchedAt ? Date.now() - new Date(cajasConfigCache.fetchedAt).getTime() : Infinity;
+    if (force || age > CAJAS_TTL || !cajasConfigCache.data) {
+        const [job] = await bigquery.createQueryJob({
+            query: `SELECT codigo_tienda, caja, local, competidor, status, notas, usuario, updated_at FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\` ORDER BY competidor, local, caja`
+        });
+        const [rows] = await job.getQueryResults();
+        cajasConfigCache.data = rows.map(r => ({
+            codigo_tienda: r.codigo_tienda || '',
+            caja:          r.caja || '',
+            local:         r.local || '',
+            competidor:    r.competidor || '',
+            status:        r.status || 'ACTIVA',
+            notas:         r.notas || '',
+            usuario:       r.usuario || '',
+            updated_at:    r.updated_at?.value || '',
+        }));
+        cajasConfigCache.fetchedAt = new Date().toISOString();
+    }
+    return cajasConfigCache.data;
+}
+
+// GET /api/cajas-config
+app.get('/api/cajas-config', async (req, res) => {
+    try {
+        const data = await getCajasConfig();
+        res.json({ cajas: data, fetchedAt: cajasConfigCache.fetchedAt });
+    } catch (err) {
+        console.error('[/api/cajas-config GET] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/cajas-config — upsert status for a caja
+app.post('/api/cajas-config', async (req, res) => {
+    const { codigo_tienda, caja, local, competidor, status, notas, usuario } = req.body;
+    if (!codigo_tienda || !caja || !status) {
+        return res.status(400).json({ error: 'codigo_tienda, caja, status son requeridos' });
+    }
+    const validStatuses = ['ACTIVA', 'DISCONTINUADA', 'SIN_ALARMAS'];
+    if (!validStatuses.includes(status)) {
+        return res.status(400).json({ error: `status debe ser uno de: ${validStatuses.join(', ')}` });
+    }
+    try {
+        const MERGE_Q = `
+            MERGE \`${PROJECT_ID}.${DATASET_ID}.cajas_config\` T
+            USING (SELECT
+                @codigo_tienda AS codigo_tienda,
+                @caja          AS caja,
+                @local         AS local,
+                @competidor    AS competidor,
+                @status        AS status,
+                @notas         AS notas,
+                @usuario       AS usuario
+            ) S
+            ON T.codigo_tienda = S.codigo_tienda AND T.caja = S.caja
+            WHEN MATCHED THEN UPDATE SET
+                status     = S.status,
+                notas      = S.notas,
+                local      = S.local,
+                competidor = S.competidor,
+                usuario    = S.usuario,
+                updated_at = CURRENT_TIMESTAMP()
+            WHEN NOT MATCHED THEN INSERT
+                (codigo_tienda, caja, local, competidor, status, notas, usuario, updated_at)
+                VALUES (S.codigo_tienda, S.caja, S.local, S.competidor, S.status, S.notas, S.usuario, CURRENT_TIMESTAMP())
+        `;
+        const [job] = await bigquery.createQueryJob({
+            query: MERGE_Q,
+            params: {
+                codigo_tienda, caja: String(caja),
+                local: local || '', competidor: competidor || '',
+                status, notas: notas || '', usuario: usuario || 'dashboard',
+            },
+        });
+        await job.getQueryResults();
+        cajasConfigCache.fetchedAt = null; // invalidate
+        cache.fetchedAt = null;            // invalidate main cache so alarms update
+        console.log(`[/api/cajas-config] Updated: ${codigo_tienda} caja=${caja} → ${status}`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[/api/cajas-config POST] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST /api/add-caja — registers a brand new caja (defaults to ACTIVA)
+app.post('/api/add-caja', async (req, res) => {
+    const { codigo_tienda, caja, local, competidor, notas, usuario } = req.body;
+    if (!codigo_tienda || !caja) {
+        return res.status(400).json({ error: 'codigo_tienda y caja son requeridos' });
+    }
+    try {
+        // Check if already exists
+        const CHECK_Q = `
+            SELECT COUNT(*) AS cnt
+            FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
+            WHERE codigo_tienda = @codigo_tienda AND caja = @caja
+        `;
+        const [cj] = await bigquery.createQueryJob({ query: CHECK_Q, params: { codigo_tienda, caja: String(caja) } });
+        const [checkRows] = await cj.getQueryResults();
+        if ((checkRows[0]?.cnt ?? 0) > 0) {
+            return res.status(409).json({ error: 'Esa caja ya existe para ese código de tienda' });
+        }
+
+        const INSERT_Q = `
+            INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
+                (codigo_tienda, caja, local, competidor, status, notas, usuario, updated_at)
+            VALUES (@codigo_tienda, @caja, @local, @competidor, 'ACTIVA', @notas, @usuario, CURRENT_TIMESTAMP())
+        `;
+        const [job] = await bigquery.createQueryJob({
+            query: INSERT_Q,
+            params: {
+                codigo_tienda, caja: String(caja),
+                local: local || '', competidor: competidor || '',
+                notas: notas || '', usuario: usuario || 'dashboard',
+            },
+        });
+        await job.getQueryResults();
+        cajasConfigCache.fetchedAt = null;
+        console.log(`[/api/add-caja] Added: ${codigo_tienda} caja=${caja} (${local})`);
+        res.json({ success: true });
+    } catch (err) {
+        console.error('[/api/add-caja] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });

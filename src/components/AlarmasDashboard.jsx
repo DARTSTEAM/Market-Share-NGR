@@ -193,7 +193,7 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
             local: foundActual.local || record.local || '',
             codigoTienda: foundActual.codigo_tienda || foundActual.codigoTienda || record.codigo_tienda || '',
             caja: foundActual.caja || foundActual.numero_de_caja || record.caja || '',
-            ticket: foundActual.ticket || foundActual.numero_de_ticket || record.ticket_actual?.toString() || '',
+            ticket: (foundActual.ticket != null ? foundActual.ticket : foundActual.numero_de_ticket) ?? record.ticket_actual?.toString() ?? '',
             importe: foundActual.importe ?? foundActual.importe_total ?? 0,
             fecha: foundActual.fecha ? foundActual.fecha.split('T')[0] : (record.fecha ? record.fecha.split('T')[0] : ''),
             originalFilename: foundActual.filename
@@ -536,8 +536,15 @@ const AlarmasDashboard = ({ records, tickets, onUpdateTicket, isRefreshing }) =>
                                                     <span className="text-slate-500 font-bold">{r.local}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 font-mono font-bold text-slate-400">{r.caja}</td>
-                                            <td className="px-6 py-4 font-mono font-bold text-slate-900 dark:text-white">#{r.ticket_actual}</td>
+                                            <td className="px-6 py-4 font-mono font-bold">
+                                                {r.caja
+                                                    ? <span className="text-slate-400">{r.caja}</span>
+                                                    : <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 text-[9px] font-black uppercase tracking-wider">
+                                                        <Hash size={9} />Sin caja
+                                                      </span>
+                                                }
+                                            </td>
+                                            <td className="px-6 py-4 font-mono font-bold text-slate-900 dark:text-white">{r.ticket_actual != null ? `#${r.ticket_actual}` : <span className="text-slate-300 dark:text-white/20">—</span>}</td>
                                             <td className="px-6 py-4 font-bold text-slate-400">
                                                 {r.fecha ? new Date(r.fecha).toLocaleDateString('es-ES') : '-'}
                                             </td>
