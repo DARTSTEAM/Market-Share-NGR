@@ -1505,6 +1505,7 @@ export default function App({ user, onSignOut }) {
               {
                 [
                   { id: 'marketshare',  icon: PieChartIcon,   label: 'Market Share' },
+                  { id: 'sstx',         icon: GitCompare,     label: 'SSTX' },
                   { id: 'tickets',      icon: Ticket,         label: 'Tickets' },
                   { id: 'clientes',     icon: Users,          label: 'Clientes' },
                   { id: 'estimaciones', icon: ClipboardEdit,  label: 'Estimaciones' },
@@ -1554,7 +1555,6 @@ export default function App({ user, onSignOut }) {
                   { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
                   { id: 'comparativos', icon: GitCompare, label: 'Comparativos' },
                   { id: 'puntos_compartidos', icon: MapPin, label: 'Puntos Compartidos' },
-                  { id: 'sstx', icon: Activity, label: 'SSTX' },
                 ] : [
                   { id: 'tickets', icon: Ticket,      label: 'Tickets' },
                   { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' },
@@ -1609,6 +1609,13 @@ export default function App({ user, onSignOut }) {
               sortDirection={sortDirection}
               filterBar={globalFilterBar}
             />
+          ) : activeCategory === 'sstx' ? (
+            <SSTXDashboard
+              key="sstx"
+              records={records}
+              filters={filters}
+              globalFilterBar={globalFilterBar}
+            />
           ) : activeCategory === 'marketshare' ? (
             activeSubTab === 'comparativos' ? (
               <ComparativosDashboard
@@ -1625,13 +1632,6 @@ export default function App({ user, onSignOut }) {
                 evolutionRecords={pcEvolutionRecords}
                 shareData={reactiveShareDataRoutine}
                 ngrLocales={ngrLocales}
-              />
-            ) : activeSubTab === 'sstx' ? (
-              <SSTXDashboard
-                key="sstx"
-                records={records}
-                filters={filters}
-                globalFilterBar={globalFilterBar}
               />
             ) : (
               <MarketShareDashboard
