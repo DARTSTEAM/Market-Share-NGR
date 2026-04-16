@@ -1842,8 +1842,8 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
           )}
         </div>
       ) : (
-        <div className="pwa-card overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="pwa-card overflow-x-auto">
+          <div style={{ minWidth: `${220 + 100 + meses.length * 75 + 80}px` }}>
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02]">
