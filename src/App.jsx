@@ -10,6 +10,7 @@ import EstimacionesDashboard from './components/EstimacionesDashboard';
 import ActivityLogDashboard from './components/ActivityLogDashboard';
 import ClientesDashboard from './components/ClientesDashboard';
 import PuntosCompartidosDashboard from './components/PuntosCompartidosDashboard';
+import SSTXDashboard from './components/SSTXDashboard';
 import CustomSelect from './components/common/CustomSelect';
 import FilterBar from './components/filters/FilterBar';
 
@@ -1553,6 +1554,7 @@ export default function App({ user, onSignOut }) {
                   { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
                   { id: 'comparativos', icon: GitCompare, label: 'Comparativos' },
                   { id: 'puntos_compartidos', icon: MapPin, label: 'Puntos Compartidos' },
+                  { id: 'sstx', icon: Activity, label: 'SSTX' },
                 ] : [
                   { id: 'tickets', icon: Ticket,      label: 'Tickets' },
                   { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' },
@@ -1623,6 +1625,13 @@ export default function App({ user, onSignOut }) {
                 evolutionRecords={pcEvolutionRecords}
                 shareData={reactiveShareDataRoutine}
                 ngrLocales={ngrLocales}
+              />
+            ) : activeSubTab === 'sstx' ? (
+              <SSTXDashboard
+                key="sstx"
+                records={records}
+                filters={filters}
+                globalFilterBar={globalFilterBar}
               />
             ) : (
               <MarketShareDashboard
