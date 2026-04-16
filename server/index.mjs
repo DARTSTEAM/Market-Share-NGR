@@ -451,12 +451,13 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 }
             }
 
-            // Determinar meses disponibles (últimos 9 meses reales + actual)
-            const mesSet = new Set();
-            for (const row of Object.values(cellMap)) {
-                mesSet.add(row.mk);
+            // Determinar ventana de meses: Últimos 9 meses desde el actual
+            const now = new Date();
+            const mesesSorted = [];
+            for (let i = 8; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                mesesSorted.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
             }
-            const mesesSorted = [...mesSet].sort().slice(-9); // últimos 9
 
             // Agrupar por local
             const localMap = {};
