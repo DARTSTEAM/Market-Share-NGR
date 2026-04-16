@@ -7,8 +7,23 @@ const SSTXDashboard = ({ records, filters, globalFilterBar }) => {
   const [expandedBrand, setExpandedBrand] = useState(null);
 
   // 1. Identify periods
-  const currentYear = parseInt(filters.year);
-  const currentMonth = parseInt(filters.month);
+  const currentYear = parseInt(filters.year) || new Date().getFullYear();
+  
+  // Hande the month: SSTX requires a month. If 'all', find the latest month in the records
+  const currentMonth = useMemo(() => {
+    const m = parseInt(filters.month);
+    if (!isNaN(m)) return m;
+    
+    // Fallback: Latest month in records for the current year
+    const yr = currentYear;
+    const availableMonths = records
+      .filter(r => parseInt(r.ano) === yr)
+      .map(r => parseInt(r.mes))
+      .filter(m => !isNaN(m));
+    
+    return availableMonths.length > 0 ? Math.max(...availableMonths) : new Date().getMonth() + 1;
+  }, [filters.month, records, currentYear]);
+
   const previousYear = currentYear - 1;
 
   // 2. Filter records for both periods
@@ -114,7 +129,6 @@ const SSTXDashboard = ({ records, filters, globalFilterBar }) => {
             Comparativa {currentMonth}/{currentYear} vs {currentMonth}/{previousYear} | {sstxStats.sameStoresCount} Tiendas Activas en ambos periodos
           </p>
         </div>
-        {globalFilterBar}
       </div>
 
       {/* KPI Cards */}
