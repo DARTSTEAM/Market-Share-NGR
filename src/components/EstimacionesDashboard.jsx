@@ -553,11 +553,13 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
     const t = {};
     meses.forEach(mk => {
       let sum = 0;
+      let hasGap = false;
       local.cajas.forEach(caja => {
         const cell = local.celdas[`${caja}||${mk}`];
         if (cell?.tasa != null) sum += cell.tasa;
+        if (cell?.tipo === 'GAP') hasGap = true;
       });
-      t[mk] = sum;
+      t[mk] = { sum, hasGap };
     });
     return t;
   }, [local, meses]);
@@ -683,38 +685,53 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
           </div>
         </td>
 
+        {/* Competidor */}
+        <td className="px-3 py-3">
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40">
+            {local.competidor}
+          </span>
+        </td>
+
+        {/* Monthly Columns */}
         {meses.map(mk => {
-          if (!esDesglose) {
-            const editCell = getEditableCellLocal(mk);
-            if (editCell) {
-              return (
-                <Celda
-                  key={mk}
-                  cell={editCell}
-                  puntos={puntosLocal}
-                  onSave={onSave}
-                  pendingEdit={pendingEdit}
-                  onStartEdit={onStartEdit}
-                  onCancelEdit={onCancelEdit}
-                  isRevisada={!!revisadasMap[`${editCell.codigo_tienda}||${editCell.caja}||${editCell.mes}||${editCell.ano}`]}
-                  onMarkRevisada={onMarkRevisada}
-                />
-              );
-            }
-            return (
-              <td key={mk} className="px-3 py-3 text-right">
-                <span className="text-slate-300 dark:text-white/10 text-[11px]">—</span>
-              </td>
-            );
-          }
+          const { sum, hasGap } = totalesPorMes[mk] || { sum: 0, hasGap: false };
+          const [ano, mes] = mk.split('-');
+          const esRutinaMk = (parseInt(ano) * 100 + parseInt(mes)) > 202511;
+
           return (
-            <td key={mk} className="px-3 py-3 text-right">
-              <span className="font-black text-[12px] text-slate-700 dark:text-white/70">
-                {totalesPorMes[mk] > 0 ? fmt(totalesPorMes[mk]) : <span className="text-slate-300 dark:text-white/15">—</span>}
-              </span>
+            <td key={mk} className={`px-2 py-3 text-center border-l border-slate-100 dark:border-white/5 ${esRutinaMk ? 'bg-orange-500/[0.02]' : ''}`}>
+              {sum > 0 ? (
+                <div className="flex flex-col items-center">
+                  <span className="text-[10px] font-black text-slate-900 dark:text-white">
+                    {sum.toLocaleString('es-AR')}
+                  </span>
+                </div>
+              ) : (
+                hasGap ? (
+                  <span className="text-[7px] font-black text-red-400 bg-red-500/10 px-1 py-0.5 rounded border border-red-500/20">GAP</span>
+                ) : (
+                  <span className="text-slate-300 dark:text-white/10">—</span>
+                )
+              )}
             </td>
           );
         })}
+
+        {/* Cajas (Optional, moved or kept) */}
+        <td className="px-3 py-3 text-right border-l border-slate-100 dark:border-white/5">
+          <span className="text-[10px] font-bold text-slate-400">
+            {local.cajas.length}
+          </span>
+        </td>
+
+        {/* Summary Badges */}
+        <td className="px-3 py-3 text-right">
+          {tieneGaps ? (
+            <span className="px-1.5 py-0.5 bg-red-500/15 text-red-400 border border-red-500/30 rounded text-[7px] font-black uppercase tracking-wider">
+              {gapCount}
+            </span>
+          ) : <span className="text-emerald-400 opacity-20"><ShieldCheck size={10} className="ml-auto" /></span>}
+        </td>
       </tr>
 
       {/* ── Transposed detail: rows=months, cols=cajas ─────────────────── */}
@@ -738,7 +755,7 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15 }}
             >
-              <td colSpan={meses.length + 1} className="p-0 border-t-2 border-accent-orange/20">
+              <td colSpan={5} className="p-0 border-t-2 border-accent-orange/20">
                 <div className="overflow-x-auto bg-slate-50/70 dark:bg-white/[0.015]">
                   <table className="w-full text-xs" style={{ minWidth: `${100 + sortedCajas.length * 90 + 80}px` }}>
                     <thead>
@@ -1827,22 +1844,35 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
       ) : (
         <div className="pwa-card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs" style={{ minWidth: `${180 + meses.length * 100}px` }}>
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02]">
                   <th className="px-4 py-3 text-left text-[8px] font-black uppercase tracking-widest text-slate-400 sticky left-0 bg-slate-50 dark:bg-slate-950 z-10" style={{ minWidth: 220 }}>
                     Local
                   </th>
+                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase tracking-widest text-slate-400" style={{ width: 100 }}>
+                    Marca
+                  </th>
                   {meses.map(mk => {
                     const [ano, mes] = mk.split('-');
-                    const esRutina = mk >= '2025-12';
+                    const mesLabel = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][parseInt(mes)-1];
+                    const esRutinaMk = (parseInt(ano) * 100 + parseInt(mes)) > 202511;
+
                     return (
-                      <th key={mk} className={`px-3 py-3 text-right text-[8px] font-black uppercase tracking-widest ${esRutina ? 'text-accent-orange' : 'text-slate-400'}`} style={{ minWidth: 90 }}>
-                        <div>{MESES[parseInt(mes)]}</div>
-                        <div className={`text-[7px] ${esRutina ? 'text-accent-orange/60' : 'text-slate-300 dark:text-white/20'}`}>{ano}</div>
+                      <th key={mk} className="px-2 py-3 text-center text-[8px] font-black uppercase tracking-widest" style={{ minWidth: 70 }}>
+                        <span className={esRutinaMk ? 'text-accent-orange' : 'text-slate-400'}>
+                          {mesLabel}
+                        </span>
+                        <span className="block text-[6px] opacity-40">{ano}</span>
                       </th>
                     );
                   })}
+                  <th className="px-3 py-3 text-right text-[8px] font-black uppercase tracking-widest text-slate-400" style={{ width: 40 }}>
+                    Cj
+                  </th>
+                  <th className="px-3 py-3 text-right text-[8px] font-black uppercase tracking-widest text-slate-400" style={{ width: 40 }}>
+                    G
+                  </th>
                 </tr>
               </thead>
               <tbody>
