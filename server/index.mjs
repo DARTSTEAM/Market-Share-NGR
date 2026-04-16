@@ -359,7 +359,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
             const Q_REAL = `
                 SELECT
                     competidor,
-                    codigo_tienda,
+                    REPLACE(codigo_tienda, ' ', '') AS codigo_tienda,
                     local,
                     CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
                     mes,
@@ -376,7 +376,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
             const Q_HIST = `
                 SELECT
                     h.competidor,
-                    h.codigo_tienda,
+                    REPLACE(h.codigo_tienda, ' ', '') AS codigo_tienda,
                     h.local,
                     CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'(\\d+)') AS INT64) AS STRING) AS caja_num,
                     h.mes,
@@ -390,7 +390,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
             const Q_EST = `
                 SELECT
                     competidor,
-                    codigo_tienda,
+                    REPLACE(codigo_tienda, ' ', '') AS codigo_tienda,
                     local,
                     CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
                     mes,

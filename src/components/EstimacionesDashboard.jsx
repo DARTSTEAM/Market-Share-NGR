@@ -744,8 +744,8 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
             if (nb === 99 && na !== 99) return -1;
             return na - nb;
           });
-          // Show last 6 months from meses array
-          const desgloseMeses = meses.slice(-6);
+          // Show all months (same as parent)
+          const desgloseMeses = meses;
 
           return (
             <motion.tr
@@ -755,7 +755,8 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.15 }}
             >
-              <td colSpan={5} className="p-0 border-t-2 border-accent-orange/20">
+              {/* colSpan = Local + Marca + n_meses + Cj + G */}
+              <td colSpan={2 + meses.length + 2} className="p-0 border-t-2 border-accent-orange/20">
                 <div className="overflow-x-auto bg-slate-50/70 dark:bg-white/[0.015]">
                   <table className="w-full text-xs" style={{ minWidth: `${100 + sortedCajas.length * 90 + 80}px` }}>
                     <thead>
