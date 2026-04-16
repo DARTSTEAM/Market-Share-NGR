@@ -11,6 +11,7 @@ const SSTXDashboard = ({ records, filters, globalFilterBar }) => {
   
   // Hande the month: SSTX requires a month. If 'all', find the latest month in the records
   const currentMonth = useMemo(() => {
+    console.log('[SSTX] Recibiendo records:', (records || []).length);
     const m = parseInt(filters.month);
     if (!isNaN(m)) return m;
     
@@ -122,8 +123,8 @@ const SSTXDashboard = ({ records, filters, globalFilterBar }) => {
       {/* Header Info */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-xl font-black italic uppercase tracking-tighter text-slate-900 dark:text-white">
-            Same Store Sales (SSTX)
+          <h2 className="text-xl font-black italic uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-2">
+            Same Store Sales (SSTX) <span className="text-[8px] bg-accent-orange text-white px-1 rounded not-italic">V1.1</span>
           </h2>
           <p className="text-[10px] text-slate-500 dark:text-white/40 font-bold uppercase tracking-widest mt-1">
             Comparativa {currentMonth}/{currentYear} vs {currentMonth}/{previousYear} | {sstxStats.sameStoresCount} Tiendas Activas en ambos periodos
