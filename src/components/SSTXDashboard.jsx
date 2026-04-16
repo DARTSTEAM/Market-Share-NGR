@@ -252,7 +252,7 @@ const SSTXDashboard = ({ records, filters, globalFilterBar }) => {
                     </td>
                   </tr>
                   {/* Detailed Store Rows (Visible if expanded or just a few) */}
-                  {brand.stores.sort((a,b) => b.growth - a.growth).slice(0, 5).map(store => (
+                  {[...brand.stores].sort((a,b) => b.growth - a.growth).slice(0, 5).map(store => (
                     <tr key={store.code || store.name} className="border-t border-slate-100 dark:border-white/[0.02] hover:bg-slate-200/20 dark:hover:bg-white/[0.01] transition-colors">
                       <td className="px-6 py-3"></td>
                       <td className="px-6 py-3 text-[10px] font-bold text-slate-600 dark:text-white/60 uppercase">{store.name}</td>
