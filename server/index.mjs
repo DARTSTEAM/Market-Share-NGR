@@ -508,7 +508,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
             // Una caja recién registrada en cajas_config no tiene datos aún → la mostramos como GAP
             try {
                 const [cajasRows] = await bigquery.query({
-                    query: `SELECT codigo_tienda, caja, local, competidor, status
+                    query: `SELECT REPLACE(codigo_tienda, ' ', '') AS codigo_tienda, caja, local, competidor, status
                             FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
                             WHERE status != 'DISCONTINUADA'`,
                 });
