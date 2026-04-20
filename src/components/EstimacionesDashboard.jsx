@@ -163,118 +163,148 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
     }
   };
 
-  return (
-    <div
-      className="absolute right-0 top-full mt-1 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/20 p-4 space-y-3 z-30"
-      onClick={e => e.stopPropagation()}
-    >
-      {/* ── Selector de método ── */}
-      <div>
-        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2">Método de estimación</p>
-        <div className="grid grid-cols-3 gap-1.5">
-          {METODOS.map(m => {
-            const v = valores[m.key];
-            const activo = metodo === m.key;
-            return (
-              <button
-                key={m.key}
-                title={m.desc}
-                onClick={() => setMetodo(m.key)}
-                className={`flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl border text-center transition-all ${
-                  activo
-                    ? 'bg-accent-orange/10 border-accent-orange/40 text-accent-orange'
-                    : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:border-accent-orange/30 hover:text-slate-600 dark:hover:text-white/60'
-                }`}
-              >
-                <span className="text-[8px] font-black uppercase tracking-tighter leading-tight">{m.label}</span>
-                <span className={`text-[11px] font-black mt-0.5 ${activo ? 'text-accent-orange' : 'text-slate-500 dark:text-white/40'}`}>
-                  {v != null ? fmt(v) : '—'}
-                </span>
-                <span className={`text-[7px] font-bold ${activo ? 'text-accent-orange/70' : 'text-slate-300 dark:text-white/20'}`}>tx/día</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+  const rect = useRef(null);
 
-      {/* ── Input manual (override) ── */}
-      <div>
-        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1 block">
-          Trx / día estimadas <span className="font-normal normal-case tracking-normal">(editá si querés otro valor)</span>
-        </label>
-        <input
-          ref={inputRef}
-          type="number"
-          value={manualVal}
-          onChange={e => setManualVal(e.target.value)}
-          placeholder="ej. 245"
-          className="w-full px-3 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-black text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
-          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancelEdit(); }}
-        />
-      </div>
-
-      {/* ── Checkbox aprobación ── */}
-      <label
-        className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all select-none ${
-          aprobado
-            ? 'bg-violet-50 dark:bg-violet-900/20 border-violet-300 dark:border-violet-600/40'
-            : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/10 hover:border-violet-300 dark:hover:border-violet-600/30'
-        }`}
+  // Modal portal overlay
+  return createPortal(
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" 
+        onClick={onCancelEdit}
+      />
+      
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 20 }}
+        className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden"
+        onClick={e => e.stopPropagation()}
       >
-        <div
-          className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all ${
-            aprobado ? 'bg-violet-500 border-violet-500' : 'border-slate-300 dark:border-white/30'
-          }`}
-          onClick={() => setAprobado(v => !v)}
-        >
-          {aprobado && <Check size={10} className="text-white" strokeWidth={3} />}
+        {/* Header Modal */}
+        <div className="px-6 py-5 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">
+              Estimar Transacciones <span className="text-[10px] text-accent-orange/40 ml-1">v2.1</span>
+            </h3>
+            <button onClick={onCancelEdit} className="p-1.5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full text-slate-400 transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="flex items-center gap-1.5">
+              <Store size={12} className="text-accent-orange" />
+              <span className="text-[11px] font-bold text-slate-500 dark:text-white/60">{cell.local}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CalendarDays size={12} className="text-slate-400" />
+              <span className="text-[11px] font-bold text-slate-500 dark:text-white/60">{MESES[cell.mes]} {cell.ano}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] font-black px-1.5 py-0.5 bg-slate-200 dark:bg-white/10 rounded text-slate-500 dark:text-white/40">{cell.caja === '99' ? 'Total Local' : `Caja ${cell.caja}`}</span>
+            </div>
+          </div>
         </div>
-        <div>
-          <p className={`text-[10px] font-black leading-tight ${aprobado ? 'text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-white/60'}`}>
-            Marcar como Aprobado
-          </p>
-          <p className="text-[8px] text-slate-400 dark:text-white/30 mt-0.5 leading-snug">
-            Solo las estimaciones aprobadas se muestran en el dashboard de market share
-          </p>
-        </div>
-      </label>
 
-      {/* ── Preview estado ── */}
-      {valido && (
-        <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
-          aprobado ? 'bg-violet-500/10 border-violet-500/20' : 'bg-amber-500/10 border-amber-500/20'
-        }`}>
-          <span className={`text-[9px] font-black uppercase tracking-widest ${aprobado ? 'text-violet-500' : 'text-amber-500'}`}>
-            {aprobado ? '✓ Se publicará en dashboard' : '⏳ Quedará pendiente de revisión'}
-          </span>
-          <span className={`font-black text-base ${aprobado ? 'text-violet-500' : 'text-amber-500'}`}>
-            {fmt(valor)} <span className="text-[9px]">tx/día</span>
-          </span>
-        </div>
-      )}
+        <div className="p-6 space-y-6">
+          {/* ── Selector de método ── */}
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3 ml-1">Método Sugerido</p>
+            <div className="grid grid-cols-3 gap-2">
+              {METODOS.map(m => {
+                const v = valores[m.key];
+                const activo = metodo === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    title={m.desc}
+                    onClick={() => { setMetodo(m.key); if (v) setManualVal(String(Math.round(v * 10) / 10)); }}
+                    className={`flex flex-col items-center gap-1 px-2 py-3 rounded-2xl border text-center transition-all ${
+                      activo
+                        ? 'bg-accent-orange/10 border-accent-orange/40 text-accent-orange shadow-lg shadow-orange-500/5'
+                        : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:border-accent-orange/30'
+                    }`}
+                  >
+                    <span className="text-[8px] font-black uppercase tracking-tighter leading-tight">{m.label}</span>
+                    <span className={`text-[12px] font-black mt-0.5 ${activo ? 'text-accent-orange' : 'text-slate-500 dark:text-white/40'}`}>
+                      {v != null ? fmt(v) : '—'}
+                    </span>
+                    <span className={`text-[7px] font-bold ${activo ? 'text-accent-orange/70' : 'text-slate-300 dark:text-white/20'}`}>tx/día</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-      {/* ── Botones ── */}
-      <div className="flex gap-2 pt-1">
-        <button
-          onClick={onCancelEdit}
-          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving || !valido}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40 transition-all ${
-            aprobado ? 'bg-violet-500 hover:bg-violet-600' : 'bg-accent-orange hover:bg-orange-600'
-          }`}
-        >
-          {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-          {aprobado ? 'Aprobar' : 'Guardar borrador'}
-        </button>
-      </div>
-    </div>
+          {/* ── Input manual ── */}
+          <div className="bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-200 dark:border-white/10">
+            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1">
+              Valor Final <span className="font-normal normal-case tracking-normal">(puedes editarlo)</span>
+            </label>
+            <div className="relative">
+              <input
+                ref={inputRef}
+                type="number"
+                value={manualVal}
+                onChange={e => setManualVal(e.target.value)}
+                className="w-full pl-4 pr-12 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl text-lg font-black text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30 transition-all"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">trx/día</span>
+            </div>
+          </div>
+
+          {/* ── Checkbox aprobación ── */}
+          <label
+            className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all select-none ${
+              aprobado
+                ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800/40'
+                : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/10 hover:border-teal-300 dark:hover:border-teal-800/30'
+            }`}
+          >
+            <div
+              className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all ${
+                aprobado ? 'bg-teal-500 border-teal-500' : 'border-slate-300 dark:border-white/20 theme-border'
+              }`}
+              onClick={(e) => { e.preventDefault(); setAprobado(v => !v); }}
+            >
+              {aprobado && <Check size={12} className="text-white" strokeWidth={4} />}
+            </div>
+            <div>
+              <p className={`text-[11px] font-black leading-tight ${aprobado ? 'text-teal-700 dark:text-teal-400' : 'text-slate-600 dark:text-white/60'}`}>
+                Aprobar Estimación
+              </p>
+              <p className="text-[9px] text-slate-400 dark:text-white/30 mt-1 leading-snug">
+                Si marcas "Aprobar", el dato será visible inmediatamente para todos. Si no, quedará como borrador pendiente de revisión.
+              </p>
+            </div>
+          </label>
+
+          {/* ── Botones ── */}
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={onCancelEdit}
+              className="px-6 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-50 dark:hover:bg-white/5"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !valido}
+              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-40 transition-all shadow-xl ${
+                aprobado ? 'bg-teal-500 hover:bg-teal-600 shadow-teal-500/20' : 'bg-accent-orange hover:bg-orange-600 shadow-orange-500/20'
+              }`}
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : (aprobado ? <Check size={14} /> : <Check size={14} />)}
+              {aprobado ? 'Publicar Ahora' : 'Guardar Pendiente'}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
   );
 }
+
 
 
 // ── Celda individual ──────────────────────────────────────────────────────────
@@ -285,11 +315,15 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
     const gapKey = `${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`;
     const gapOk  = isGapRevisado;
     return (
-      <td className="px-1.5 py-1.5 align-middle relative" style={{ minWidth: 90 }} onClick={e => e.stopPropagation()}>
+      <td 
+        className="px-1.5 py-1.5 align-middle relative" 
+        style={{ minWidth: 90 }} 
+        onClick={e => e.stopPropagation()}
+      >
         {isEditing && (
-          <div className="relative z-20">
+          <AnimatePresence>
             <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
-          </div>
+          </AnimatePresence>
         )}
         {gapOk ? (
           /* GAP revisado: muestra guión verde + check, ya no es error */
@@ -342,9 +376,9 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
         onClick={e => { e.stopPropagation(); onStartEdit(cell); }}
       >
         {isEditing && (
-          <div className="relative z-20" onClick={e => e.stopPropagation()}>
+          <AnimatePresence>
             <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
-          </div>
+          </AnimatePresence>
         )}
         <div className="flex items-center justify-end gap-1">
           <span className={`font-mono font-black text-[12px] ${cfg.text}`}>{fmt(cell.tasa)}</span>
@@ -372,9 +406,9 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
       onClick={e => { e.stopPropagation(); onStartEdit(cell); }}
     >
       {isEditing && (
-        <div className="relative z-20" onClick={e => e.stopPropagation()}>
+        <AnimatePresence>
           <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
-        </div>
+        </AnimatePresence>
       )}
       <div className="flex items-center justify-end gap-1">
         {esCaidaAlarm && !revisada && <AlertTriangle size={9} className="text-red-500 shrink-0" />}
@@ -682,6 +716,11 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                 {gapCount} gaps
               </span>
             )}
+            {estPct !== null && estPct > 0 && (
+              <span className="px-1.5 py-0.5 bg-teal-500/10 text-teal-500 border border-teal-500/25 rounded text-[7px] font-black shrink-0">
+                {estPct}% est.
+              </span>
+            )}
             {/* Toggle silenciar local entero — al extremo derecho */}
             {onToggleLocal && (
               <Tip label={isLocalSilenciado ? 'Reactivar alarmas del local' : 'Silenciar todas las alarmas del local'} placement="top">
@@ -744,12 +783,12 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
           <div className="flex flex-col items-end gap-1">
             {tieneGaps ? (
               <span className="px-1.5 py-0.5 bg-red-500/15 text-red-400 border border-red-500/30 rounded text-[7px] font-black uppercase tracking-wider">
-                {gapCount}g
+                {gapCount} gaps
               </span>
             ) : <span className="text-emerald-400 opacity-20"><ShieldCheck size={10} /></span>}
             {estPct !== null && estPct > 0 && (
               <span className="px-1.5 py-0.5 bg-teal-500/10 text-teal-500 border border-teal-500/25 rounded text-[7px] font-black tracking-wider">
-                {estPct}%est
+                {estPct}% est.
               </span>
             )}
           </div>
@@ -1098,15 +1137,24 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
         if (isSilenciada(l.codigo_tienda, c)) return acc;
         return acc + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && l.celdas[`${c}||${mk}`]?.tipo === 'GAP').length;
       }, 0);
-      d.sort((a, b) => gc(b) - gc(a));
+      d.sort((a, b) => gc(b) - gc(a) || a.competidor.localeCompare(b.competidor) || (a.codigo_tienda || '').localeCompare(b.codigo_tienda || '', undefined, { numeric: true }));
     } else if (sortBy === 'pendiente') {
       const pc = (l) => l.cajas.reduce((acc, c) =>
         acc + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && l.celdas[`${c}||${mk}`]?.tipo === 'PENDIENTE').length, 0);
-      d.sort((a, b) => pc(b) - pc(a));
+      d.sort((a, b) => pc(b) - pc(a) || a.competidor.localeCompare(b.competidor) || (a.codigo_tienda || '').localeCompare(b.codigo_tienda || '', undefined, { numeric: true }));
     } else if (sortBy === 'codigo') {
-      d.sort((a, b) => (a.codigo_tienda || '').localeCompare(b.codigo_tienda || ''));
+      // Natural sort by Competitor -> Code
+      d.sort((a, b) =>
+        a.competidor.localeCompare(b.competidor) ||
+        (a.codigo_tienda || '').localeCompare(b.codigo_tienda || '', undefined, { numeric: true, sensitivity: 'base' })
+      );
     } else {
-      d.sort((a, b) => a.local?.localeCompare(b.local));
+      // Natural sort by Competitor -> Code (to satisfy "A-Z be KFC01, KFC02...") -> then Name
+      d.sort((a, b) =>
+        a.competidor.localeCompare(b.competidor) ||
+        (a.codigo_tienda || '').localeCompare(b.codigo_tienda || '', undefined, { numeric: true, sensitivity: 'base' }) ||
+        a.local?.localeCompare(b.local)
+      );
     }
     return d;
   }, [matrix, meses, filterSoloGaps, filterPendientes, search, sortBy, cajaStatusMap]);
