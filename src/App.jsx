@@ -1474,7 +1474,7 @@ export default function App({ user, onSignOut }) {
               >
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-              {activeCategory !== 'tickets' && activeCategory !== 'clientes' && globalFilterBar}
+              {activeCategory !== 'tickets' && activeCategory !== 'clientes' && activeCategory !== 'estimaciones' && globalFilterBar}
 
               {/* ── User avatar + logout ── */}
               {user && (

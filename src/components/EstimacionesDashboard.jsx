@@ -5,7 +5,8 @@ import {
   ClipboardEdit, RefreshCw, AlertTriangle, CheckCircle2,
   Loader2, ChevronDown, ChevronRight, Search,
   TrendingDown, Wifi, Database, Info, X, Check, Pencil,
-  ShieldCheck, Clock, Settings2, Plus, Power, BellOff, Store, Bell, Trash2
+  ShieldCheck, Clock, Settings2, Plus, Power, BellOff, Store, Bell, Trash2,
+  CalendarDays
 } from 'lucide-react';
 
 const API = window.location.hostname === 'localhost'
@@ -16,11 +17,11 @@ const MESES = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
                'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 const TIPO_CONFIG = {
-  REAL:     { dot: 'bg-emerald-400', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', label: 'Real',              icon: Wifi },
-  HISTORIAL:{ dot: 'bg-indigo-400',  badge: 'bg-indigo-500/15  text-indigo-400  border-indigo-500/30',  label: 'Historial',         icon: Database },
-  APROBADO: { dot: 'bg-violet-400',  badge: 'bg-violet-500/15  text-violet-400  border-violet-500/30',  label: 'Aprobado',          icon: ShieldCheck },
-  PENDIENTE:{ dot: 'bg-amber-400',   badge: 'bg-amber-500/15   text-amber-400   border-amber-500/30',   label: 'Pend. Aprobación',  icon: Clock },
-  GAP:      { dot: 'bg-red-400',     badge: 'bg-red-500/15     text-red-400     border-red-500/30',     label: 'Gap',               icon: AlertTriangle },
+  REAL:     { dot: 'bg-emerald-400', cell: 'bg-emerald-50   dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', label: 'Real',             icon: Wifi },
+  HISTORIAL:{ dot: 'bg-slate-400',   cell: 'bg-slate-100    dark:bg-white/[0.06]',   text: 'text-slate-600   dark:text-white/70',    badge: 'bg-slate-500/15  text-slate-400  border-slate-500/30',  label: 'Historial',        icon: Database },
+  APROBADO: { dot: 'bg-teal-400',    cell: 'bg-teal-50      dark:bg-teal-500/10',    text: 'text-teal-700    dark:text-teal-300',    badge: 'bg-teal-500/15   text-teal-400   border-teal-500/30',   label: 'Aprobado',         icon: ShieldCheck },
+  PENDIENTE:{ dot: 'bg-amber-400',   cell: 'bg-amber-50     dark:bg-amber-500/10',   text: 'text-amber-700   dark:text-amber-300',   badge: 'bg-amber-500/15  text-amber-400  border-amber-500/30',  label: 'Pend. Aprobación', icon: Clock },
+  GAP:      { dot: 'bg-red-400',     cell: '',                                        text: '',                                       badge: 'bg-red-500/15    text-red-400    border-red-500/30',    label: 'Gap',              icon: AlertTriangle },
 };
 
 const fmt = n => n != null ? Number(n).toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—';
@@ -337,7 +338,7 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
     const cfg = TIPO_CONFIG.PENDIENTE;
     return (
       <td
-        className="px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-colors hover:bg-amber-50/40 dark:hover:bg-amber-900/10"
+        className={`px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-all ${cfg.cell} hover:brightness-95`}
         onClick={e => { e.stopPropagation(); onStartEdit(cell); }}
       >
         {isEditing && (
@@ -345,17 +346,16 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
             <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
           </div>
         )}
-        <div className="flex items-center justify-end gap-1.5">
-          <span className="font-mono font-black text-[12px] text-amber-500">{fmt(cell.tasa)}</span>
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-          <Pencil size={7} className="opacity-0 group-hover:opacity-30 text-slate-400 transition-opacity shrink-0 -mr-0.5" />
+        <div className="flex items-center justify-end gap-1">
+          <span className={`font-mono font-black text-[12px] ${cfg.text}`}>{fmt(cell.tasa)}</span>
+          <Pencil size={7} className="opacity-0 group-hover:opacity-40 text-slate-400 transition-opacity shrink-0" />
         </div>
-        <div className="text-[7px] text-amber-400/70 font-black text-right uppercase tracking-wider">pend.</div>
+        <div className="text-[7px] text-amber-500/60 font-black text-right uppercase tracking-wider">pend.</div>
       </td>
     );
   }
 
-  // APROBADO, REAL, HISTORIAL: mostrar con su color
+  // APROBADO, REAL, HISTORIAL: mostrar con fondo de celda coloreado
   const cfg = TIPO_CONFIG[cell.tipo] || TIPO_CONFIG.REAL;
 
   // ── Alarma por caída + estado revisado ──
@@ -364,10 +364,10 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
 
   return (
     <td
-      className={`px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-colors ${
-        revisada         ? 'bg-emerald-500/5    hover:bg-emerald-500/10' :
-        esCaidaAlarm     ? 'bg-red-500/5'       :
-                           'hover:bg-slate-100/60 dark:hover:bg-white/[0.04]'
+      className={`px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-all ${
+        revisada     ? 'bg-emerald-100 dark:bg-emerald-500/15 hover:brightness-95' :
+        esCaidaAlarm ? 'bg-red-100 dark:bg-red-500/15 hover:brightness-95' :
+                       `${cfg.cell} hover:brightness-95`
       }`}
       onClick={e => { e.stopPropagation(); onStartEdit(cell); }}
     >
@@ -376,23 +376,22 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
           <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
         </div>
       )}
-      <div className="flex items-center justify-end gap-1.5">
-        {esCaidaAlarm && !revisada && <AlertTriangle size={9} className="text-red-400 shrink-0" />}
-        {revisada && <Check size={9} className="text-emerald-400 shrink-0" />}
+      <div className="flex items-center justify-end gap-1">
+        {esCaidaAlarm && !revisada && <AlertTriangle size={9} className="text-red-500 shrink-0" />}
+        {revisada && <Check size={9} className="text-emerald-500 shrink-0" />}
         <span className={`font-mono font-black text-[12px] ${
-          revisada ? 'text-emerald-400' : esCaidaAlarm ? 'text-red-400' : 'text-slate-800 dark:text-white/90'
+          revisada ? 'text-emerald-600 dark:text-emerald-300' :
+          esCaidaAlarm ? 'text-red-600 dark:text-red-300' :
+          cfg.text
         }`}>
           {fmt(cell.tasa)}
         </span>
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-        {(cell.tipo === 'APROBADO' || cell.tipo === 'REAL' || cell.tipo === 'HISTORIAL') &&
-          <Pencil size={7} className="opacity-0 group-hover:opacity-30 text-slate-400 transition-opacity shrink-0 -mr-0.5" />
-        }
+        <Pencil size={7} className="opacity-0 group-hover:opacity-30 text-slate-400 transition-opacity shrink-0" />
       </div>
       {/* Porcentaje de caída + check de revisión */}
       {esCaidaAlarm && (
         <div className="flex items-center justify-end gap-1">
-          <span className={`text-[8px] font-black ${ revisada ? 'text-emerald-400/70' : 'text-red-400'}`}>
+          <span className={`text-[8px] font-black ${ revisada ? 'text-emerald-500/70' : 'text-red-500'}`}>
             {cell.caida_pct?.toFixed(0)}%
           </span>
           {onMarkRevisada && (
@@ -401,7 +400,7 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
               onClick={e => { e.stopPropagation(); onMarkRevisada(cell, !revisada); }}
               className={`transition-all rounded-full p-0.5 ${
                 revisada
-                  ? 'opacity-100 text-emerald-400 hover:text-red-400'
+                  ? 'opacity-100 text-emerald-500 hover:text-red-400'
                   : 'opacity-0 group-hover:opacity-80 text-slate-400 hover:text-emerald-500'
               }`}
             >
@@ -592,6 +591,22 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
   const tieneGaps = gapCount > 0;
   const tienePendientes = pendienteCount > 0;
 
+  // % de estimación: celdas APROBADO o PENDIENTE / total de celdas con dato en período de rutina
+  const { estCount, totalCount } = useMemo(() => {
+    let est = 0, total = 0;
+    local.cajas.forEach(c => {
+      meses.forEach(mk => {
+        const cell = local.celdas[`${c}||${mk}`];
+        if (!cell) return;
+        if (cell.tipo === 'GAP') return;
+        total += 1;
+        if (cell.tipo === 'APROBADO' || cell.tipo === 'PENDIENTE') est += 1;
+      });
+    });
+    return { estCount: est, totalCount: total };
+  }, [local.celdas, local.cajas, meses]);
+  const estPct = totalCount > 0 ? Math.round((estCount / totalCount) * 100) : null;
+
   // Para NO_CAJA_DETAIL: celda editable
   const PRIO_TIPO = { REAL: 5, APROBADO: 4, PENDIENTE: 3, HISTORIAL: 2 };
   const getEditableCellLocal = (mk) => {
@@ -724,13 +739,20 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
           </span>
         </td>
 
-        {/* Summary Badges */}
+        {/* Summary Badges: gaps + % estimado */}
         <td className="px-3 py-3 text-right">
-          {tieneGaps ? (
-            <span className="px-1.5 py-0.5 bg-red-500/15 text-red-400 border border-red-500/30 rounded text-[7px] font-black uppercase tracking-wider">
-              {gapCount}
-            </span>
-          ) : <span className="text-emerald-400 opacity-20"><ShieldCheck size={10} className="ml-auto" /></span>}
+          <div className="flex flex-col items-end gap-1">
+            {tieneGaps ? (
+              <span className="px-1.5 py-0.5 bg-red-500/15 text-red-400 border border-red-500/30 rounded text-[7px] font-black uppercase tracking-wider">
+                {gapCount}g
+              </span>
+            ) : <span className="text-emerald-400 opacity-20"><ShieldCheck size={10} /></span>}
+            {estPct !== null && estPct > 0 && (
+              <span className="px-1.5 py-0.5 bg-teal-500/10 text-teal-500 border border-teal-500/25 rounded text-[7px] font-black tracking-wider">
+                {estPct}%est
+              </span>
+            )}
+          </div>
         </td>
       </tr>
 
@@ -892,6 +914,13 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
   const [filterSoloGaps, setFilterSoloGaps] = useState(true);
   const [filterPendientes, setFilterPendientes] = useState(false);
   const [sortBy, setSortBy]                 = useState('gaps');
+
+  // ── Filtro de períodos ──────────────────────────────────────────────────────
+  // preset: 'all' | '3m' | '6m' | 'custom'
+  const [periodoPreset, setPeriodoPreset]   = useState('6m');
+  const _pNow = new Date();
+  const [customDesde, setCustomDesde]       = useState({ mes: _pNow.getMonth() + 1, ano: _pNow.getFullYear() - 1 });
+  const [customHasta, setCustomHasta]       = useState({ mes: _pNow.getMonth() + 1, ano: _pNow.getFullYear() });
   const [search, setSearch]                 = useState('');
   const [expandidos, setExpandidos]         = useState(new Set());
   const [pendingEdit, setPendingEdit]       = useState(null);
@@ -1074,6 +1103,8 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
       const pc = (l) => l.cajas.reduce((acc, c) =>
         acc + meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL && l.celdas[`${c}||${mk}`]?.tipo === 'PENDIENTE').length, 0);
       d.sort((a, b) => pc(b) - pc(a));
+    } else if (sortBy === 'codigo') {
+      d.sort((a, b) => (a.codigo_tienda || '').localeCompare(b.codigo_tienda || ''));
     } else {
       d.sort((a, b) => a.local?.localeCompare(b.local));
     }
@@ -1082,6 +1113,30 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
 
 
   const competidores = useMemo(() => [...new Set(matrix.map(l => l.competidor))].sort(), [matrix]);
+
+  // ── Columnas de meses visibles según filtro de período ──────────────────────
+  const mesesFiltrados = useMemo(() => {
+    if (!meses.length) return meses;
+    if (periodoPreset === 'all') return meses;
+    if (periodoPreset === '3m') return meses.slice(-3);
+    if (periodoPreset === '6m') return meses.slice(-6);
+
+    // custom: generamos TODOS los meses del rango, aunque el servidor no los devuelva
+    const desdeKey = `${customDesde.ano}-${String(customDesde.mes).padStart(2, '0')}`;
+    const hastaKey = `${customHasta.ano}-${String(customHasta.mes).padStart(2, '0')}`;
+    if (desdeKey > hastaKey) return meses;
+
+    // Generar secuencia completa mes a mes
+    const resultado = [];
+    let [ano, mes] = desdeKey.split('-').map(Number);
+    const [hastaAno, hastaMes] = hastaKey.split('-').map(Number);
+    while (ano < hastaAno || (ano === hastaAno && mes <= hastaMes)) {
+      resultado.push(`${ano}-${String(mes).padStart(2, '0')}`);
+      mes += 1;
+      if (mes > 12) { mes = 1; ano += 1; }
+    }
+    return resultado;
+  }, [meses, periodoPreset, customDesde, customHasta]);
 
   const handleStartEdit = (cell) => setPendingEdit(cell);
   const handleCancelEdit = () => setPendingEdit(null);
@@ -1746,79 +1801,185 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
       <div className="flex flex-wrap items-center gap-3 pwa-card px-4 py-3">
         <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 shrink-0">Referencia:</span>
         {Object.entries(TIPO_CONFIG).map(([tipo, cfg]) => (
-          <span key={tipo} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest border ${cfg.badge}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+          <span key={tipo} className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[7px] font-black uppercase tracking-widest border ${cfg.badge} ${cfg.cell}`}>
             {cfg.label}
           </span>
         ))}
         <span className="ml-auto text-[8px] font-bold text-slate-300 dark:text-white/20 italic flex items-center gap-1">
           <Info size={10} />
-          Solo los <strong className="text-violet-400">Aprobados</strong> se muestran en Market Share
+          Solo los <strong className="text-teal-400">Aprobados</strong> se muestran en Market Share
         </span>
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar local o código…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
-          />
-        </div>
-        <select
-          value={filterComp}
-          onChange={e => setFilterComp(e.target.value)}
-          className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-white/70 focus:outline-none"
-        >
-          <option value="">Todos los competidores</option>
-          {competidores.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+      <div className="flex flex-col gap-2">
 
-        {/* Sort */}
-        <div className="flex items-center gap-1 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl p-1">
-          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest px-2">Ordenar</span>
-          {[{ id: 'gaps', label: 'gaps' }, { id: 'pendiente', label: 'pendientes' }, { id: 'local', label: 'A-Z' }].map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => setSortBy(opt.id)}
-              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
-                sortBy === opt.id ? 'bg-accent-orange text-white shadow-sm' : 'text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        {/* ── Fila 1: Búsqueda + Competidor ── */}
+        <div className="flex flex-wrap gap-2">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar local o código…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2.5 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
+            />
+          </div>
+          <select
+            value={filterComp}
+            onChange={e => setFilterComp(e.target.value)}
+            className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-white/70 focus:outline-none min-w-[180px]"
+          >
+            <option value="">Todos los competidores</option>
+            {competidores.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
 
-        {/* Filtros rápidos */}
-        <button
-          onClick={() => { setFilterSoloGaps(v => !v); setFilterPendientes(false); }}
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
-            filterSoloGaps ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40'
-          }`}
-        >
-          <AlertTriangle size={10} />
-          Solo gaps
-        </button>
-        <button
-          onClick={() => { setFilterPendientes(v => !v); setFilterSoloGaps(false); }}
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
-            filterPendientes ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40'
-          }`}
-        >
-          <Clock size={10} />
-          Pendientes
-        </button>
-        <button onClick={expandAll} className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70 transition-colors">
-          Expandir todo
-        </button>
-        <button onClick={collapseAll} className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70 transition-colors">
-          Colapsar todo
-        </button>
+        {/* ── Fila 2: Controles segmentados + acciones ── */}
+        <div className="flex flex-wrap items-center gap-2">
+
+          {/* Ordenar */}
+          <div className="flex items-center bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
+            <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest px-2.5 py-2 border-r border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] shrink-0">
+              Ordenar
+            </span>
+            {[
+              { id: 'gaps',      label: 'Gaps' },
+              { id: 'pendiente', label: 'Pendientes' },
+              { id: 'local',     label: 'A-Z' },
+              { id: 'codigo',    label: 'Código' },
+            ].map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setSortBy(opt.id)}
+                className={`px-3 py-2 text-[9px] font-black uppercase tracking-widest transition-all border-r border-slate-200 dark:border-white/10 last:border-r-0 ${
+                  sortBy === opt.id
+                    ? 'bg-accent-orange text-white'
+                    : 'text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-700 dark:hover:text-white/70'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Período */}
+          <div className="flex items-center bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden">
+            <span className="flex items-center gap-1.5 text-[7px] font-black text-slate-400 uppercase tracking-widest px-2.5 py-2 border-r border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] shrink-0">
+              <CalendarDays size={10} />
+              Período
+            </span>
+            {[
+              { id: 'all',    label: 'Todo' },
+              { id: '3m',     label: 'Últ. 3m' },
+              { id: '6m',     label: 'Últ. 6m' },
+              { id: 'custom', label: 'Custom' },
+            ].map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setPeriodoPreset(opt.id)}
+                className={`px-3 py-2 text-[9px] font-black uppercase tracking-widest transition-all border-r border-slate-200 dark:border-white/10 last:border-r-0 ${
+                  periodoPreset === opt.id
+                    ? 'bg-accent-orange text-white'
+                    : 'text-slate-500 dark:text-white/40 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-700 dark:hover:text-white/70'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Separador visual */}
+          <div className="w-px h-6 bg-slate-200 dark:bg-white/10 shrink-0" />
+
+          {/* Filtros rápidos */}
+          <button
+            onClick={() => { setFilterSoloGaps(v => !v); setFilterPendientes(false); }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
+              filterSoloGaps ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40'
+            }`}
+          >
+            <AlertTriangle size={10} />
+            Solo gaps
+          </button>
+          <button
+            onClick={() => { setFilterPendientes(v => !v); setFilterSoloGaps(false); }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
+              filterPendientes ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40'
+            }`}
+          >
+            <Clock size={10} />
+            Pendientes
+          </button>
+
+          {/* Separador visual */}
+          <div className="w-px h-6 bg-slate-200 dark:bg-white/10 shrink-0" />
+
+          <button onClick={expandAll} className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70 transition-colors">
+            Expandir todo
+          </button>
+          <button onClick={collapseAll} className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-white/40 hover:text-slate-700 dark:hover:text-white/70 transition-colors">
+            Colapsar todo
+          </button>
+        </div>
+
+        {/* ── Rango de fechas custom (solo visible cuando preset = custom) ── */}
+        {periodoPreset === 'custom' && (
+          <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-white/5 border border-accent-orange/30 rounded-xl px-4 py-3">
+            <CalendarDays size={14} className="text-accent-orange shrink-0" />
+            <span className="text-[8px] font-black text-accent-orange uppercase tracking-widest shrink-0 mr-1">Rango personalizado</span>
+
+            {/* Desde */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5">
+              <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest shrink-0">Desde</span>
+              <select
+                value={customDesde.mes}
+                onChange={e => setCustomDesde(p => ({ ...p, mes: parseInt(e.target.value) }))}
+                className="bg-transparent text-[9px] font-black text-slate-700 dark:text-white focus:outline-none cursor-pointer"
+              >
+                {['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'].map((m, i) => (
+                  <option key={i+1} value={i+1}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={customDesde.ano}
+                onChange={e => setCustomDesde(p => ({ ...p, ano: parseInt(e.target.value) }))}
+                className="bg-transparent text-[9px] font-black text-slate-700 dark:text-white focus:outline-none cursor-pointer"
+              >
+                {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+
+            <span className="text-slate-300 dark:text-white/20 font-black">→</span>
+
+            {/* Hasta */}
+            <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5">
+              <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest shrink-0">Hasta</span>
+              <select
+                value={customHasta.mes}
+                onChange={e => setCustomHasta(p => ({ ...p, mes: parseInt(e.target.value) }))}
+                className="bg-transparent text-[9px] font-black text-slate-700 dark:text-white focus:outline-none cursor-pointer"
+              >
+                {['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'].map((m, i) => (
+                  <option key={i+1} value={i+1}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={customHasta.ano}
+                onChange={e => setCustomHasta(p => ({ ...p, ano: parseInt(e.target.value) }))}
+                className="bg-transparent text-[9px] font-black text-slate-700 dark:text-white focus:outline-none cursor-pointer"
+              >
+                {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+
+            <span className="ml-auto text-[8px] text-slate-400 dark:text-white/30 italic">
+              {mesesFiltrados.length} {mesesFiltrados.length === 1 ? 'mes' : 'meses'} seleccionados
+            </span>
+          </div>
+        )}
+
       </div>
 
       {/* Tabla */}
@@ -1844,7 +2005,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
         </div>
       ) : (
         <div className="pwa-card overflow-x-auto">
-          <div style={{ minWidth: `${220 + 100 + meses.length * 75 + 80}px` }}>
+          <div style={{ minWidth: `${220 + 100 + mesesFiltrados.length * 75 + 80}px` }}>
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02]">
@@ -1854,7 +2015,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                   <th className="px-3 py-3 text-left text-[8px] font-black uppercase tracking-widest text-slate-400" style={{ width: 100 }}>
                     Marca
                   </th>
-                  {meses.map(mk => {
+                  {mesesFiltrados.map(mk => {
                     const [ano, mes] = mk.split('-');
                     const mesLabel = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][parseInt(mes)-1];
                     const esRutinaMk = (parseInt(ano) * 100 + parseInt(mes)) > 202511;
@@ -1881,7 +2042,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                   <LocalRow
                     key={local.codigo_tienda}
                     local={local}
-                    meses={meses}
+                    meses={mesesFiltrados}
                     pendingEdit={pendingEdit}
                     onStartEdit={cell => { setPendingEdit(null); setTimeout(() => handleStartEdit(cell), 0); }}
                     onCancelEdit={handleCancelEdit}

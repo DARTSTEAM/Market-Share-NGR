@@ -451,15 +451,33 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 }
             }
 
-            // Determinar ventana de meses: Últimos 9 meses desde el actual
+            // Determinar ventana de meses: desde el mes más antiguo en los datos hasta el mes actual
             const now = new Date();
-            const mesesSorted = [];
-            for (let i = 8; i >= 0; i--) {
-                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                mesesSorted.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+            const currentMk = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            // Encontrar el mes más antiguo con datos
+            let minMk = currentMk;
+            for (const r of allRows) {
+                const ano = parseInt(r.ano?.value ?? r.ano ?? 0);
+                const mes = parseInt(r.mes?.value ?? r.mes ?? 0);
+                if (!ano || !mes) continue;
+                const mk = `${ano}-${String(mes).padStart(2, '0')}`;
+                if (mk < minMk) minMk = mk;
             }
 
-            // Agrupar por local
+            // Generar todos los meses entre minMk y el mes actual
+            const mesesSorted = [];
+            {
+                let [a, m] = minMk.split('-').map(Number);
+                const [ca, cm] = [now.getFullYear(), now.getMonth() + 1];
+                while (a < ca || (a === ca && m <= cm)) {
+                    mesesSorted.push(`${a}-${String(m).padStart(2, '0')}`);
+                    m += 1;
+                    if (m > 12) { m = 1; a += 1; }
+                }
+            }
+
+            // Agrupar por local — ahora incluye toda la ventana histórica
             const localMap = {};
             for (const cell of Object.values(cellMap)) {
                 if (!mesesSorted.includes(cell.mk)) continue;
