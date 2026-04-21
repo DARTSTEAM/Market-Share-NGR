@@ -515,6 +515,50 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 });
             }
 
+            // ── Detección de RETORNO: caja que reaparece tras 4+ meses de hiatus ──
+            // Una celda REAL se marca como RETORNO si tiene 4+ meses consecutivos sin
+            // datos previos (sin importar si la tasa es mayor, menor o igual a la previa).
+            // También se marca si la caja nunca tuvo historial en la ventana (caja nueva
+            // que aparece por primera vez en datos recientes).
+            // El frontend muestra estas celdas con badge naranja y abre el panel de
+            // estimación para que el usuario aplique Estimación Local.
+            for (const local of Object.values(localMap)) {
+                for (const caja of local.cajas) {
+                    for (let i = 0; i < mesesSorted.length; i++) {
+                        const mk   = mesesSorted[i];
+                        const cell = local.celdas[`${caja}||${mk}`];
+                        if (!cell || cell.tipo !== 'REAL' || !cell.tasa || cell.tasa <= 0) continue;
+
+                        // Buscar hacia atrás el último mes activo y contar meses vacíos consecutivos
+                        let gapCount = 0;
+                        let lastActiveTasa = null;
+                        for (let j = i - 1; j >= 0; j--) {
+                            const prevMk   = mesesSorted[j];
+                            const prevCell = local.celdas[`${caja}||${prevMk}`];
+                            if (!prevCell || prevCell.tipo === 'GAP' || !prevCell.tasa || prevCell.tasa <= 0) {
+                                gapCount++;
+                            } else {
+                                // Encontré el último mes con actividad
+                                lastActiveTasa = prevCell.tasa;
+                                break;
+                            }
+                        }
+
+                        // Hiatus de 4+ meses → RETORNO (sin importar si la tasa es mayor o menor)
+                        // También aplica si nunca hubo datos previos en la ventana (lastActiveTasa === null
+                        // y gapCount > 0, es decir, la caja apareció "de la nada" en medio de la ventana).
+                        const esHiatus  = gapCount >= 4;
+                        const esNueva   = lastActiveTasa === null && gapCount > 0;
+
+                        if (esHiatus || esNueva) {
+                            cell.tipo                = 'RETORNO';
+                            cell.retorno_tasa_previa = lastActiveTasa; // null → sin historial previo
+                            cell.retorno_meses_gap   = gapCount;
+                        }
+                    }
+                }
+            }
+
             // ── Meses de rutina ──────────────────────────────────────────────────────
             const CUTOFF_KEY = 202511; // ano*100 + mes > 202511 → desde Dic 2025 inclusive
             const mesesRutina = mesesSorted.filter(mk => {
@@ -523,16 +567,18 @@ app.get('/api/estimation-matrix', async (req, res) => {
             });
 
             // ── Inject cajas from cajas_config that have no data yet ──────────────────
-            // Una caja recién registrada en cajas_config no tiene datos aún → la mostramos como GAP
+            // Cajas con manual=true y sin datos reales → tipo 'CAJA_NUEVA' (filtrable)
+            // Cajas con manual=false y sin datos reales → tipo 'GAP' normal
             try {
                 const [cajasRows] = await bigquery.query({
-                    query: `SELECT REPLACE(codigo_tienda, ' ', '') AS codigo_tienda, caja, local, competidor, status
+                    query: `SELECT REPLACE(codigo_tienda, ' ', '') AS codigo_tienda, caja, local, competidor, status, manual
                             FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
                             WHERE status != 'DISCONTINUADA'`,
                 });
                 for (const cfg of cajasRows) {
-                    const ct   = cfg.codigo_tienda;
-                    const caja = String(cfg.caja);
+                    const ct        = cfg.codigo_tienda;
+                    const caja      = String(cfg.caja);
+                    const tipoNueva = cfg.manual ? 'CAJA_NUEVA' : 'GAP';
                     if (localMap[ct]) {
                         const cajaSet = new Set(localMap[ct].cajas);
                         if (!cajaSet.has(caja)) {
@@ -551,7 +597,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
                                         ano:           parseInt(ano),
                                         mk,
                                         tasa:          null,
-                                        tipo:          'GAP',
+                                        tipo:          tipoNueva,
                                     };
                                 }
                             }
@@ -576,7 +622,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
                                 ano:           parseInt(ano),
                                 mk,
                                 tasa:          null,
-                                tipo:          'GAP',
+                                tipo:          tipoNueva,
                             };
                         }
                     }
@@ -636,6 +682,14 @@ app.get('/api/estimation-matrix', async (req, res) => {
         console.error('[/api/estimation-matrix] Error:', err.message);
         res.status(500).json({ error: err.message });
     }
+});
+
+// POST /api/refresh-matrix — invalida el caché de la matriz para forzar una reconstrucción
+app.post('/api/refresh-matrix', (req, res) => {
+    cacheMatrix.fetchedAt = null;
+    cacheMatrix.data = null;
+    console.log('[/api/refresh-matrix] Cache invalidated — next GET will rebuild.');
+    res.json({ success: true, message: 'Matrix cache cleared' });
 });
 
 // POST /api/save-estimation — MERGE una estimación manual a BigQuery

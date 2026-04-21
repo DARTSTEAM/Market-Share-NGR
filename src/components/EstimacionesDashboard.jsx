@@ -6,7 +6,7 @@ import {
   Loader2, ChevronDown, ChevronRight, Search,
   TrendingDown, Wifi, Database, Info, X, Check, Pencil,
   ShieldCheck, Clock, Settings2, Plus, Power, BellOff, Store, Bell, Trash2,
-  CalendarDays
+  CalendarDays, PlusCircle
 } from 'lucide-react';
 
 const API = window.location.hostname === 'localhost'
@@ -371,6 +371,67 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
             )}
           </div>
         )}
+      </td>
+    );
+  }
+
+  // RETORNO: caja que reaparece tras 4+ meses de hiatus (sin importar si la tasa es
+  // mayor o menor), o caja nueva que aparece por primera vez en datos recientes.
+  // retorno_tasa_previa = null → sin historial previo en la ventana.
+  const esRetorno = cell.tipo === 'RETORNO';
+
+  if (esRetorno) {
+    return (
+      <td 
+        className="px-1.5 py-1.5 align-middle relative cursor-pointer" 
+        style={{ minWidth: 90 }} 
+        onClick={e => { e.preventDefault(); e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
+      >
+        {isEditing && (
+          <AnimatePresence mode="wait">
+            <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} pendingEditPos={pendingEditPos} local={local} meses={meses} />
+          </AnimatePresence>
+        )}
+        <div className="group w-full flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30 hover:bg-orange-500/25 transition-all ring-1 ring-orange-500/20">
+          <div className="flex items-center gap-1">
+            <RefreshCw size={9} className="text-orange-500" />
+            <span className="text-[8px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-tighter">Retorno Caja</span>
+          </div>
+          <span className="text-[11px] font-mono font-black text-orange-700 dark:text-orange-400">{fmt(cell.tasa)}</span>
+          {cell.retorno_tasa_previa != null ? (
+            <span className="text-[7px] text-orange-500/70 font-bold">
+              antes: {fmt(cell.retorno_tasa_previa)}{cell.retorno_meses_gap ? ` · ${cell.retorno_meses_gap}m inact.` : ''}
+            </span>
+          ) : (
+            <span className="text-[7px] text-orange-500/70 font-bold">
+              Primera aparición{cell.retorno_meses_gap ? ` · ${cell.retorno_meses_gap}m sin data` : ''}
+            </span>
+          )}
+        </div>
+      </td>
+    );
+  }
+
+  // CAJA_NUEVA: inyectada manualmente desde cajas_config, sin historial de datos
+  if (cell.tipo === 'CAJA_NUEVA') {
+    return (
+      <td 
+        className="px-1.5 py-1.5 align-middle relative cursor-pointer" 
+        style={{ minWidth: 90 }} 
+        onClick={e => { e.preventDefault(); e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
+      >
+        {isEditing && (
+          <AnimatePresence mode="wait">
+            <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} pendingEditPos={pendingEditPos} local={local} meses={meses} />
+          </AnimatePresence>
+        )}
+        <div className="w-full flex flex-col items-center justify-center gap-0.5 px-2 py-1.5 rounded-lg bg-teal-500/10 border border-teal-500/25 hover:bg-teal-500/20 transition-all">
+          <div className="flex items-center gap-1">
+            <PlusCircle size={9} className="text-teal-500" />
+            <span className="text-[8px] font-black text-teal-600 dark:text-teal-400 uppercase tracking-tighter">Caja Nueva</span>
+          </div>
+          <span className="text-[8px] text-teal-500/60 font-bold">Sin historial</span>
+        </div>
       </td>
     );
   }
@@ -979,6 +1040,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
   const [filterComp, setFilterComp]         = useState('');
   const [filterSoloGaps, setFilterSoloGaps] = useState(true);
   const [filterPendientes, setFilterPendientes] = useState(false);
+  const [filterRetorno, setFilterRetorno]         = useState(false);
   const [sortBy, setSortBy]                 = useState('gaps');
 
   // ── Filtro de períodos ──────────────────────────────────────────────────────
@@ -1015,6 +1077,8 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
   const fetchMatrix = useCallback(async () => {
     setLoading(true);
     try {
+      // Invalida el caché del servidor para garantizar datos frescos (RETORNO actualizado)
+      await fetch(`${API}/api/refresh-matrix`, { method: 'POST' }).catch(() => {});
       const url = `${API}/api/estimation-matrix${filterComp ? `?competidor=${encodeURIComponent(filterComp)}` : ''}`;
       const d = await fetch(url).then(r => r.json());
       setMatrix(d.locales || []);
@@ -1152,6 +1216,10 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
       d = d.filter(local => local.cajas.some(c =>
         meses.some(mk => mk >= RUTINA_DESDE_GLOBAL && local.celdas[`${c}||${mk}`]?.tipo === 'PENDIENTE')
       ));
+    } else if (filterRetorno) {
+      d = d.filter(local => local.cajas.some(c =>
+        meses.some(mk => ['RETORNO', 'CAJA_NUEVA'].includes(local.celdas[`${c}||${mk}`]?.tipo))
+      ));
     }
     if (search) {
       const q = search.toLowerCase();
@@ -1183,7 +1251,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
       );
     }
     return d;
-  }, [matrix, meses, filterSoloGaps, filterPendientes, search, sortBy, cajaStatusMap]);
+  }, [matrix, meses, filterSoloGaps, filterPendientes, filterRetorno, search, sortBy, cajaStatusMap]);
 
 
   const competidores = useMemo(() => [...new Set(matrix.map(l => l.competidor))].sort(), [matrix]);
@@ -1975,7 +2043,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
 
           {/* Filtros rápidos */}
           <button
-            onClick={() => { setFilterSoloGaps(v => !v); setFilterPendientes(false); }}
+            onClick={() => { setFilterSoloGaps(v => !v); setFilterPendientes(false); setFilterRetorno(false); }}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
               filterSoloGaps ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40'
             }`}
@@ -1984,13 +2052,22 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
             Solo gaps
           </button>
           <button
-            onClick={() => { setFilterPendientes(v => !v); setFilterSoloGaps(false); }}
+            onClick={() => { setFilterPendientes(v => !v); setFilterSoloGaps(false); setFilterRetorno(false); }}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
               filterPendientes ? 'bg-amber-500/10 border-amber-500/30 text-amber-500' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40'
             }`}
           >
             <Clock size={10} />
             Pendientes
+          </button>
+          <button
+            onClick={() => { setFilterRetorno(v => !v); setFilterSoloGaps(false); setFilterPendientes(false); }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${
+              filterRetorno ? 'bg-orange-500/10 border-orange-500/30 text-orange-500' : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40'
+            }`}
+          >
+            <RefreshCw size={10} />
+            Retorno / Nuevo
           </button>
 
           {/* Separador visual */}
