@@ -839,29 +839,6 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
             </td>
           );
         })}
-
-        {/* Cajas (Optional, moved or kept) */}
-        <td className="px-3 py-3 text-right border-l border-slate-100 dark:border-white/5">
-          <span className="text-[10px] font-bold text-slate-400">
-            {local.cajas.length}
-          </span>
-        </td>
-
-        {/* Summary Badges: gaps + % estimado */}
-        <td className="px-3 py-3 text-right">
-          <div className="flex flex-col items-end gap-1">
-            {tieneGaps ? (
-              <span className="px-1.5 py-0.5 bg-red-500/15 text-red-400 border border-red-500/30 rounded text-[7px] font-black uppercase tracking-wider">
-                {gapCount} gaps
-              </span>
-            ) : <span className="text-emerald-400 opacity-20"><ShieldCheck size={10} /></span>}
-            {estPct !== null && estPct > 0 && (
-              <span className="px-1.5 py-0.5 bg-teal-500/10 text-teal-500 border border-teal-500/25 rounded text-[7px] font-black tracking-wider">
-                {estPct}% est.
-              </span>
-            )}
-          </div>
-        </td>
       </tr>
 
       {/* ── Transposed detail: rows=months, cols=cajas ─────────────────── */}
@@ -1253,6 +1230,12 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
     return d;
   }, [matrix, meses, filterSoloGaps, filterPendientes, filterRetorno, search, sortBy, cajaStatusMap]);
 
+  // Contador de locales con RETORNO o CAJA_NUEVA (calculado directo desde matrix, no depende del filtro activo)
+  const retornoCount = useMemo(() =>
+    matrix.filter(local =>
+      Object.values(local.celdas || {}).some(c => ['RETORNO', 'CAJA_NUEVA'].includes(c.tipo))
+    ).length,
+  [matrix]);
 
   const competidores = useMemo(() => [...new Set(matrix.map(l => l.competidor))].sort(), [matrix]);
 
@@ -2068,6 +2051,14 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
           >
             <RefreshCw size={10} />
             Retorno / Nuevo
+            {retornoCount > 0 && (
+              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-orange-500 text-white text-[7px] font-black">
+                {retornoCount}
+              </span>
+            )}
+            {retornoCount === 0 && !loading && (
+              <span className="ml-0.5 text-[7px] text-red-400 font-bold">0</span>
+            )}
           </button>
 
           {/* Separador visual */}
@@ -2186,12 +2177,6 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                       </th>
                     );
                   })}
-                  <th className="px-3 py-3 text-right text-[8px] font-black uppercase tracking-widest text-slate-400" style={{ width: 40 }}>
-                    Cj
-                  </th>
-                  <th className="px-3 py-3 text-right text-[8px] font-black uppercase tracking-widest text-slate-400" style={{ width: 40 }}>
-                    G
-                  </th>
                 </tr>
               </thead>
               <tbody>

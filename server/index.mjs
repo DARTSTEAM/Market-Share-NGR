@@ -364,11 +364,11 @@ app.get('/api/estimation-matrix', async (req, res) => {
                     CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
                     mes,
                     ano,
-                    ROUND(AVG(CAST(promedio_transacciones_diarias AS FLOAT64)), 1) AS tasa
+                    ROUND(AVG(COALESCE(CAST(promedio_transacciones_diarias AS FLOAT64), 0)), 1) AS tasa,
+                    MAX(status_busqueda) as status_busqueda
                 FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
-                WHERE status_busqueda = 'OK'
+                WHERE status_busqueda IN ('OK', 'SIN_HISTORIAL')
                   AND DATE(fecha_y_hora_registro) > '${CUTOFF}'
-                  AND CAST(promedio_transacciones_diarias AS FLOAT64) > 0
                   AND REGEXP_CONTAINS(caja, r'\\d')
                 GROUP BY 1,2,3,4,5,6
             `;
@@ -381,7 +381,8 @@ app.get('/api/estimation-matrix', async (req, res) => {
                     CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'(\\d+)') AS INT64) AS STRING) AS caja_num,
                     h.mes,
                     h.ano,
-                    ROUND(h.trx_promedio, 1) AS tasa
+                    ROUND(h.trx_promedio, 1) AS tasa,
+                    'OK' as status_busqueda
                 FROM \`${PROJECT_ID}.${DATASET_ID}.historial_tasas\` h
                 WHERE h.trx_promedio > 0
                   AND (h.ano < 2025 OR (h.ano = 2025 AND h.mes <= 11))
@@ -421,8 +422,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
             const allRows = [
                 ...rowsReal.map(r => ({ ...r, tipo: 'REAL' })),
                 ...rowsHist.map(r => ({ ...r, caja: r.caja_num, tipo: 'HISTORIAL' })),
-                ...rowsEst.map(r => ({ ...r, tipo: r.tipo_manual || 'PENDIENTE' })),
-                // rowsMan is now merged into Q_EST (estimaciones_manuales)
+                ...rowsEst.map(r => ({ ...r, tipo: r.tipo_manual || 'PENDIENTE', status_busqueda: 'OK' })),
             ];
 
             // Deduplicar: prioridad REAL > APROBADO > PENDIENTE > HISTORIAL
@@ -433,11 +433,15 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 const mes = r.mes?.value ?? r.mes;
                 const mk = `${ano}-${String(mes).padStart(2,'0')}`;
                 const cajaStr = String(r.caja?.value ?? r.caja ?? '');
+                
+                // FILTRAR COLUMNA "TOTAL" (que aparecía por error en la UI)
+                if (!cajaStr || cajaStr.toLowerCase() === 'total') continue;
+
                 const k = `${r.codigo_tienda}||${cajaStr}||${mk}`;
                 if (!cellMap[k] || PRIO[r.tipo] > PRIO[cellMap[k].tipo]) {
                     const tasa = parseFloat(r.tasa?.value ?? r.tasa ?? 0);
                     cellMap[k] = {
-                        key:           k,   // usado por el frontend para identificar la celda en edición
+                        key:           k,
                         codigo_tienda: r.codigo_tienda,
                         local:         r.local,
                         competidor:    r.competidor,
@@ -447,6 +451,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
                         mk,
                         tasa,
                         tipo:          r.tipo,
+                        status_busqueda: r.status_busqueda || 'OK'
                     };
                 }
             }
@@ -527,7 +532,10 @@ app.get('/api/estimation-matrix', async (req, res) => {
                     for (let i = 0; i < mesesSorted.length; i++) {
                         const mk   = mesesSorted[i];
                         const cell = local.celdas[`${caja}||${mk}`];
-                        if (!cell || cell.tipo !== 'REAL' || !cell.tasa || cell.tasa <= 0) continue;
+                        // 1. Si no hay ticket, no hay nada que evaluar como retorno.
+                        // 2. Si BigQuery ya nos dijo que el registro es 'OK' (tiene historial coherente),
+                        //    no lo marcamos como alarma de retorno.
+                        if (!cell || cell.tipo !== 'REAL' || cell.status_busqueda === 'OK') continue;
 
                         // Buscar hacia atrás el último mes activo y contar meses vacíos consecutivos
                         let gapCount = 0;
@@ -535,6 +543,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
                         for (let j = i - 1; j >= 0; j--) {
                             const prevMk   = mesesSorted[j];
                             const prevCell = local.celdas[`${caja}||${prevMk}`];
+                            // Si no hay celda o la tasa es 0/negativa en el pasado, lo contamos como gap
                             if (!prevCell || prevCell.tipo === 'GAP' || !prevCell.tasa || prevCell.tasa <= 0) {
                                 gapCount++;
                             } else {
@@ -578,6 +587,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 for (const cfg of cajasRows) {
                     const ct        = cfg.codigo_tienda;
                     const caja      = String(cfg.caja);
+                    if (!caja || caja.toLowerCase() === 'total') continue;
                     const tipoNueva = cfg.manual ? 'CAJA_NUEVA' : 'GAP';
                     if (localMap[ct]) {
                         const cajaSet = new Set(localMap[ct].cajas);
@@ -1329,7 +1339,7 @@ app.get('/api/ngr-locales', async (req, res) => {
                 categoria:        r.categoria || '',
                 estado:           r.estado || '',
                 es_sss:           !!r.es_sss,
-                punto_compartido: !!r.punto_compartido,
+                punto_compartido: r.punto_compartido || '',
                 ano:              Number(r.ano),
                 mes:              Number(r.mes),
                 mes_texto:        r.mes_texto || '',

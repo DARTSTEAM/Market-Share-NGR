@@ -1647,6 +1647,7 @@ export default function App({ user, onSignOut }) {
                 evolutionRecords={pcEvolutionRecords}
                 shareData={reactiveShareDataRoutine}
                 ngrLocales={ngrLocales}
+                filters={filters}
               />
             ) : (
               <MarketShareDashboard

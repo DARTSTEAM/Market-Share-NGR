@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MapPin, Building2, Store, TrendingUp, BarChart3,
-    ChevronRight, ChevronLeft, X, Layers, Activity, Table2
+    ChevronRight, ChevronLeft, X, Layers, Activity, Table2, LayoutGrid,
+    Target, ShieldCheck
 } from 'lucide-react';
 import {
     ResponsiveContainer, PieChart, Pie, Cell, Tooltip as ReTooltip,
@@ -23,17 +24,11 @@ const BRAND_COLORS = {
     'pizza hut':     '#EE3A24',
     'little caesars': '#6D1F7E',
     'popeyes':       '#F26522',
-    'subway':        '#009B48',
     'bembos':        '#CC1F1F',
-    'norkys':        '#F0A500',
-    'pardos':        '#7B3F00',
     'papa john':     '#007743',
-    'china wok':     '#FF0000',
-    'chinawok':      '#FF0000',
-    'wanta':         '#00B4A0',
-    'hermanos':      '#A52020',
-    'church':        '#8B0000',
     'telepizza':     '#C00D0D',
+    'chinawok':      '#FFB800',
+    'dunkin':        '#DA1884',
 };
 
 const COMPETITOR_TO_CATEGORY = {
@@ -47,15 +42,9 @@ const COMPETITOR_TO_CATEGORY = {
     'LITTLE CAESARS': 'Pizza',
     'PIZZA HUT': 'Pizza',
     'POPEYES': 'Pollo Frito',
-    'CHINAWOK': 'Chifas',
-    'CHINA WOK': 'Chifas',
     'PAPA JOHNS': 'Pizza',
     'PUNTOS COMPARTIDOS': 'Otros',
     'NGR': 'Otros',
-    'SUBWAY': 'Sandwiches',
-    'NORKYS': 'Pollo a la Brasa',
-    'PARDOS': 'Pollo a la Brasa',
-    'PARDOS CHICKEN': 'Pollo a la Brasa',
     'TELEPIZZA': 'Pizza'
 };
 
@@ -63,22 +52,29 @@ const CATEGORY_COLORS = {
     'Pollo Frito': '#E4002B',
     'Hamburguesa': '#FFC72C',
     'Pizza': '#006491',
-    'Chifas': '#EE3A24',
-    'Sandwiches': '#009B48',
-    'Pollo a la Brasa': '#7B3F00',
     'Otros': '#94a3b8'
+};
+
+const getCategory = (name) => {
+    if (!name) return 'Otros';
+    const clean = name.replace(' (NGR)', '').replace(' (ngr)', '').trim().toUpperCase();
+    return COMPETITOR_TO_CATEGORY[clean] || 'Otros';
 };
 
 function colorFor(name) {
     if (!name) return PALETTE[0];
     const lower = name.toLowerCase().trim();
+    const cleanLower = lower.replace(' (ngr)', '').trim();
     
-    // Check if it's a category
+    // 1. Check if it's an EXACT category name (e.g. for "Group by Category" mode)
     if (CATEGORY_COLORS[name]) return CATEGORY_COLORS[name];
 
+    // 2. Match by brand name (stripping NGR suffix)
     for (const [brand, color] of Object.entries(BRAND_COLORS)) {
-        if (lower.includes(brand)) return color;
+        if (cleanLower.includes(brand)) return color;
     }
+
+    // 3. Last fallback: random hash from palette
     let hash = 0;
     for (let i = 0; i < (name?.length || 0); i++) hash = (name.charCodeAt(i) + ((hash << 5) - hash));
     return PALETTE[Math.abs(hash) % PALETTE.length];
@@ -202,7 +198,7 @@ const PCCard = ({ pc, onClick, isSelected }) => {
 // ─── Evolution Line Chart ─────────────────────────────────────────────────────
 const EvolutionChart = ({ monthData, competitors }) => {
     const data = Object.entries(monthData || {})
-        .sort(([a], [b]) => a.localeCompare(b))
+        .sort(([a], [b]) => String(a).localeCompare(String(b)))
         .map(([mk, byComp]) => {
             const [ano, mes] = mk.split('-');
             const label = `${MONTH_SHORT[parseInt(mes) - 1]}-${ano.slice(2)}`;
@@ -256,7 +252,7 @@ const ShareTooltip = ({ active, payload, label }) => {
 // ─── Share % Evolution Chart (100% stacked area) ─────────────────────────────
 const ShareEvolutionChart = ({ monthData, competitors }) => {
     const data = Object.entries(monthData || {})
-        .sort(([a], [b]) => a.localeCompare(b))
+        .sort(([a], [b]) => String(a).localeCompare(String(b)))
         .map(([mk, byComp]) => {
             const [ano, mes] = mk.split('-');
             const label = `${MONTH_SHORT[parseInt(mes) - 1]}-${ano.slice(2)}`;
@@ -296,9 +292,53 @@ const ShareEvolutionChart = ({ monthData, competitors }) => {
     );
 };
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+const norm = s => String(s || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
-const PCDetailPanel = ({ pc, evolutionData, onClose, allPCs, currentIndex, onNavigate, ngrForPC = [] }) => {
-    if (!pc) return null;
+const PCDetailPanel = ({ pc: rawPc, evolutionData: rawEvolutionData, onClose, allPCs, currentIndex, onNavigate, ngrByPC = {}, showNGR }) => {
+    if (!rawPc) return null;
+
+    // Normalize and find NGR records for this PC
+    const ngrForPC = ngrByPC[norm(rawPc.nombre)] || [];
+
+    // MERGE NGR into the current PC data for the charts
+    const pc = useMemo(() => {
+        if (!showNGR || ngrForPC.length === 0) return rawPc;
+        
+        const mergedByComp = [...rawPc.byComp];
+        const mergedLocales = [...rawPc.locales];
+
+        ngrForPC.forEach(n => {
+            const name = `${n.marca} (NGR)`;
+            // Add to byComp if not already there (avoid double counting)
+            if (!mergedByComp.find(c => c.name === name)) {
+                mergedByComp.push({
+                    name: name,
+                    prom: n.trx_promedio,
+                    value: n.trx_promedio,
+                    isNGR: true
+                });
+            }
+            // Add to locales list
+            mergedLocales.push({
+                competidor: name,
+                local: n.local_ngr || n.nombre_ngr,
+                prom: n.trx_promedio,
+                isNGR: true
+            });
+        });
+
+        return {
+            ...rawPc,
+            byComp: mergedByComp.sort((a, b) => b.prom - a.prom),
+            locales: mergedLocales.sort((a, b) => b.prom - a.prom)
+        };
+    }, [rawPc, ngrForPC, showNGR]);
+
+    // Main evolution data as provided by parent (now includes NGR history)
+    const evolutionData = rawEvolutionData;
+
     const isCC = !!pc.cc_nombre;
     const hasPrev = currentIndex > 0;
     const hasNext = currentIndex < allPCs.length - 1;
@@ -372,25 +412,33 @@ const PCDetailPanel = ({ pc, evolutionData, onClose, allPCs, currentIndex, onNav
                         <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 mb-3">
                             Share por marca (Prom. Diario)
                         </p>
-                        <ResponsiveContainer width="100%" height={200}>
-                            <PieChart>
-                                <Pie data={pc.byComp.map(d => ({ name: d.name, value: d.prom || 0 }))}
-                                    cx="50%" cy="50%" innerRadius={52} outerRadius={82}
-                                    paddingAngle={3} dataKey="value" stroke="none" label={false}>
-                                    {pc.byComp.map((e, i) => <Cell key={i} fill={colorFor(e.name)} />)}
-                                </Pie>
-                                <Legend iconSize={7} iconType="circle"
-                                    formatter={(v, e) => (
-                                        <span style={{ fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b' }}>
-                                            {v} · {totalProm > 0 ? ((e.payload.value / totalProm) * 100).toFixed(0) : 0}%
-                                        </span>
-                                    )} />
-                                <ReTooltip
-                                    formatter={(val, name) => [`${fmt(val)} trx/día`, name]}
-                                    contentStyle={{ backgroundColor: 'rgba(0,0,0,0.85)', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: 900 }}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
+                        <div className="flex flex-col items-center">
+                            <ResponsiveContainer width="100%" height={240}>
+                                <PieChart>
+                                    <Pie data={pc.byComp.map(d => ({ name: d.name, value: d.prom || 0 }))}
+                                        cx="50%" cy="50%" innerRadius={50} outerRadius={75}
+                                        paddingAngle={2} dataKey="value" stroke="none" label={false}>
+                                        {pc.byComp.map((e, i) => <Cell key={i} fill={colorFor(e.name)} />)}
+                                    </Pie>
+                                    <ReTooltip
+                                        formatter={(val, name) => [`${fmt(val)} trx/día`, name]}
+                                        contentStyle={{ backgroundColor: 'rgba(0,0,0,0.85)', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: 900 }}
+                                    />
+                                    <Legend 
+                                        verticalAlign="bottom" 
+                                        align="center"
+                                        iconSize={7} 
+                                        iconType="circle"
+                                        wrapperStyle={{ paddingTop: '20px' }}
+                                        formatter={(v, e) => (
+                                            <span style={{ fontSize: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b' }}>
+                                                {v} · {totalProm > 0 ? ((e.payload.value / totalProm) * 100).toFixed(0) : 0}%
+                                            </span>
+                                        )} 
+                                    />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
                     </div>
 
                     {/* Stacked bars with prom */}
@@ -514,7 +562,12 @@ const PCDetailPanel = ({ pc, evolutionData, onClose, allPCs, currentIndex, onNav
                                     <div className="flex items-center gap-2 min-w-0">
                                         <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                                         <span className="text-[9px] font-black uppercase tracking-widest truncate" style={{ color }}>{loc.competidor}</span>
-                                        <span className="text-[9px] text-slate-500 dark:text-white/40 font-bold truncate">{loc.local}</span>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-[9px] text-slate-500 dark:text-white/40 font-bold truncate leading-tight">{loc.local}</span>
+                                            {loc.codigo_tienda && (
+                                                <span className="text-[7px] font-black font-mono text-accent-orange/70 tracking-tighter leading-none">#{loc.codigo_tienda}</span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="text-right flex-shrink-0 ml-2">
                                         <p className="text-[9px] font-mono font-black text-slate-700 dark:text-white/70">
@@ -532,7 +585,7 @@ const PCDetailPanel = ({ pc, evolutionData, onClose, allPCs, currentIndex, onNav
 };
 
 // ─── Macro Summary Table ──────────────────────────────────────────────────────
-const MacroTable = ({ pcs, onSelectPC, groupByCategory }) => {
+const MacroTable = ({ pcs, onSelectPC, groupMode }) => {
     const [sortCol, setSortCol] = useState('prom');
     const [sortDir, setSortDir] = useState('desc');
 
@@ -544,7 +597,7 @@ const MacroTable = ({ pcs, onSelectPC, groupByCategory }) => {
     const sorted = [...pcs].sort((a, b) => {
         const av = sortCol === 'nombre' ? a.nombre : sortCol === 'marcas' ? a.byComp.length : a.byComp.reduce((s, c) => s + (c.prom || 0), 0);
         const bv = sortCol === 'nombre' ? b.nombre : sortCol === 'marcas' ? b.byComp.length : b.byComp.reduce((s, c) => s + (c.prom || 0), 0);
-        if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+        if (typeof av === 'string' || typeof bv === 'string') return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
         return sortDir === 'asc' ? av - bv : bv - av;
     });
 
@@ -565,7 +618,7 @@ const MacroTable = ({ pcs, onSelectPC, groupByCategory }) => {
                     <tr>
                         <Th col="nombre">Punto Compartido</Th>
                         <th className="px-4 py-3 text-left text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Tipo</th>
-                        <Th col="marcas">{groupByCategory ? 'Categorías' : 'Marcas'}</Th>
+                        <Th col="marcas">{groupMode === 'category' ? 'Categorías' : groupMode === 'ownership' ? 'Segmento' : 'Marcas'}</Th>
                         {allColKeys.map(c => (
                             <th key={c} className="px-4 py-3 text-right text-[8px] font-black uppercase tracking-widest whitespace-nowrap"
                                 style={{ color: colorFor(c) }}>
@@ -661,33 +714,96 @@ const MacroTable = ({ pcs, onSelectPC, groupByCategory }) => {
 };
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function PuntosCompartidosDashboard({ allRecords, evolutionRecords, shareData, ngrLocales = [] }) {
+export default function PuntosCompartidosDashboard({ allRecords, evolutionRecords, shareData, ngrLocales = [], filters }) {
     const [selectedPC, setSelectedPC] = useState(null);
     const [filterTipo, setFilterTipo] = useState('all');
     const [filterCadena, setFilterCadena] = useState('all');
     const [filterComp, setFilterComp] = useState([]); // Array for multi-select
     const [filterCat, setFilterCat] = useState('all'); // New category filter
-    const [groupByCategory, setGroupByCategory] = useState(false); // New grouping toggle
+    const [groupMode, setGroupMode] = useState('brand'); // 'brand' | 'category' | 'ownership'
     const [sortMode, setSortMode] = useState('prom');
     const [visibleCount, setVisibleCount] = useState(8);
     const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
+    const [showNGR, setShowNGR] = useState(false); // New: Mostrar marcas NGR propias
+
+    const ngrByPC = useMemo(() => {
+        const map = {};
+        if (!ngrLocales) return map;
+        
+        const targetMonth = filters?.month && filters.month !== 'all' ? (parseInt(filters.month) + 1) : null;
+        const targetYear = filters?.year && filters.year !== 'all' ? parseInt(filters.year) : null;
+
+        ngrLocales.forEach(loc => {
+            // Strict date matching: if a filter is set, record must have matching date info
+            const locMonth = loc.mes ? parseInt(loc.mes) : null;
+            const locYear = loc.ano ? parseInt(loc.ano) : null;
+
+            if (targetMonth && locMonth !== targetMonth) return;
+            if (targetYear && locYear !== targetYear) return;
+
+            let pcName = loc.punto_compartido;
+            if (!pcName || pcName === 'SI' || pcName === 'true') {
+                 pcName = loc.cc_nombre || loc.local;
+            }
+            if (!pcName) return;
+            const key = norm(pcName);
+            if (!map[key]) map[key] = [];
+            map[key].push(loc);
+        });
+        return map;
+    }, [ngrLocales, filters?.month, filters?.year]);
 
     // ─── PC static data (from filtered allRecords — current period) ──────────
-    // prom = promedio diario para el periodo seleccionado.
-    // Correctly computed as the average across distinct months (not raw sum).
     const pcData = useMemo(() => {
         const map = {};
-        allRecords.forEach(rec => {
+        
+        // Process competition records and NGR records together
+        const dataToProcess = [...allRecords];
+        
+        if (showNGR) {
+            const targetMonth = filters?.month && filters.month !== 'all' ? (parseInt(filters.month) + 1) : null;
+            const targetYear = filters?.year && filters.year !== 'all' ? parseInt(filters.year) : null;
+
+            ngrLocales.forEach(r => {
+                // Strict date matching: if a filter is set, record must have matching date info
+                const rMonth = r.mes ? parseInt(r.mes) : null;
+                const rYear = r.ano ? parseInt(r.ano) : null;
+
+                if (targetMonth && rMonth !== targetMonth) return;
+                if (targetYear && rYear !== targetYear) return;
+
+                let pcName = r.punto_compartido;
+                if (!pcName || pcName === 'SI' || pcName === 'true') {
+                    pcName = r.cc_nombre || r.local;
+                }
+                
+                dataToProcess.push({
+                    punto_compartido: pcName,
+                    cc_punto_compartido: r.cc_punto_compartido || r.cc_nombre,
+                    competidor: r.marca + ' (NGR)',
+                    local: r.local,
+                    codigo_tienda: r.store_num || r.codigo_tienda || r.cod_tienda,
+                    transacciones: (parseFloat(r.trx_promedio) || 0) * 30,
+                    promedio: parseFloat(r.trx_promedio) || 0,
+                    mes: r.mes || targetMonth || 12,
+                    ano: r.ano || targetYear || 2025,
+                    status_busqueda: 'OK'
+                });
+            });
+        }
+
+        dataToProcess.forEach(rec => {
             if (!rec.punto_compartido) return;
 
-            const pcKey = rec.punto_compartido;
+            const pcKey = String(rec.punto_compartido).toUpperCase().trim();
+            
             if (!map[pcKey]) {
                 map[pcKey] = {
                     nombre: rec.punto_compartido,
-                    cc_nombre: rec.cc_punto_compartido || null,
+                    cc_nombre: rec.cc_punto_compartido || rec.cc_nombre || null,
                     grupos_cc: rec.grupos_cc || null,
-                    byComp: {},   // comp → { trx, monthPromSums: {monthKey: prom} }
-                    locales: {},  // locKey → { competidor, local, trx, monthPromSums }
+                    byComp: {},
+                    locales: {},
                 };
             }
 
@@ -699,14 +815,20 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 ? `${parseInt(rec.ano)}-${String(parseInt(rec.mes)).padStart(2, '0')}`
                 : '__nodate__';
 
-            // Aggregate by competitor — accumulate prom per month-key to average later
             if (!pc.byComp[comp]) pc.byComp[comp] = { trx: 0, monthProm: {} };
             pc.byComp[comp].trx += trx;
             pc.byComp[comp].monthProm[mk] = (pc.byComp[comp].monthProm[mk] || 0) + prom;
 
-            // Aggregate by local
             const locKey = `${comp}||${rec.local}`;
-            if (!pc.locales[locKey]) pc.locales[locKey] = { competidor: comp, local: rec.local, trx: 0, monthProm: {} };
+            if (!pc.locales[locKey]) {
+                pc.locales[locKey] = { 
+                    competidor: comp, 
+                    local: rec.local, 
+                    codigo_tienda: rec.codigo_tienda,
+                    trx: 0, 
+                    monthProm: {} 
+                };
+            }
             pc.locales[locKey].trx += trx;
             pc.locales[locKey].monthProm[mk] = (pc.locales[locKey].monthProm[mk] || 0) + prom;
         });
@@ -716,7 +838,6 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 nombre: pc.nombre,
                 cc_nombre: pc.cc_nombre,
                 grupos_cc: pc.grupos_cc,
-                // prom = average monthly prom (sum of month-sums / n months)
                 byComp: Object.entries(pc.byComp)
                     .map(([name, d]) => {
                         const months = Object.values(d.monthProm);
@@ -732,70 +853,79 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                         const avgProm = months.length > 0
                             ? months.reduce((s, v) => s + v, 0) / months.length
                             : 0;
-                        return { competidor: l.competidor, local: l.local, trx: Math.round(l.trx), prom: Math.round(avgProm * 10) / 10 };
+                        return { 
+                            competidor: l.competidor, 
+                            local: l.local, 
+                            codigo_tienda: l.codigo_tienda,
+                            trx: Math.round(l.trx), 
+                            prom: Math.round(avgProm * 10) / 10 
+                        };
+                    })
+                    .filter((l, idx, self) => {
+                        // Deduplicate NGR brands: if we have two with same brand and same prom, 
+                        // and one has no code, keep only the one with code.
+                        if (!l.codigo_tienda) {
+                            const hasBetter = self.some(other => 
+                                other.competidor === l.competidor && 
+                                other.prom === l.prom && 
+                                other.codigo_tienda
+                            );
+                            if (hasBetter) return false;
+                        }
+                        return true;
                     })
                     .sort((a, b) => b.prom - a.prom),
             }))
-            .filter(pc => pc.byComp.length >= 2);
-    }, [allRecords]);
+            .filter(pc => pc.byComp.length >= (showNGR ? 1 : 2));
+    }, [allRecords, ngrLocales, showNGR]);
 
     // ─── Evolution data (from evolutionRecords — always last 12 months) ───────
-    // Keyed by PC name → { monthKey → { comp → prom_sum } }
     const pcEvolutionMap = useMemo(() => {
-        const source = evolutionRecords || allRecords;
+        const source = [...(evolutionRecords || allRecords)];
+        
+        if (showNGR && ngrLocales?.length) {
+            ngrLocales.forEach(r => {
+                const pcName = (r.punto_compartido && r.punto_compartido !== 'SI' && r.punto_compartido !== 'true') 
+                    ? r.punto_compartido 
+                    : r.local;
+
+                source.push({
+                    punto_compartido: pcName,
+                    competidor: r.marca + ' (NGR)',
+                    promedio: r.trx_promedio,
+                    mes: r.mes,
+                    ano: r.ano
+                });
+            });
+        }
+
         const map = {};
         source.forEach(rec => {
             if (!rec.punto_compartido || !rec.mes || !rec.ano) return;
-            const pcKey = rec.punto_compartido;
+            const pcKey = String(rec.punto_compartido).toUpperCase().trim();
             const comp = rec.competidor;
-            const prom = parseFloat(rec.promedio) || 0;
+            const prom = parseFloat(rec.promedio || rec.prom) || 0;
             const mk = `${parseInt(rec.ano)}-${String(parseInt(rec.mes)).padStart(2, '0')}`;
             if (!map[pcKey]) map[pcKey] = {};
             if (!map[pcKey][mk]) map[pcKey][mk] = {};
             map[pcKey][mk][comp] = (map[pcKey][mk][comp] || 0) + prom;
         });
         return map;
-    }, [evolutionRecords, allRecords]);
-
-    // ─── NGR locales grouped by PC name (matched by local name) ─────────────
-    // Match: NGR 'local' (e.g. 'Jockey Plaza') == PC 'nombre' (e.g. 'Jockey Plaza')
-    // Uses normalized key (lowercase + no accents) for robustness
-    const ngrByPC = useMemo(() => {
-        const normalize = s => (s || '').toLowerCase().trim()
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
-            .replace(/\s+/g, ' ');
-
-        const map = {}; // normalizedName → { original, marcas: {marca → {total, count}} }
-        ngrLocales.forEach(r => {
-            if (!r.punto_compartido || !r.local) return;
-            const normKey = normalize(r.local);
-            if (!map[normKey]) map[normKey] = { original: r.local, marcas: {} };
-            if (!map[normKey].marcas[r.marca]) map[normKey].marcas[r.marca] = { total: 0, count: 0 };
-            map[normKey].marcas[r.marca].total += r.trx_promedio;
-            map[normKey].marcas[r.marca].count += 1;
-        });
-
-        // Build result keyed by BOTH original and normalized names for lookup
-        const result = {}; // pcName → [{ marca, trx_promedio }]
-        Object.entries(map).forEach(([normKey, data]) => {
-            const arr = Object.entries(data.marcas)
-                .map(([marca, d]) => ({ marca, trx_promedio: Math.round(d.total / d.count * 10) / 10 }))
-                .sort((a, b) => b.trx_promedio - a.trx_promedio);
-            result[data.original] = arr;   // exact original name
-            result[normKey] = arr;          // normalized (fallback)
-        });
-        return result;
-    }, [ngrLocales]);
+    }, [evolutionRecords, allRecords, ngrLocales, showNGR]);
 
     const catOptions = useMemo(() => {
-        const cats = [...new Set(Object.values(COMPETITOR_TO_CATEGORY))].sort();
-        return [{ value: 'all', label: 'Todas las categorías' }, ...cats.map(v => ({ value: v, label: v }))];
+        const allowed = ['Pollo Frito', 'Pizza', 'Hamburguesa'];
+        return [
+            { value: 'all', label: 'Todas las categorías' },
+            ...allowed.map(v => ({ value: v, label: v })),
+            { value: 'Otros', label: 'Otros' }
+        ];
     }, []);
 
     const compOptions = useMemo(() => {
         let comps = [...new Set(pcData.flatMap(p => p.byComp.map(c => c.name)))].sort();
         if (filterCat !== 'all') {
-            comps = comps.filter(c => COMPETITOR_TO_CATEGORY[c] === filterCat);
+            comps = comps.filter(c => getCategory(c) === filterCat);
         }
         return comps.map(v => ({ value: v, label: v }));
     }, [pcData, filterCat]);
@@ -808,11 +938,11 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         
         // Filter by category — Isolate selected segment
         if (filterCat !== 'all') {
-            data = data.filter(p => p.byComp.some(c => COMPETITOR_TO_CATEGORY[c.name] === filterCat))
+            data = data.filter(p => p.byComp.some(c => getCategory(c.name) === filterCat))
                 .map(p => ({
                     ...p,
-                    byComp: p.byComp.filter(c => COMPETITOR_TO_CATEGORY[c.name] === filterCat),
-                    locales: p.locales.filter(l => COMPETITOR_TO_CATEGORY[l.competidor] === filterCat)
+                    byComp: p.byComp.filter(c => getCategory(c.name) === filterCat),
+                    locales: p.locales.filter(l => getCategory(l.competidor) === filterCat)
                 }));
         }
 
@@ -827,20 +957,26 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
             }));
         }
 
-        // Apply "Group by Category" transformation if active
+        // Apply Grouping Transformation if active
         // Note: Filtering happens BEFORE grouping, so we are grouping only the remaining items
-        if (groupByCategory) {
+        if (groupMode !== 'brand') {
             data = data.map(pc => {
-                const catMap = {};
+                const groupMap = {};
                 pc.byComp.forEach(c => {
-                    const cat = COMPETITOR_TO_CATEGORY[c.name] || 'Otros';
-                    if (!catMap[cat]) catMap[cat] = { name: cat, value: 0, prom: 0 };
-                    catMap[cat].value += c.value;
-                    catMap[cat].prom += c.prom;
+                    let groupKey;
+                    if (groupMode === 'category') {
+                        groupKey = getCategory(c.name);
+                    } else if (groupMode === 'ownership') {
+                        groupKey = c.name.includes('(NGR)') ? 'Nuestras Marcas' : 'Competencia';
+                    }
+
+                    if (!groupMap[groupKey]) groupMap[groupKey] = { name: groupKey, value: 0, prom: 0 };
+                    groupMap[groupKey].value += c.value;
+                    groupMap[groupKey].prom += c.prom;
                 });
                 return {
                     ...pc,
-                    byComp: Object.values(catMap).sort((a, b) => b.prom - a.prom),
+                    byComp: Object.values(groupMap).sort((a, b) => b.prom - a.prom),
                 };
             });
         }
@@ -848,12 +984,12 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         if (sortMode === 'prom') data.sort((a, b) => b.byComp.reduce((s, c) => s + c.prom, 0) - a.byComp.reduce((s, c) => s + c.prom, 0));
         else if (sortMode === 'transacciones') data.sort((a, b) => b.byComp.reduce((s, c) => s + c.value, 0) - a.byComp.reduce((s, c) => s + c.value, 0));
         else if (sortMode === 'marcas') data.sort((a, b) => b.byComp.length - a.byComp.length);
-        else data.sort((a, b) => a.nombre.localeCompare(b.nombre));
+        else data.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
 
         return data;
-    }, [pcData, filterTipo, filterCadena, filterComp, filterCat, groupByCategory, sortMode]);
+    }, [pcData, filterTipo, filterCadena, filterComp, filterCat, groupMode, sortMode]);
 
-    React.useEffect(() => { setVisibleCount(8); }, [filterTipo, filterCadena, filterComp, filterCat, sortMode, groupByCategory]);
+    React.useEffect(() => { setVisibleCount(8); }, [filterTipo, filterCadena, filterComp, filterCat, sortMode, groupMode]);
 
     const cadenaOptions = useMemo(() => {
         const vals = [...new Set(pcData.map(p => p.grupos_cc).filter(Boolean))].sort();
@@ -873,6 +1009,14 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
     const handleCardClick = (pc) => {
         setSelectedPC(prev => prev?.nombre === pc.nombre ? null : pc);
     };
+
+    // Keep selectedPC in sync with updated data (e.g. when showNGR toggle changes)
+    useEffect(() => {
+        if (selectedPC) {
+            const updated = filteredPCs.find(p => p.nombre === selectedPC.nombre);
+            if (updated) setSelectedPC(updated);
+        }
+    }, [filteredPCs]);
 
     return (
         <>
@@ -901,71 +1045,100 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 </section>
 
                 {/* Filters + View Toggle */}
-                <section className="pwa-card no-hover p-4 flex flex-wrap gap-4 items-end border-slate-200 dark:border-white/5">
-                    <div className="space-y-1">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Tipo</span>
-                        <CustomSelect selected={filterTipo} onChange={setFilterTipo} width="w-28"
-                            options={[{ value: 'all', label: 'Todos' }, { value: 'cc', label: '🏬 CC' }, { value: 'calle', label: '📍 Calle' }]} />
-                    </div>
-                    
-                    <div className="space-y-1">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Categoría</span>
-                        <CustomSelect selected={filterCat} onChange={(val) => { setFilterCat(val); setFilterComp([]); }} width="w-40" options={catOptions} searchable />
-                    </div>
-
-                    <div className="space-y-1">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Competidores</span>
-                        <CustomSelect selected={filterComp} onChange={setFilterComp} width="w-48" options={compOptions} multi searchable label="Seleccionar..." />
-                    </div>
-
-                    <div className="space-y-1">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Cadena CC</span>
-                        <CustomSelect selected={filterCadena} onChange={setFilterCadena} width="w-40" options={cadenaOptions} searchable />
-                    </div>
-
-                    <div className="space-y-1">
+                <section className="flex flex-col gap-4">
+                    {/* NGR Toggle — Pill at top */}
+                    <div className="flex items-center justify-between px-1">
+                        <div />
                         <button
-                            onClick={() => setGroupByCategory(!groupByCategory)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
-                                groupByCategory 
-                                ? 'bg-accent-orange/10 border-accent-orange text-accent-orange shadow-[0_0_15px_rgba(255,94,0,0.1)]' 
-                                : 'bg-slate-100 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:border-accent-orange/30'
+                            onClick={() => setShowNGR(prev => !prev)}
+                            title={showNGR ? 'Click para ver solo competencia' : 'Click para incluir locales propios NGR'}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest border-2 transition-all duration-200 ${
+                                showNGR
+                                    ? 'bg-orange-500/20 border-orange-400 text-orange-400 shadow-[0_0_16px_rgba(249,115,22,0.25)]'
+                                    : 'bg-slate-100 dark:bg-white/[0.06] border-slate-300 dark:border-white/20 text-slate-500 dark:text-white/50 hover:border-orange-400/50 hover:text-orange-400'
                             }`}
                         >
-                            <Layers className={`w-3.5 h-3.5 ${groupByCategory ? 'animate-pulse' : ''}`} />
-                            <span className="text-[9px] font-black uppercase tracking-widest">Agrupar por Categoría</span>
+                            <span className={`w-2.5 h-2.5 rounded-full transition-all ${showNGR ? 'bg-orange-400' : 'bg-slate-300 dark:bg-white/20'}`} />
+                            {showNGR ? '★ Marcas NGR incluidas' : '⊕ Incluir marcas NGR'}
                         </button>
                     </div>
 
-                    <div className="space-y-1">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Ordenar por</span>
-                        <CustomSelect selected={sortMode} onChange={setSortMode} width="w-44"
-                            options={[
-                                { value: 'prom', label: 'Prom. Diario ↓' },
-                                { value: 'transacciones', label: 'Transacciones ↓' },
-                                { value: 'marcas', label: 'N° Marcas ↓' },
-                                { value: 'nombre', label: 'Nombre A→Z' },
-                            ]} />
-                    </div>
-
-                    {/* View toggle */}
-                    <div className="ml-auto flex items-center gap-2 pb-0.5">
-                        <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/5">
-                            {[
-                                { mode: 'cards', icon: Layers, label: 'Cards' },
-                                { mode: 'table', icon: Table2, label: 'Tabla' },
-                            ].map(({ mode, icon: Icon, label }) => (
-                                <button key={mode} onClick={() => setViewMode(mode)}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === mode
-                                        ? 'bg-accent-orange text-white shadow-sm'
-                                        : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white'}`}>
-                                    <Icon className="w-3 h-3" />{label}
-                                </button>
-                            ))}
+                    <div className="pwa-card no-hover p-4 flex flex-wrap gap-4 items-end border-slate-200 dark:border-white/5">
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Tipo</span>
+                            <CustomSelect selected={filterTipo} onChange={setFilterTipo} width="w-28"
+                                options={[{ value: 'all', label: 'Todos' }, { value: 'cc', label: '🏬 CC' }, { value: 'calle', label: '📍 Calle' }]} />
                         </div>
-                        <span className="text-[9px] font-black text-slate-400 dark:text-white/30 uppercase">
-                            {filteredPCs.length} puntos · {kpis.totalLocales} locales
-                        </span>
+                        
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Categoría</span>
+                            <CustomSelect selected={filterCat} onChange={(val) => { setFilterCat(val); setFilterComp([]); }} width="w-40" options={catOptions} searchable />
+                        </div>
+
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Competidores</span>
+                            <CustomSelect selected={filterComp} onChange={setFilterComp} width="w-48" options={compOptions} multi searchable label="Seleccionar..." />
+                        </div>
+
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Cadena CC</span>
+                            <CustomSelect selected={filterCadena} onChange={setFilterCadena} width="w-40" options={cadenaOptions} searchable />
+                        </div>
+
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Agrupación</span>
+                            <div className="flex p-1 bg-slate-100 dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/10">
+                                {[
+                                    { id: 'brand', label: 'Marca', icon: Target },
+                                    { id: 'category', label: 'Categoría', icon: Layers },
+                                    { id: 'ownership', label: 'Propio/Comp', icon: ShieldCheck }
+                                ].map(mode => (
+                                    <button
+                                        key={mode.id}
+                                        onClick={() => setGroupMode(mode.id)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                                            groupMode === mode.id
+                                            ? 'bg-white dark:bg-white/10 text-accent-orange shadow-sm border border-slate-200 dark:border-white/10'
+                                            : 'text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <mode.icon className={`w-3.5 h-3.5 ${groupMode === mode.id ? 'animate-pulse' : ''}`} />
+                                        <span className="text-[9px] font-black uppercase tracking-widest">{mode.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Ordenar por</span>
+                            <CustomSelect selected={sortMode} onChange={setSortMode} width="w-44"
+                                options={[
+                                    { value: 'prom', label: 'Prom. Diario ↓' },
+                                    { value: 'transacciones', label: 'Transacciones ↓' },
+                                    { value: 'marcas', label: 'N° Marcas ↓' },
+                                    { value: 'nombre', label: 'Nombre A→Z' },
+                                ]} />
+                        </div>
+
+                        {/* View toggle */}
+                        <div className="ml-auto flex items-center gap-3 pb-0.5">
+                            <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/5">
+                                {[
+                                    { mode: 'cards', icon: LayoutGrid, label: 'Cards' },
+                                    { mode: 'table', icon: Table2, label: 'Tabla' },
+                                ].map(({ mode, icon: Icon, label }) => (
+                                    <button key={mode} onClick={() => setViewMode(mode)}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === mode
+                                            ? 'bg-accent-orange text-white shadow-sm'
+                                            : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white'}`}>
+                                        <Icon className="w-3 h-3" />{label}
+                                    </button>
+                                ))}
+                            </div>
+                            <span className="text-[9px] font-black text-slate-400 dark:text-white/30 uppercase">
+                                {filteredPCs.length} puntos · {kpis.totalLocales} locales
+                            </span>
+                        </div>
                     </div>
                 </section>
 
@@ -981,7 +1154,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                     </div>
                 ) : viewMode === 'table' ? (
                     /* ── TABLE VIEW ── */
-                    <MacroTable pcs={filteredPCs} onSelectPC={handleCardClick} groupByCategory={groupByCategory} />
+                    <MacroTable pcs={filteredPCs} onSelectPC={handleCardClick} groupMode={groupMode} />
                 ) : (
                     /* ── CARDS VIEW ── */
                     <>
@@ -1013,7 +1186,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                                 <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
                                     <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
                                         <div className="w-1.5 h-6 bg-accent-orange rounded-full" />
-                                        {groupByCategory ? 'Prom. Diario por Categoría — Top 12 Puntos' : 'Prom. Diario por Marca — Top 12 Puntos'}
+                                        {groupMode === 'brand' ? 'Prom. Diario por Marca' : groupMode === 'category' ? 'Prom. Diario por Categoría' : 'Prom. Diario por Propio/Comp'} — Top 12 Puntos
                                     </h3>
                                     <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
                                 </div>
@@ -1058,15 +1231,13 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                     <PCDetailPanel
                         key={selectedPC.nombre}
                         pc={selectedPC}
-                        evolutionData={pcEvolutionMap[selectedPC.nombre]}
+                        evolutionData={pcEvolutionMap[String(selectedPC.nombre).toUpperCase().trim()] || pcEvolutionMap[selectedPC.nombre]}
                         onClose={() => setSelectedPC(null)}
                         allPCs={filteredPCs}
                         currentIndex={filteredPCs.findIndex(p => p.nombre === selectedPC.nombre)}
                         onNavigate={(idx) => setSelectedPC(filteredPCs[idx])}
-                        ngrForPC={(() => {
-                            const norm = s => (s || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
-                            return ngrByPC[selectedPC.nombre] || ngrByPC[norm(selectedPC.nombre)] || [];
-                        })()}
+                        ngrByPC={ngrByPC}
+                        showNGR={showNGR}
                     />
                 )}
             </AnimatePresence>
