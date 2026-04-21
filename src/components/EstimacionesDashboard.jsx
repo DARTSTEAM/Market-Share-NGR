@@ -26,19 +26,47 @@ const TIPO_CONFIG = {
 
 const fmt = n => n != null ? Number(n).toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—';
 
-// ── Calcula promedio simple de los últimos N meses ────────────────────────────
-function calcularProm6M(puntos) {
-  const disponibles = puntos
-    .filter(p => p.tipo !== 'GAP' && p.tasa != null && p.tasa > 0)
-    .sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes)
-    .slice(0, 6);
-  if (!disponibles.length) return null;
-  return disponibles.reduce((s, p) => s + p.tasa, 0) / disponibles.length;
+// ── Nuevo método: Promedio 3m anteriores (Total) - Lo que ya tiene el mes ───────
+function calcularEstimacionLocal(cell, puntos, local, meses) {
+  if (!local || !meses || !cell) return null;
+  const currentMk = `${cell.ano}-${String(cell.mes).padStart(2, '0')}`;
+
+  // 1. Obtener lista de todos los meses del local ordenados descendente
+  const allMks = Object.keys(local.celdas || {})
+    .map(k => k.split('||')[1])
+    .filter((v, i, a) => v && a.indexOf(v) === i)
+    .sort((a, b) => b.localeCompare(a)); // [2025-12, 2025-11, ...]
+
+  const idx = allMks.indexOf(currentMk);
+  if (idx === -1) return null;
+
+  const past3 = allMks.slice(idx + 1).slice(0, 3);
+  if (past3.length < 3) return null;
+
+  // Helper quirúrgico para sumar totales de un mes
+  const getMesFullTotal = (mk) => {
+    let st = 0;
+    // Normalizamos a String para evitar duplicados por tipo (99 vs "99")
+    const cajasUnicas = new Set([...(local.cajas || []).map(c => String(c)), "99"]);
+    cajasUnicas.forEach(c => {
+      const cld = local.celdas[`${c}||${mk}`];
+      if (cld && cld.tasa != null && cld.tipo !== 'GAP') {
+        st += cld.tasa;
+      }
+    });
+    return st;
+  };
+
+  const avgPrev = (getMesFullTotal(past3[0]) + getMesFullTotal(past3[1]) + getMesFullTotal(past3[2])) / 3;
+  const current = getMesFullTotal(currentMk);
+
+  const res = avgPrev - current;
+  return res > 1 ? res : null;
 }
 
 // ── Promedio ponderado (más reciente = más peso, decay exponencial) ────────────
-function calcularPromPonderado(puntos) {
-  const disponibles = puntos
+function calcularPromPonderado(cell, puntos) {
+  const disponibles = (puntos || [])
     .filter(p => p.tipo !== 'GAP' && p.tasa != null && p.tasa > 0)
     .sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes)
     .slice(0, 6);
@@ -54,17 +82,17 @@ function calcularPromPonderado(puntos) {
 }
 
 // ── Calcula "igual al anterior" (el mes más reciente disponible) ──────────────
-function calcularIgualAnterior(puntos) {
-  const disponibles = puntos
+function calcularIgualAnterior(cell, puntos) {
+  const disponibles = (puntos || [])
     .filter(p => p.tipo !== 'GAP' && p.tasa != null && p.tasa > 0)
     .sort((a, b) => b.ano !== a.ano ? b.ano - a.ano : b.mes - a.mes);
   return disponibles[0]?.tasa ?? null;
 }
 
 const METODOS = [
-  { key: 'PROM_6M',        label: 'Prom. 6 meses',     desc: 'Media simple de los últimos 6 meses reales',          calc: calcularProm6M },
-  { key: 'IGUAL_ANTERIOR', label: 'Igual al anterior',  desc: 'Mismo valor que el mes inmediatamente anterior',      calc: calcularIgualAnterior },
-  { key: 'PROM_PONDERADO', label: 'Prom. ponderado',    desc: 'Más peso a los meses recientes (decay exponencial)',  calc: calcularPromPonderado },
+  { key: 'ESTIMACION_LOCAL', label: 'Estim. Local', desc: 'Promedio 3m anteriores del local - otras cajas actuales', calc: calcularEstimacionLocal },
+  { key: 'IGUAL_ANTERIOR',   label: 'Igual al anterior', desc: 'Mismo valor que el mes inmediatamente anterior', calc: calcularIgualAnterior },
+  { key: 'PROM_PONDERADO',   label: 'Prom. ponderado', desc: 'Más peso a los meses recientes (decay exponencial)', calc: calcularPromPonderado },
 ];
 
 // ── Botón desregistrar (quita manual=false, saca del panel sin borrar de BQ) ─
@@ -116,25 +144,28 @@ function DesregistrarButton({ cfg, user, onCajasConfigChange, notify }) {
 }
 
 // ── Panel de edición para un GAP ──────────────────────────────────────────────
-function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
+function EditPanel({ cell, puntos, onSave, onCancelEdit, pendingEditPos, local, meses }) {
   const pts = puntos || [];
 
   // Pre-calculamos los 3 métodos
   const valores = useMemo(() => {
     const v = {};
-    METODOS.forEach(m => { v[m.key] = m.calc(pts); });
+    METODOS.forEach(m => { 
+      v[m.key] = m.calc(cell, pts, local, meses); 
+    });
     return v;
-  }, [pts]);
+  }, [cell, pts, local, meses]);
 
   // Método seleccionado (default: IGUAL_ANTERIOR si tiene valor, sino PROM_6M)
-  const defaultMetodo = valores.IGUAL_ANTERIOR != null ? 'IGUAL_ANTERIOR'
-    : valores.PROM_6M != null ? 'PROM_6M' : 'PROM_PONDERADO';
+  const defaultMetodo = valores.ESTIMACION_LOCAL != null ? 'ESTIMACION_LOCAL'
+    : valores.IGUAL_ANTERIOR != null ? 'IGUAL_ANTERIOR' : 'PROM_PONDERADO';
 
   const [metodo,    setMetodo]    = useState(defaultMetodo);
   const [manualVal, setManualVal] = useState('');
   const [aprobado,  setAprobado]  = useState(false);
   const [saving,    setSaving]    = useState(false);
   const inputRef = useRef(null);
+  const panelRef = useRef(null);
 
   // Cuando cambia el método, pre-cargar el valor calculado
   useEffect(() => {
@@ -163,139 +194,111 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
     }
   };
 
-  const rect = useRef(null);
+  if (!pendingEditPos) return null;
 
-  // Modal portal overlay
+  const panelWidth = 320;
+  const panelHeight = 420;
+  
+  // Center horizontally relative to cell center
+  let left = (pendingEditPos.left + pendingEditPos.width / 2) - (panelWidth / 2);
+  
+  // Boundary checks (Horizontal)
+  if (left + panelWidth > window.innerWidth) left = window.innerWidth - panelWidth - 20;
+  if (left < 10) left = 10;
+
+  // Position below cell, or above if no space
+  let top = pendingEditPos.bottom + 4;
+  if (top + panelHeight > window.innerHeight) top = pendingEditPos.top - panelHeight - 4;
+  if (top < 10) top = 10;
+
   return createPortal(
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm" 
-        onClick={onCancelEdit}
-      />
-      
+    <div className="fixed inset-0 z-[2000] pointer-events-none">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden"
+        ref={panelRef}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 10 }}
+        style={{ top, left, width: panelWidth }}
+        className="pointer-events-auto absolute bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden ring-1 ring-black/5"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header Modal */}
-        <div className="px-6 py-5 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
-          <div className="flex items-center justify-between mb-1">
-            <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-tight">
-              Estimar Transacciones <span className="text-[10px] text-accent-orange/40 ml-1">v2.1</span>
-            </h3>
-            <button onClick={onCancelEdit} className="p-1.5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full text-slate-400 transition-colors">
-              <X size={16} />
-            </button>
+        {/* Header Compacto */}
+        <div className="px-4 py-3 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[7px] font-black uppercase text-slate-400 tracking-widest">Estimar</span>
+            <span className="text-[10px] font-bold text-slate-700 dark:text-white truncate max-w-[200px]">{cell.local}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <div className="flex items-center gap-1.5">
-              <Store size={12} className="text-accent-orange" />
-              <span className="text-[11px] font-bold text-slate-500 dark:text-white/60">{cell.local}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CalendarDays size={12} className="text-slate-400" />
-              <span className="text-[11px] font-bold text-slate-500 dark:text-white/60">{MESES[cell.mes]} {cell.ano}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] font-black px-1.5 py-0.5 bg-slate-200 dark:bg-white/10 rounded text-slate-500 dark:text-white/40">{cell.caja === '99' ? 'Total Local' : `Caja ${cell.caja}`}</span>
-            </div>
-          </div>
+          <button onClick={onCancelEdit} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full text-slate-400">
+            <X size={14} />
+          </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* ── Selector de método ── */}
+        <div className="p-4 space-y-4">
+          {/* Métodos */}
           <div>
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3 ml-1">Método Sugerido</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5">
               {METODOS.map(m => {
                 const v = valores[m.key];
                 const activo = metodo === m.key;
                 return (
                   <button
                     key={m.key}
-                    title={m.desc}
                     onClick={() => { setMetodo(m.key); if (v) setManualVal(String(Math.round(v * 10) / 10)); }}
-                    className={`flex flex-col items-center gap-1 px-2 py-3 rounded-2xl border text-center transition-all ${
+                    className={`flex flex-col items-center gap-0.5 px-1 py-2 rounded-xl border text-center transition-all ${
                       activo
-                        ? 'bg-accent-orange/10 border-accent-orange/40 text-accent-orange shadow-lg shadow-orange-500/5'
+                        ? 'bg-accent-orange/10 border-accent-orange/40 text-accent-orange'
                         : 'bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 hover:border-accent-orange/30'
                     }`}
                   >
-                    <span className="text-[8px] font-black uppercase tracking-tighter leading-tight">{m.label}</span>
-                    <span className={`text-[12px] font-black mt-0.5 ${activo ? 'text-accent-orange' : 'text-slate-500 dark:text-white/40'}`}>
+                    <span className="text-[7px] font-black uppercase tracking-tight leading-tight">{m.label}</span>
+                    <span className={`text-[11px] font-black mt-0.5 ${activo ? 'text-accent-orange' : 'text-slate-500 dark:text-white/40'}`}>
                       {v != null ? fmt(v) : '—'}
                     </span>
-                    <span className={`text-[7px] font-bold ${activo ? 'text-accent-orange/70' : 'text-slate-300 dark:text-white/20'}`}>tx/día</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* ── Input manual ── */}
-          <div className="bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-200 dark:border-white/10">
-            <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2 block ml-1">
-              Valor Final <span className="font-normal normal-case tracking-normal">(puedes editarlo)</span>
-            </label>
-            <div className="relative">
-              <input
-                ref={inputRef}
-                type="number"
-                value={manualVal}
-                onChange={e => setManualVal(e.target.value)}
-                className="w-full pl-4 pr-12 py-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-white/10 rounded-xl text-lg font-black text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30 transition-all"
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">trx/día</span>
-            </div>
+          {/* Input */}
+          <div className="relative">
+            <input
+              ref={inputRef}
+              type="number"
+              value={manualVal}
+              onChange={e => setManualVal(e.target.value)}
+              className="w-full pl-3 pr-10 py-2 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-base font-black text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-orange/30"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-bold text-slate-400">tx/día</span>
           </div>
 
-          {/* ── Checkbox aprobación ── */}
-          <label
-            className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all select-none ${
-              aprobado
-                ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800/40'
-                : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/10 hover:border-teal-300 dark:hover:border-teal-800/30'
+          {/* Switch Aprobación */}
+          <button
+            onClick={() => setAprobado(!aprobado)}
+            className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+              aprobado ? 'bg-teal-500/10 border-teal-500/20 text-teal-600' : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400'
             }`}
           >
-            <div
-              className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5 border-2 transition-all ${
-                aprobado ? 'bg-teal-500 border-teal-500' : 'border-slate-300 dark:border-white/20 theme-border'
-              }`}
-              onClick={(e) => { e.preventDefault(); setAprobado(v => !v); }}
-            >
-              {aprobado && <Check size={12} className="text-white" strokeWidth={4} />}
+            <div className="flex items-center gap-2">
+              <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition-all ${aprobado ? 'bg-teal-500 border-teal-500' : 'border-slate-300 dark:border-white/10'}`}>
+                {aprobado && <Check size={10} className="text-white" strokeWidth={4} />}
+              </div>
+              <span className="text-[9px] font-black uppercase">Aprobar ahora</span>
             </div>
-            <div>
-              <p className={`text-[11px] font-black leading-tight ${aprobado ? 'text-teal-700 dark:text-teal-400' : 'text-slate-600 dark:text-white/60'}`}>
-                Aprobar Estimación
-              </p>
-              <p className="text-[9px] text-slate-400 dark:text-white/30 mt-1 leading-snug">
-                Si marcas "Aprobar", el dato será visible inmediatamente para todos. Si no, quedará como borrador pendiente de revisión.
-              </p>
-            </div>
-          </label>
+            {aprobado && <span className="text-[7px] font-bold">Visible en dashboard</span>}
+          </button>
 
-          {/* ── Botones ── */}
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={onCancelEdit}
-              className="px-6 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 dark:hover:text-white transition-all hover:bg-slate-50 dark:hover:bg-white/5"
-            >
-              Cancelar
-            </button>
+          {/* Footer Botones */}
+          <div className="flex gap-2">
             <button
               onClick={handleSave}
               disabled={saving || !valido}
-              className={`flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-40 transition-all shadow-xl ${
-                aprobado ? 'bg-teal-500 hover:bg-teal-600 shadow-teal-500/20' : 'bg-accent-orange hover:bg-orange-600 shadow-orange-500/20'
+              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40 transition-all ${
+                aprobado ? 'bg-teal-500 hover:bg-teal-600' : 'bg-accent-orange hover:bg-orange-600'
               }`}
             >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : (aprobado ? <Check size={14} /> : <Check size={14} />)}
-              {aprobado ? 'Publicar Ahora' : 'Guardar Pendiente'}
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              {aprobado ? 'Publicar' : 'Guardar'}
             </button>
           </div>
         </div>
@@ -308,7 +311,7 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit }) {
 
 
 // ── Celda individual ──────────────────────────────────────────────────────────
-function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, isRevisada, onMarkRevisada, isGapRevisado, onToggleGapRevisado }) {
+function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, isRevisada, onMarkRevisada, isGapRevisado, onToggleGapRevisado, pendingEditPos, local, meses }) {
   const isEditing = pendingEdit?.key === cell.key;
 
   if (cell.tipo === 'GAP') {
@@ -316,13 +319,21 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
     const gapOk  = isGapRevisado;
     return (
       <td 
-        className="px-1.5 py-1.5 align-middle relative" 
+        className="px-1.5 py-1.5 align-middle relative cursor-pointer" 
         style={{ minWidth: 90 }} 
-        onClick={e => e.stopPropagation()}
+        onClick={e => { e.preventDefault(); e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
       >
         {isEditing && (
-          <AnimatePresence>
-            <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
+          <AnimatePresence mode="wait">
+            <EditPanel 
+              cell={cell} 
+              puntos={puntos} 
+              onSave={onSave} 
+              onCancelEdit={onCancelEdit} 
+              pendingEditPos={pendingEditPos} 
+              local={local} 
+              meses={meses} 
+            />
           </AnimatePresence>
         )}
         {gapOk ? (
@@ -344,13 +355,10 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
         ) : (
           /* GAP normal: rojo + botón check en hover */
           <div className="group w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 hover:border-red-500/35 transition-all">
-            <button
-              onClick={() => onStartEdit(cell)}
-              className="flex items-center gap-1"
-            >
+            <div className="flex items-center gap-1">
               <AlertTriangle size={9} className="text-red-400 shrink-0" />
               <span className="text-[10px] font-black text-red-400">GAP</span>
-            </button>
+            </div>
             {onToggleGapRevisado && (
               <Tip label="Marcar como revisado — ya no es un error">
                 <button
@@ -373,11 +381,11 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
     return (
       <td
         className={`px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-all ${cfg.cell} hover:brightness-95`}
-        onClick={e => { e.stopPropagation(); onStartEdit(cell); }}
+        onClick={e => { e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
       >
         {isEditing && (
           <AnimatePresence>
-            <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
+            <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} pendingEditPos={pendingEditPos} />
           </AnimatePresence>
         )}
         <div className="flex items-center justify-end gap-1">
@@ -403,11 +411,11 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
         esCaidaAlarm ? 'bg-red-100 dark:bg-red-500/15 hover:brightness-95' :
                        `${cfg.cell} hover:brightness-95`
       }`}
-      onClick={e => { e.stopPropagation(); onStartEdit(cell); }}
+      onClick={e => { e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
     >
       {isEditing && (
         <AnimatePresence>
-          <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} />
+          <EditPanel cell={cell} puntos={puntos} onSave={onSave} onCancelEdit={onCancelEdit} pendingEditPos={pendingEditPos} />
         </AnimatePresence>
       )}
       <div className="flex items-center justify-end gap-1">
@@ -569,7 +577,7 @@ function DeleteCajaButton({ cfg, user, onDeleted, onError }) {
   );
 }
 
-function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal, revisadasMap = {}, onMarkRevisada, gapsRevisadosMap = {}, onToggleGapRevisado }) {
+function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal, revisadasMap = {}, onMarkRevisada, gapsRevisadosMap = {}, onToggleGapRevisado, pendingEditPos }) {
   const esDesglose = !NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
   const RUTINA_DESDE = '2025-12';
   const esRutina = (mk) => mk >= RUTINA_DESDE;
@@ -912,6 +920,9 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                                   pendingEdit={pendingEdit}
                                   onStartEdit={onStartEdit}
                                   onCancelEdit={onCancelEdit}
+                                  pendingEditPos={pendingEditPos}
+                                  local={local}
+                                  meses={fullMeses}
                                   isRevisada={!!revisadasMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
                                   onMarkRevisada={onMarkRevisada}
                                   isGapRevisado={!!gapsRevisadosMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
@@ -920,14 +931,30 @@ function LocalRow({ local, meses, pendingEdit, onStartEdit, onCancelEdit, onSave
                               );
                             })}
                             {/* Total for month */}
-                            <td className="px-3 py-2 text-right">
-                              <span className="font-black text-[12px] text-slate-700 dark:text-white/70">
-                                {totalesPorMes[mk] > 0
-                                  ? fmt(totalesPorMes[mk])
-                                  : <span className="text-slate-300 dark:text-white/15">—</span>
-                                }
-                              </span>
-                            </td>
+                            <Celda
+                              key={`${mk}-total`}
+                              cell={{
+                                key: `${local.codigo_tienda}||99||${mk}`,
+                                codigo_tienda: local.codigo_tienda,
+                                local: local.local,
+                                competidor: local.competidor,
+                                caja: 99,
+                                mes: parseInt(mes),
+                                ano: parseInt(ano),
+                                tipo: totalesPorMes[mk] > 0 ? (local.celdas[`99||${mk}`]?.tipo || 'REAL') : 'GAP',
+                                tasa: totalesPorMes[mk] > 0 ? totalesPorMes[mk] : null,
+                              }}
+                              puntos={local.cajas.flatMap(c => getPuntosCaja(c))}
+                              onSave={onSave}
+                              pendingEdit={pendingEdit}
+                              onStartEdit={onStartEdit}
+                              onCancelEdit={onCancelEdit}
+                              pendingEditPos={pendingEditPos}
+                              isRevisada={!!revisadasMap[`${local.codigo_tienda}||99||${parseInt(mes)}||${parseInt(ano)}`]}
+                              onMarkRevisada={onMarkRevisada}
+                              local={local}
+                              meses={fullMeses}
+                            />
                           </tr>
                         );
                       })}
@@ -963,6 +990,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
   const [search, setSearch]                 = useState('');
   const [expandidos, setExpandidos]         = useState(new Set());
   const [pendingEdit, setPendingEdit]       = useState(null);
+  const [pendingEditPos, setPendingEditPos] = useState(null);
   const [saving, setSaving]                 = useState(false);
   const [notification, setNotification]     = useState(null);
   const [showGestion, setShowGestion]       = useState(false);
@@ -1001,10 +1029,8 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
   useEffect(() => { fetchMatrix(); }, [fetchMatrix]);
 
   useEffect(() => {
-    const handler = () => setPendingEdit(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
+    fetchMatrix();
+  }, [fetchMatrix]);
 
   // ── Lookup rápido (debe estar ANTES de cualquier useMemo que lo use) ──
   // Claves: `codigo_tienda||caja` o `codigo_tienda||__LOCAL__` (local entero silenciado)
@@ -1186,8 +1212,14 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
     return resultado;
   }, [meses, periodoPreset, customDesde, customHasta]);
 
-  const handleStartEdit = (cell) => setPendingEdit(cell);
-  const handleCancelEdit = () => setPendingEdit(null);
+  const handleStartEdit = (cell, rect) => {
+    setPendingEditPos(rect);
+    setPendingEdit(cell);
+  };
+  const handleCancelEdit = () => {
+    setPendingEdit(null);
+    setPendingEditPos(null);
+  };
 
   const handleSave = useCallback(async (cell) => {
     setSaving(true);
@@ -2091,8 +2123,10 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                     key={local.codigo_tienda}
                     local={local}
                     meses={mesesFiltrados}
+                    fullMeses={meses}
                     pendingEdit={pendingEdit}
-                    onStartEdit={cell => { setPendingEdit(null); setTimeout(() => handleStartEdit(cell), 0); }}
+                    pendingEditPos={pendingEditPos}
+                    onStartEdit={handleStartEdit}
                     onCancelEdit={handleCancelEdit}
                     onSave={handleSave}
                     expandido={expandidos.has(local.codigo_tienda)}

@@ -83,7 +83,16 @@ const SSTXDashboard = ({ records, filters }) => {
       if (!rawData[yr][ms][storeKey]) {
         rawData[yr][ms][storeKey] = { brand, name: r.local, code: r.codigo_tienda, sales: 0 };
       }
-      rawData[yr][ms][storeKey].sales += (parseFloat(r.transacciones_diferencial || r.transacciones || r.trx_total) || 0);
+      // Prioridad absoluta a 'promedio' para coincidir con el KPI de Market Share (App.jsx)
+      const dailyVal = parseFloat(r.promedio || r.trx_diarias || r.promedioDiario || 0);
+      if (dailyVal > 0) {
+        rawData[yr][ms][storeKey].sales += dailyVal;
+      } else {
+        // Fallback: total / días (solo si no hay columna de promedio diario)
+        const totalVal = parseFloat(r.transacciones_diferencial || r.transacciones || r.trx_total || 0);
+        const daysInMonth = new Date(yr, ms, 0).getDate();
+        rawData[yr][ms][storeKey].sales += (totalVal / daysInMonth);
+      }
       
       if (yr === currentYearSelected && ms > latestMonth) latestMonth = ms;
     });
@@ -149,7 +158,8 @@ const SSTXDashboard = ({ records, filters }) => {
 
   const kFormatter = (num) => {
     if (num === 0) return '-';
-    return Math.abs(num) > 999 ? (num/1000).toFixed(1) + 'k' : Math.round(num);
+    if (Math.abs(num) > 999) return (num/1000).toFixed(1) + 'k';
+    return num.toLocaleString('es-PE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   };
 
   const currentMonthTotal = matrixData.totals[activeMonth] || { ty: 0, ly: 0, growth: 0 };
@@ -162,7 +172,7 @@ const SSTXDashboard = ({ records, filters }) => {
            <div className="flex items-center gap-3">
               <div className="p-2 bg-accent-orange/10 rounded-lg"><LayoutDashboard className="text-accent-orange" size={18} /></div>
               <div>
-                <h3 className="text-sm font-black text-slate-900 dark:text-white italic uppercase tracking-widest">Master Matrix SSTX {currentYearSelected}</h3>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white italic uppercase tracking-widest">Master Matrix SSTX - Trx Diarias {currentYearSelected}</h3>
                 <p className="text-[9px] text-slate-500 dark:text-white/40 font-bold uppercase tracking-widest mt-0.5 italic">Consistencia Garantizada vs Market Share Dash</p>
               </div>
            </div>
@@ -234,7 +244,7 @@ const SSTXDashboard = ({ records, filters }) => {
             <span className="text-xl font-black text-slate-900 dark:text-white tracking-tighter">{rawStoresDetail.length}</span>
          </div>
          <div className="flex flex-col border-l-2 border-accent-orange pl-4">
-            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Volumen Concuerdado</span>
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Promedio Trx Diarias</span>
             <span className="text-xl font-black text-slate-900 dark:text-white tracking-tighter">{kFormatter(currentMonthTotal.ty)}</span>
          </div>
          <div className="flex flex-col border-l-2 border-accent-orange pl-4">

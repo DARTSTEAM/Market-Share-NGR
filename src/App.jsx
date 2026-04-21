@@ -527,7 +527,15 @@ export default function App({ user, onSignOut }) {
         ]);
         if (dataRes.ok) {
           const data = await dataRes.json();
-          if (data.records) setRecords(data.records);
+          if (data.records) {
+            // Normalización para evitar duplicados como "KFC07" y "KFC 07"
+            const normalized = data.records.map(r => ({
+              ...r,
+              codigo_tienda: (r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
+              local: (r.local || '').trim().toUpperCase()
+            }));
+            setRecords(normalized);
+          }
           if (data.tickets) setTickets(data.tickets);
         }
         if (cajasRes?.ok) {
@@ -562,7 +570,14 @@ export default function App({ user, onSignOut }) {
         const dr = await fetch(`${API_BASE_URL}/api/data`);
         if (dr.ok) {
           const fresh = await dr.json();
-          if (fresh.records) setRecords(fresh.records);
+          if (fresh.records) {
+            const normalized = fresh.records.map(r => ({
+              ...r,
+              codigo_tienda: (r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
+              local: (r.local || '').trim().toUpperCase()
+            }));
+            setRecords(normalized);
+          }
           if (fresh.tickets) setTickets(fresh.tickets);
         }
         setNotification({ type: 'success', message: `¡Datos actualizados correctamente!` });

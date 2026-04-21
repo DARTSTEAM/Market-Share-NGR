@@ -28,15 +28,54 @@ const BRAND_COLORS = {
     'norkys':        '#F0A500',
     'pardos':        '#7B3F00',
     'papa john':     '#007743',
+    'china wok':     '#FF0000',
+    'chinawok':      '#FF0000',
     'wanta':         '#00B4A0',
     'hermanos':      '#A52020',
     'church':        '#8B0000',
     'telepizza':     '#C00D0D',
 };
 
+const COMPETITOR_TO_CATEGORY = {
+    'KFC': 'Pollo Frito',
+    'MCDONALD\'S': 'Hamburguesa',
+    'MCDONALDS': 'Hamburguesa',
+    'BEMBOS': 'Hamburguesa',
+    'BURGER KING': 'Hamburguesa',
+    'DOMINOS': 'Pizza',
+    'DOMINO\'S': 'Pizza',
+    'LITTLE CAESARS': 'Pizza',
+    'PIZZA HUT': 'Pizza',
+    'POPEYES': 'Pollo Frito',
+    'CHINAWOK': 'Chifas',
+    'CHINA WOK': 'Chifas',
+    'PAPA JOHNS': 'Pizza',
+    'PUNTOS COMPARTIDOS': 'Otros',
+    'NGR': 'Otros',
+    'SUBWAY': 'Sandwiches',
+    'NORKYS': 'Pollo a la Brasa',
+    'PARDOS': 'Pollo a la Brasa',
+    'PARDOS CHICKEN': 'Pollo a la Brasa',
+    'TELEPIZZA': 'Pizza'
+};
+
+const CATEGORY_COLORS = {
+    'Pollo Frito': '#E4002B',
+    'Hamburguesa': '#FFC72C',
+    'Pizza': '#006491',
+    'Chifas': '#EE3A24',
+    'Sandwiches': '#009B48',
+    'Pollo a la Brasa': '#7B3F00',
+    'Otros': '#94a3b8'
+};
+
 function colorFor(name) {
     if (!name) return PALETTE[0];
     const lower = name.toLowerCase().trim();
+    
+    // Check if it's a category
+    if (CATEGORY_COLORS[name]) return CATEGORY_COLORS[name];
+
     for (const [brand, color] of Object.entries(BRAND_COLORS)) {
         if (lower.includes(brand)) return color;
     }
@@ -493,7 +532,7 @@ const PCDetailPanel = ({ pc, evolutionData, onClose, allPCs, currentIndex, onNav
 };
 
 // ─── Macro Summary Table ──────────────────────────────────────────────────────
-const MacroTable = ({ pcs, onSelectPC }) => {
+const MacroTable = ({ pcs, onSelectPC, groupByCategory }) => {
     const [sortCol, setSortCol] = useState('prom');
     const [sortDir, setSortDir] = useState('desc');
 
@@ -516,8 +555,8 @@ const MacroTable = ({ pcs, onSelectPC }) => {
         </th>
     );
 
-    // All unique competitors across filtered PCs for column headers
-    const allComps = [...new Set(pcs.flatMap(p => p.byComp.map(c => c.name)))].sort();
+    // Columns are either Competitors or Categories
+    const allColKeys = [...new Set(pcs.flatMap(p => p.byComp.map(c => c.name)))].sort();
 
     return (
         <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-white/5">
@@ -526,8 +565,8 @@ const MacroTable = ({ pcs, onSelectPC }) => {
                     <tr>
                         <Th col="nombre">Punto Compartido</Th>
                         <th className="px-4 py-3 text-left text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Tipo</th>
-                        <Th col="marcas">Marcas</Th>
-                        {allComps.map(c => (
+                        <Th col="marcas">{groupByCategory ? 'Categorías' : 'Marcas'}</Th>
+                        {allColKeys.map(c => (
                             <th key={c} className="px-4 py-3 text-right text-[8px] font-black uppercase tracking-widest whitespace-nowrap"
                                 style={{ color: colorFor(c) }}>
                                 {c}
@@ -565,7 +604,7 @@ const MacroTable = ({ pcs, onSelectPC }) => {
                                 <td className="px-4 py-3 text-center">
                                     <span className="text-[11px] font-black text-slate-900 dark:text-white">{pc.byComp.length}</span>
                                 </td>
-                                {allComps.map(comp => {
+                                {allColKeys.map(comp => {
                                     const found = pc.byComp.find(c => c.name === comp);
                                     const pct = totalProm > 0 && found ? (found.prom / totalProm) * 100 : 0;
                                     return (
@@ -598,7 +637,7 @@ const MacroTable = ({ pcs, onSelectPC }) => {
                                 TOTAL ({sorted.length} puntos)
                             </span>
                         </td>
-                        {allComps.map(comp => {
+                        {allColKeys.map(comp => {
                             const total = sorted.reduce((s, pc) => s + (pc.byComp.find(c => c.name === comp)?.prom || 0), 0);
                             return (
                                 <td key={comp} className="px-4 py-3 text-right">
@@ -626,7 +665,9 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
     const [selectedPC, setSelectedPC] = useState(null);
     const [filterTipo, setFilterTipo] = useState('all');
     const [filterCadena, setFilterCadena] = useState('all');
-    const [filterComp, setFilterComp] = useState('all');
+    const [filterComp, setFilterComp] = useState([]); // Array for multi-select
+    const [filterCat, setFilterCat] = useState('all'); // New category filter
+    const [groupByCategory, setGroupByCategory] = useState(false); // New grouping toggle
     const [sortMode, setSortMode] = useState('prom');
     const [visibleCount, setVisibleCount] = useState(8);
     const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
@@ -746,22 +787,63 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         return result;
     }, [ngrLocales]);
 
-    const cadenaOptions = useMemo(() => {
-        const vals = [...new Set(pcData.map(p => p.grupos_cc).filter(Boolean))].sort();
-        return [{ value: 'all', label: 'Todas las cadenas' }, ...vals.map(v => ({ value: v, label: v }))];
-    }, [pcData]);
+    const catOptions = useMemo(() => {
+        const cats = [...new Set(Object.values(COMPETITOR_TO_CATEGORY))].sort();
+        return [{ value: 'all', label: 'Todas las categorías' }, ...cats.map(v => ({ value: v, label: v }))];
+    }, []);
 
     const compOptions = useMemo(() => {
-        const vals = [...new Set(pcData.flatMap(p => p.byComp.map(c => c.name)))].sort();
-        return [{ value: 'all', label: 'Todos los competidores' }, ...vals.map(v => ({ value: v, label: v }))];
-    }, [pcData]);
+        let comps = [...new Set(pcData.flatMap(p => p.byComp.map(c => c.name)))].sort();
+        if (filterCat !== 'all') {
+            comps = comps.filter(c => COMPETITOR_TO_CATEGORY[c] === filterCat);
+        }
+        return comps.map(v => ({ value: v, label: v }));
+    }, [pcData, filterCat]);
 
     const filteredPCs = useMemo(() => {
         let data = [...pcData];
         if (filterTipo === 'cc') data = data.filter(p => !!p.cc_nombre);
         if (filterTipo === 'calle') data = data.filter(p => !p.cc_nombre);
         if (filterCadena !== 'all') data = data.filter(p => p.grupos_cc === filterCadena);
-        if (filterComp !== 'all') data = data.filter(p => p.byComp.some(c => c.name === filterComp));
+        
+        // Filter by category — Isolate selected segment
+        if (filterCat !== 'all') {
+            data = data.filter(p => p.byComp.some(c => COMPETITOR_TO_CATEGORY[c.name] === filterCat))
+                .map(p => ({
+                    ...p,
+                    byComp: p.byComp.filter(c => COMPETITOR_TO_CATEGORY[c.name] === filterCat),
+                    locales: p.locales.filter(l => COMPETITOR_TO_CATEGORY[l.competidor] === filterCat)
+                }));
+        }
+
+        // Filter by multi-select competitors — Isolate selected brands
+        if (filterComp.length > 0) {
+            data = data.filter(p => 
+                filterComp.some(target => p.byComp.some(c => c.name === target))
+            ).map(p => ({
+                ...p,
+                byComp: p.byComp.filter(c => filterComp.includes(c.name)),
+                locales: p.locales.filter(l => filterComp.includes(l.competidor))
+            }));
+        }
+
+        // Apply "Group by Category" transformation if active
+        // Note: Filtering happens BEFORE grouping, so we are grouping only the remaining items
+        if (groupByCategory) {
+            data = data.map(pc => {
+                const catMap = {};
+                pc.byComp.forEach(c => {
+                    const cat = COMPETITOR_TO_CATEGORY[c.name] || 'Otros';
+                    if (!catMap[cat]) catMap[cat] = { name: cat, value: 0, prom: 0 };
+                    catMap[cat].value += c.value;
+                    catMap[cat].prom += c.prom;
+                });
+                return {
+                    ...pc,
+                    byComp: Object.values(catMap).sort((a, b) => b.prom - a.prom),
+                };
+            });
+        }
 
         if (sortMode === 'prom') data.sort((a, b) => b.byComp.reduce((s, c) => s + c.prom, 0) - a.byComp.reduce((s, c) => s + c.prom, 0));
         else if (sortMode === 'transacciones') data.sort((a, b) => b.byComp.reduce((s, c) => s + c.value, 0) - a.byComp.reduce((s, c) => s + c.value, 0));
@@ -769,9 +851,14 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         else data.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
         return data;
-    }, [pcData, filterTipo, filterCadena, filterComp, sortMode]);
+    }, [pcData, filterTipo, filterCadena, filterComp, filterCat, groupByCategory, sortMode]);
 
-    React.useEffect(() => { setVisibleCount(8); }, [filterTipo, filterCadena, filterComp, sortMode]);
+    React.useEffect(() => { setVisibleCount(8); }, [filterTipo, filterCadena, filterComp, filterCat, sortMode, groupByCategory]);
+
+    const cadenaOptions = useMemo(() => {
+        const vals = [...new Set(pcData.map(p => p.grupos_cc).filter(Boolean))].sort();
+        return [{ value: 'all', label: 'Todas las cadenas' }, ...vals.map(v => ({ value: v, label: v }))];
+    }, [pcData]);
 
     const kpis = useMemo(() => {
         const totalProm = filteredPCs.reduce((s, p) => s + p.byComp.reduce((ss, c) => ss + c.prom, 0), 0);
@@ -817,17 +904,39 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 <section className="pwa-card no-hover p-4 flex flex-wrap gap-4 items-end border-slate-200 dark:border-white/5">
                     <div className="space-y-1">
                         <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Tipo</span>
-                        <CustomSelect selected={filterTipo} onChange={setFilterTipo} width="w-36"
-                            options={[{ value: 'all', label: 'Todos' }, { value: 'cc', label: '🏬 Centro Comercial' }, { value: 'calle', label: '📍 Punto de Calle' }]} />
+                        <CustomSelect selected={filterTipo} onChange={setFilterTipo} width="w-28"
+                            options={[{ value: 'all', label: 'Todos' }, { value: 'cc', label: '🏬 CC' }, { value: 'calle', label: '📍 Calle' }]} />
                     </div>
+                    
+                    <div className="space-y-1">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Categoría</span>
+                        <CustomSelect selected={filterCat} onChange={(val) => { setFilterCat(val); setFilterComp([]); }} width="w-40" options={catOptions} searchable />
+                    </div>
+
+                    <div className="space-y-1">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Competidores</span>
+                        <CustomSelect selected={filterComp} onChange={setFilterComp} width="w-48" options={compOptions} multi searchable label="Seleccionar..." />
+                    </div>
+
                     <div className="space-y-1">
                         <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Cadena CC</span>
-                        <CustomSelect selected={filterCadena} onChange={setFilterCadena} width="w-44" options={cadenaOptions} />
+                        <CustomSelect selected={filterCadena} onChange={setFilterCadena} width="w-40" options={cadenaOptions} searchable />
                     </div>
+
                     <div className="space-y-1">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Competidor</span>
-                        <CustomSelect selected={filterComp} onChange={setFilterComp} width="w-44" options={compOptions} />
+                        <button
+                            onClick={() => setGroupByCategory(!groupByCategory)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                                groupByCategory 
+                                ? 'bg-accent-orange/10 border-accent-orange text-accent-orange shadow-[0_0_15px_rgba(255,94,0,0.1)]' 
+                                : 'bg-slate-100 dark:bg-white/[0.03] border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:border-accent-orange/30'
+                            }`}
+                        >
+                            <Layers className={`w-3.5 h-3.5 ${groupByCategory ? 'animate-pulse' : ''}`} />
+                            <span className="text-[9px] font-black uppercase tracking-widest">Agrupar por Categoría</span>
+                        </button>
                     </div>
+
                     <div className="space-y-1">
                         <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Ordenar por</span>
                         <CustomSelect selected={sortMode} onChange={setSortMode} width="w-44"
@@ -872,7 +981,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                     </div>
                 ) : viewMode === 'table' ? (
                     /* ── TABLE VIEW ── */
-                    <MacroTable pcs={filteredPCs} onSelectPC={handleCardClick} />
+                    <MacroTable pcs={filteredPCs} onSelectPC={handleCardClick} groupByCategory={groupByCategory} />
                 ) : (
                     /* ── CARDS VIEW ── */
                     <>
@@ -904,11 +1013,11 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                                 <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
                                     <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
                                         <div className="w-1.5 h-6 bg-accent-orange rounded-full" />
-                                        Prom. Diario por Punto Compartido — Top 12
+                                        {groupByCategory ? 'Prom. Diario por Categoría — Top 12 Puntos' : 'Prom. Diario por Marca — Top 12 Puntos'}
                                     </h3>
                                     <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
                                 </div>
-                                <div style={{ height: '320px' }}>
+                                <div style={{ height: '420px' }}>
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart
                                             data={filteredPCs.slice(0, 12).map(pc => {
@@ -916,7 +1025,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                                                 pc.byComp.forEach(c => { row[c.name] = c.prom; });
                                                 return row;
                                             })}
-                                            margin={{ top: 10, right: 20, left: 10, bottom: 70 }}
+                                            margin={{ top: 10, right: 20, left: 10, bottom: 90 }}
                                         >
                                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
                                             <XAxis dataKey="name" angle={-35} textAnchor="end" fontSize={8} interval={0}
@@ -931,7 +1040,8 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                                                 formatter={v => <span style={{ fontSize: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{v}</span>} />
                                             {[...new Set(filteredPCs.flatMap(p => p.byComp.map(c => c.name)))].map(comp => (
                                                 <Line key={comp} type="monotone" dataKey={comp}
-                                                    stroke={colorFor(comp)} strokeWidth={2} dot={{ r: 4, fill: colorFor(comp) }} />
+                                                    stroke={colorFor(comp)} strokeWidth={2.5} dot={{ r: 4, fill: colorFor(comp) }}
+                                                    activeDot={{ r: 6 }} connectNulls />
                                             ))}
                                         </LineChart>
                                     </ResponsiveContainer>

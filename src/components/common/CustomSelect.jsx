@@ -80,7 +80,11 @@ const CustomSelect = ({
         : (options.find(o => o.value === selected)?.label ?? label);
 
     const filteredOptions = (searchable && searchQuery)
-        ? options.filter(o => o.label.toLowerCase().includes(searchQuery.toLowerCase()))
+        ? options.filter(o => {
+            const labelNorm = o.label.toLowerCase().replace(/\s+/g, '');
+            const queryNorm = searchQuery.toLowerCase().replace(/\s+/g, '');
+            return labelNorm.includes(queryNorm);
+        })
         : options;
 
     // ── Multi toggle ───────────────────────────────────────────────────
