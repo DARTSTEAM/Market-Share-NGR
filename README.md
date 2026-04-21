@@ -1,73 +1,76 @@
-# 📊 NGR Market Share - Guía para Colaboradores
+# 📊 NGR Market Share - Dashboard de Inteligencia Competitiva
 
-¡Bienvenido al proyecto! Este dashboard automatizado procesa reportes consolidados en CSV y los visualiza en tiempo real. Aquí tienes todo lo necesario para empezar a trabajar.
-
-## 🔗 Enlaces Importantes
-- **Repositorio:** [DARTSTEAM/Market-Share-NGR](https://github.com/DARTSTEAM/Market-Share-NGR)
-- **URL en Vivo:** [ngr-market-share.web.app](https://ngr-market-share.web.app/)
+Plataforma unificada para el monitoreo de cuota de mercado, análisis de puntos compartidos y validación de estimaciones para el grupo NGR (Bembos, ChinaWok, Papa Johns, Popeyes, etc.).
 
 ---
 
-## 🛠 Entorno de Desarrollo
+## 🏗 Arquitectura del Sistema
 
-1. **Clonar el repo:**
-   ```bash
-   git clone https://github.com/DARTSTEAM/Market-Share-NGR.git
-   cd Market-Share-NGR
-   ```
+El proyecto opera bajo un modelo de **Frontend-Relay**:
 
-2. **Instalar dependencias:**
-   ```bash
-   npm install
-   ```
+1.  **Frontend**: Single Page Application (SPA) construida con **React + Vite + Tailwind CSS**.
+2.  **Backend (Proxy)**: Servidor Node.js desplegado en **Google Cloud Run** que actúa como puente seguro hacia **BigQuery**. Evita exponer credenciales de GCP en el navegador.
+3.  **Data Warehouse**: La "Fuente de Verdad" reside en BigQuery (`bigquery-388915`).
 
-3. **Correr en local:**
-   ```bash
-   npm run dev
-   ```
+### 🔗 Enlaces Clave
+- **Producción**: [ngr-market-share.web.app](https://ngr-market-share.web.app/)
+- **API Proxy**: `https://ngr-proxy-server-gvxb4rjzvq-uc.a.run.app`
 
 ---
 
-## 📅 Cómo Actualizar los Datos
+## 📂 Módulos del Dashboard
 
-El dashboard no lee el CSV directamente en el navegador por performance. Usa un script intermedio que genera un JSON optimizado.
+### 1. Market Share (Tab Principal)
+- **Propósito**: Visualizar la cuota de mercado por marca y su evolución mensual.
+- **Lógica**: Utiliza la rutina `calcular_diferencia_tickets_gemini`. Filtra estrictamente por `status_busqueda = 'OK'` para asegurar que solo los datos validados afecten los porcentajes.
 
-1. Reemplaza el archivo `public/data.csv` con el nuevo reporte (debe mantener el mismo nombre).
-2. Procesa los datos localmente para ver los cambios:
-   ```bash
-   node process_csv.cjs
-   ```
-3. Verifica que la tabla y gráficos se vean bien en tu `localhost`.
+### 2. Puntos Compartidos (Intersection Analysis)
+- **Propósito**: Ver dónde coinciden marcas de NGR con competidores (ej. Food Courts).
+- **Funcionalidad única**: 
+    - **Agrupación**: Permite agrupar la data por Marca, Categoría (Fast Food, Pizza) o Propiedad (NGR vs Competencia).
+    - **Detail Panel**: Al clickear un punto, muestra qué tiendas específicas están compitiendo ahí con sus KPIs de transacciones promedio.
+- **Dato Crítico**: Cruza la data de competencia histórica con `ngrLocales` (datos internos) en tiempo real.
 
----
-
-## 🚀 Flujo de Publicación (CI/CD)
-
-**No necesitas desplegar manualmente a Firebase.** Todo está automatizado con GitHub Actions.
-
-### Para cambios menores:
-1. Haz tus cambios en el código (`src/App.jsx`, etc.) o actualiza el CSV.
-2. Sube a la rama principal:
-   ```bash
-   git add .
-   git commit -m "Descripción clara del cambio"
-   git push origin master
-   ```
-3. Al hacer el push, GitHub iniciará el "Action" automáticamente. En **2 minutos**, la web se actualizará sola.
-
-### Para cambios grandes:
-1. Crea una rama nueva: `git checkout -b mejora-grafico`.
-2. Sube la rama y abre un **Pull Request (PR)** en GitHub.
-3. El sistema te responderá en el PR con una **Preview URL** temporal para que Agus revise el cambio antes de pasarlo a producción.
+### 3. Estimaciones
+- **Propósito**: Comparar las predicciones de ventas históricas contra la realidad validada por auditoría.
+- **Alarmas inteligentes**:
+    - `Caja Nueva`: Marcada manualmente por usuarios para seguimiento.
+    - `Retorno Caja`: Detecta locales que no operaban hace 4+ meses y han regresado.
 
 ---
 
-## 🗂 Estructura del Proyecto
-- `src/App.jsx`: UI principal y lógica del Dashboard.
-- `process_csv.cjs`: Script en Node que limpia y agrupa la data del CSV.
-- `src/data.json`: El archivo que consume el frontend (se genera automáticamente).
-- `public/data.csv`: Tu fuente de verdad.
+## ⚙️ Desarrollo y Operación
+
+### 🛠 Configuración Local
+1.  `npm install`
+2.  `npm run dev` (El frontend apunta automáticamente al proxy de producción).
+
+### 🚀 Despliegue
+- **Frontend**: `firebase deploy --only hosting:ngr_dashboard`
+- **Backend**: Desplegado vía contenedor a Cloud Run.
 
 ---
 
-**Nota:** Si el despliegue falla, revisa la pestaña **Actions** en GitHub para ver el log de errores.
+## 🧠 Guía para el Programador (o Agente AI)
+
+### ⚠️ El "Gotcha" de las Fechas
+- **Filtros (UI)**: El estado `filters.month` usa un índice **0-11** (Enero = "0", Febrero = "1") para ser compatible con `new Date().getMonth()`.
+- **Datos (BigQuery/JSON)**: El campo `mes` en los registros es **1-12** (Enero = 1).
+- **Lógica de Cruce**: Siempre verificar si se requiere un `+1` o `-1` al comparar meses entre los filtros y los datos de NGR/Competencia. 
+
+### 🔄 Flujo de Datos en Puntos Compartidos
+La agregación ocurre en el cliente (`useMemo`) dentro de `PuntosCompartidosDashboard.jsx`. 
+- Se agrupa por el campo `punto_compartido` o `cc_nombre`.
+- Si `showNGR` está activo, se inyectan los registros de `ngrLocales` en la misma tubería de procesamiento, añadiendo el sufijo ` (NGR)` a la marca.
+
+### 🛠 Deduplicación
+Existe una lógica de limpieza de locales duplicados que prioriza registros con `codigo_tienda` si las transacciones son idénticas, para evitar ruido visual en los dashboards de detalle.
+
+---
+
+## 📈 Herramientas de Scripting
+El repositorio contiene varios scripts en Python (`load_historial_*.py`) usados para poblar BigQuery inicialmente con datos históricos de marcas específicas.
+
+---
+
+*Desarrollado para NGR Intelligence por el equipo de Advanced Agentic Coding.*

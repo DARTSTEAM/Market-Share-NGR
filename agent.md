@@ -1,18 +1,31 @@
-# Fundamental Rules for Market Share NGR
+# Guide for AI Agents (Antigravity/Developer)
 
-These rules define the data sources for the different tabs in the application and must be followed for any future modifications.
+## 🏗 System Overview
+- **Type**: Competitive Intelligence Dashboard.
+- **Backend**: Node.js Proxy on Cloud Run (fetching from BQ).
+- **Frontend**: React (Vite).
+- **Auth**: Google/Microsoft OAuth (managed in `App.jsx`).
 
-## 1. Market Share Tab
-- **Primary Source**: BigQuery routine `bigquery-388915.ngr.calcular_diferencia_tickets_gemini`.
-- **Filtering**: ONLY include records where `status_busqueda='OK'`.
-- **Scope**: All metrics (Transactions, Market Share %, Evolution) and tables in this tab must exclusively reflect processed data that passed the audit.
+## 📊 Data Mapping
+- **Competition**: Records with `is_ngr=false` or from `records` state.
+- **NGR**: Records with `is_ngr=true` or from `ngrLocales` state.
+- **PC Dashboard**: High complexity. Merges competition and NGR records based on `punto_compartido`.
 
-## 2. Análisis Competencias Tab
-- **Ticket/Amount Metrics**: Use `facturas_v2` dataset to report total business volume (Tickets Totales, Importe Total).
-- **Audit Metrics**: Use the full routine `calcular_diferencia_tickets_gemini` (including errors) for audit tracking:
-    - **Cajas Cerradas**: Total records filtered by specific period/filters.
-    - **Cajas con Error**: Records where `status_busqueda != 'OK'`.
-- **Tables**: Should show full routine data to allow managers to identify and fix specific store/POS errors.
+## ⏱️ Technical Constraints (The "Traps")
+1. **Month Offsets**:
+   - `filters.month` in UI state is **0-indexed string** ("0" for Jan).
+   - Data records (mes) are **1-indexed numbers/strings** (1 for Jan).
+   - Logic at `App.jsx` handles this with `parseInt(rec.mes) - 1`.
+   - Logic at `PuntosCompartidosDashboard.jsx` handles this with `(parseInt(filters.month) + 1)`.
+   - **DO NOT** change this without reviewing both files, as they are currently in sync.
 
-## 3. Tickets Tab
-- **Source**: Directly reflects `facturas_v2` for raw invoice auditing and consistency checking against the routine data.
+2. **NGR Labels**:
+   - For internal differentiation in Puntos Compartidos, NGR brands are suffixed with ` (NGR)`.
+
+3. **Aggregation Logic**:
+   - Summary cards must match Detail panel. Always use the central `pcData` or `ngrByPC` grouping logic in `PuntosCompartidosDashboard.jsx`.
+
+## 🚀 Deployment
+- Frontend: `firebase deploy --only hosting:ngr_dashboard`
+- BigQuery Project: `bigquery-388915`
+- Dataset: `ngr`
