@@ -975,13 +975,24 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         if (filterPreset !== 'all') {
             const preset = PC_PRESETS.find(p => p.value === filterPreset);
             if (preset) {
-                data = data.filter(p => 
-                    p.byComp.some(c => preset.brands.includes(getBrandId(c.name)))
-                ).map(p => ({
-                    ...p,
-                    byComp: p.byComp.filter(c => preset.brands.includes(getBrandId(c.name))),
-                    locales: p.locales.filter(l => preset.brands.includes(getBrandId(l.competidor)))
-                }));
+                data = data
+                    .map(p => {
+                        // 1. Filter components and locales to ONLY those in the preset
+                        const filteredByComp = p.byComp.filter(c => preset.brands.includes(getBrandId(c.name)));
+                        const filteredLocales = p.locales.filter(l => preset.brands.includes(getBrandId(l.competidor)));
+                        
+                        // 2. Count unique brand IDs present in this PC that are part of the preset
+                        const presentBrandIds = new Set(filteredByComp.map(c => getBrandId(c.name)).filter(Boolean));
+                        
+                        return {
+                            ...p,
+                            byComp: filteredByComp,
+                            locales: filteredLocales,
+                            presetBrandCount: presentBrandIds.size
+                        };
+                    })
+                    // 3. Only keep PCs that have at least 2 distinct brands from the preset
+                    .filter(p => p.presetBrandCount >= 2);
             }
         }
 

@@ -695,20 +695,23 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
   const tieneGaps = gapCount > 0;
   const tienePendientes = pendienteCount > 0;
 
-  // % de estimación: celdas APROBADO o PENDIENTE / total de celdas con dato en período de rutina
+  // % de estimación: celdas APROBADO o PENDIENTE en los últimos 3 meses / total de slots (incl. caja 99)
   const { estCount, totalCount } = useMemo(() => {
     let est = 0, total = 0;
-    local.cajas.forEach(c => {
-      meses.forEach(mk => {
+    const last3 = meses.slice(-3);
+    if (last3.length === 0) return { estCount: 0, totalCount: 0 };
+
+    const boxes = Array.from(new Set([...(local.cajas || []).map(String), "99"]));
+    boxes.forEach(c => {
+      if (isCajaSilenciada(c)) return;
+      total += last3.length;
+      last3.forEach(mk => {
         const cell = local.celdas[`${c}||${mk}`];
-        if (!cell) return;
-        if (cell.tipo === 'GAP') return;
-        total += 1;
-        if (cell.tipo === 'APROBADO' || cell.tipo === 'PENDIENTE') est += 1;
+        if (cell && (cell.tipo === 'APROBADO' || cell.tipo === 'PENDIENTE')) est += 1;
       });
     });
     return { estCount: est, totalCount: total };
-  }, [local.celdas, local.cajas, meses]);
+  }, [local.celdas, local.cajas, meses, cajaStatusMap]);
   const estPct = totalCount > 0 ? Math.round((estCount / totalCount) * 100) : null;
 
   // Para NO_CAJA_DETAIL: celda editable
@@ -864,9 +867,9 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
               transition={{ duration: 0.15 }}
             >
               {/* colSpan = Local + Marca + n_meses + Cj + G */}
-              <td colSpan={2 + meses.length + 2} className="p-0 border-t-2 border-accent-orange/20">
+              <td colSpan={2 + meses.length} className="p-0 border-t-2 border-accent-orange/20">
                 <div className="overflow-x-auto bg-slate-50/70 dark:bg-white/[0.015]">
-                  <table className="w-full text-xs" style={{ minWidth: `${100 + sortedCajas.length * 90 + 80}px` }}>
+                  <table className="w-full text-xs" style={{ minWidth: `${100 + sortedCajas.length * 90}px` }}>
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-white/[0.03]">
                         {/* Mes column */}
@@ -897,11 +900,6 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
                             </th>
                           );
                         })}
-                        {/* Total column */}
-                        <th className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-slate-600 dark:text-white/40"
-                            style={{ minWidth: 80 }}>
-                          Total
-                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -969,31 +967,6 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
                                 />
                               );
                             })}
-                            {/* Total for month */}
-                            <Celda
-                              key={`${mk}-total`}
-                              cell={{
-                                key: `${local.codigo_tienda}||99||${mk}`,
-                                codigo_tienda: local.codigo_tienda,
-                                local: local.local,
-                                competidor: local.competidor,
-                                caja: 99,
-                                mes: parseInt(mes),
-                                ano: parseInt(ano),
-                                tipo: totalesPorMes[mk] > 0 ? (local.celdas[`99||${mk}`]?.tipo || 'REAL') : 'GAP',
-                                tasa: totalesPorMes[mk] > 0 ? totalesPorMes[mk] : null,
-                              }}
-                              puntos={local.cajas.flatMap(c => getPuntosCaja(c))}
-                              onSave={onSave}
-                              pendingEdit={pendingEdit}
-                              onStartEdit={onStartEdit}
-                              onCancelEdit={onCancelEdit}
-                              pendingEditPos={pendingEditPos}
-                              isRevisada={!!revisadasMap[`${local.codigo_tienda}||99||${parseInt(mes)}||${parseInt(ano)}`]}
-                              onMarkRevisada={onMarkRevisada}
-                              local={local}
-                              meses={fullMeses}
-                            />
                           </tr>
                         );
                       })}
@@ -1143,10 +1116,26 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
     }, 0);
   }, [matrix, meses, cajaStatusMap]);
 
-  const pctEstimacion = totalCeldas > 0
-    ? Math.round((totalAprobados + totalPendientes + (totalCeldas - totalGaps - totalAprobados - totalPendientes)) / totalCeldas * 100)
-    : 0;
-  // Más preciso: % de celdas que YA tienen algún dato (no GAP)
+  // % de estimación: celdas APROBADO o PENDIENTE en los últimos 3 meses / total de slots (incl. caja 99)
+  const pctEstimado3m = useMemo(() => {
+    const last3 = meses.slice(-3);
+    if (last3.length === 0) return 0;
+    let numerador = 0, denominador = 0;
+    matrix.forEach(local => {
+      const boxes = Array.from(new Set([...(local.cajas || []).map(String), "99"]));
+      boxes.forEach(c => {
+        if (isSilenciada(local.codigo_tienda, c)) return;
+        denominador += last3.length;
+        last3.forEach(mk => {
+          const cell = local.celdas[`${c}||${mk}`];
+          if (cell && (cell.tipo === 'APROBADO' || cell.tipo === 'PENDIENTE')) numerador++;
+        });
+      });
+    });
+    return denominador > 0 ? Math.round((numerador / denominador) * 100) : 0;
+  }, [matrix, meses, cajaStatusMap]);
+
+  // % de celdas que YA tienen algún dato (no GAP) en el período de rutina global
   const pctCubierto = totalCeldas > 0
     ? Math.round((totalCeldas - totalGaps) / totalCeldas * 100)
     : 0;
@@ -1882,19 +1871,18 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
           </button>
         ))}
 
-        {/* ── % Estimación cubierta ── */}
         <div className="pwa-card p-4 flex items-center gap-4">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400"><ShieldCheck size={18} /></div>
+          <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-400"><Database size={18} /></div>
           <div className="flex-1 min-w-0">
-            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">% Estimación</p>
-            <p className="text-xl font-black text-emerald-400 mt-0.5">
-              {loading ? '—' : `${pctCubierto}%`}
+            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">% Estimado (3m)</p>
+            <p className="text-xl font-black text-teal-400 mt-0.5">
+              {loading ? '—' : `${pctEstimado3m}%`}
             </p>
             {!loading && (
               <div className="mt-1.5 h-1 w-full rounded-full bg-slate-100 dark:bg-white/8 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-emerald-400 transition-all"
-                  style={{ width: `${pctCubierto}%` }}
+                  className="h-full rounded-full bg-teal-400 transition-all"
+                  style={{ width: `${pctEstimado3m}%` }}
                 />
               </div>
             )}
