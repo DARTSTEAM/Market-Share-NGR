@@ -8,7 +8,7 @@ import {
 
 const API = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
-  : 'https://ngr-proxy-server-gvxb4rjzvq-uc.a.run.app';
+  : 'https://ngr-proxy-server-966549276703.us-central1.run.app';
 
 // ── Config visual — todos los colores tienen variantes light + dark ───────────
 const EVENTO_CONFIG = {

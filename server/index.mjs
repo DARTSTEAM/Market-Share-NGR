@@ -353,15 +353,13 @@ app.get('/api/estimation-matrix', async (req, res) => {
             console.log('[/api/estimation-matrix] Building from BigQuery...');
             const CUTOFF = '2025-11-30'; // fin del historial
 
-            // 1. Datos reales (post-cutoff)
-            // Normalizar caja con REGEXP_EXTRACT para obtener solo el número
-            // (el TVF puede devolver '001', '1', 'Caja 1', o vacío)
+            // 1. Datos reales (post-cutoff) desde la TVF maestra
             const Q_REAL = `
                 SELECT
                     competidor,
                     REPLACE(codigo_tienda, ' ', '') AS codigo_tienda,
                     local,
-                    CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
+                    COALESCE(CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'(\d+)') AS INT64) AS STRING), caja) AS caja,
                     mes,
                     ano,
                     ROUND(AVG(COALESCE(CAST(promedio_transacciones_diarias AS FLOAT64), 0)), 1) AS tasa,
@@ -369,16 +367,16 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
                 WHERE status_busqueda IN ('OK', 'SIN_HISTORIAL')
                   AND DATE(fecha_y_hora_registro) > '${CUTOFF}'
-                  AND REGEXP_CONTAINS(caja, r'\\d')
                 GROUP BY 1,2,3,4,5,6
             `;
+
             // 2. Historial hasta NOVIEMBRE 2025 inclusive
             const Q_HIST = `
                 SELECT
                     h.competidor,
                     REPLACE(h.codigo_tienda, ' ', '') AS codigo_tienda,
                     h.local,
-                    CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'(\\d+)') AS INT64) AS STRING) AS caja_num,
+                    COALESCE(CAST(SAFE_CAST(REGEXP_EXTRACT(h.caja, r'(\d+)') AS INT64) AS STRING), h.caja) AS caja,
                     h.mes,
                     h.ano,
                     ROUND(h.trx_promedio, 1) AS tasa,
@@ -393,13 +391,13 @@ app.get('/api/estimation-matrix', async (req, res) => {
                     competidor,
                     REPLACE(codigo_tienda, ' ', '') AS codigo_tienda,
                     local,
-                    CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'^0*(\\d+)') AS INT64) AS STRING) AS caja,
+                    COALESCE(CAST(SAFE_CAST(REGEXP_EXTRACT(caja, r'(\d+)') AS INT64) AS STRING), caja) AS caja,
                     mes,
                     ano,
                     ROUND(trx_diarias, 1) AS tasa,
                     IF(aprobado, 'APROBADO', 'PENDIENTE') AS tipo_manual
                 FROM \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\`
-                WHERE caja IS NOT NULL AND REGEXP_CONTAINS(caja, r'\\d')
+                WHERE caja IS NOT NULL
             `;
             const runQ = async (q) => {
                 try {
@@ -416,43 +414,101 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 runQ(Q_REAL), runQ(Q_HIST), runQ(Q_EST)
             ]);
 
-            // Armar estructura plana
-            // Q_EST ahora devuelve APROBADO o PENDIENTE según el campo tipo_manual
-            // rowsMan ya no se usa (está integrado en Q_EST)
             const allRows = [
                 ...rowsReal.map(r => ({ ...r, tipo: 'REAL' })),
-                ...rowsHist.map(r => ({ ...r, caja: r.caja_num, tipo: 'HISTORIAL' })),
+                ...rowsHist.map(r => ({ ...r, tipo: 'HISTORIAL' })),
                 ...rowsEst.map(r => ({ ...r, tipo: r.tipo_manual || 'PENDIENTE', status_busqueda: 'OK' })),
             ];
+
+            // 0. Cajas configuradas (Filtro base y garante de existencia de locales)
+            const [cajasRows] = await bigquery.query({
+                query: `SELECT REPLACE(codigo_tienda, ' ', '') AS codigo_tienda, caja, local, competidor, status, manual
+                        FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
+                        WHERE status != 'DISCONTINUADA'`,
+            });
+
+            const normCT = (s) => {
+                let n = String(s || '').toUpperCase().replace(/\s+/g, '');
+                if (n.startsWith('KFC')) n = 'KF' + n.slice(3);
+                if (n.startsWith('PHUT')) n = 'PH' + n.slice(4);
+                return n;
+            };
+
+            const localMap = {}; // ct -> { ... }
+            const validCajasMap = {}; // ct -> Set of normalized caja IDs
+            
+            // Inicializar locales base desde cajas_config
+            for (const c of cajasRows) {
+                const ct = normCT(c.codigo_tienda);
+                if (!localMap[ct]) {
+                    localMap[ct] = {
+                        codigo_tienda: (c.codigo_tienda || '').replace(/\s+/g, ''), // Mantenemos el original sin espacios
+                        local:         c.local,
+                        competidor:    c.competidor,
+                        cajas:         new Set(),
+                        celdas:        {},
+                    };
+                }
+                let norm = String(c.caja || '').trim();
+                if (norm !== '__LOCAL__') {
+                    const m = norm.match(/\d+/);
+                    if (m) norm = String(parseInt(m[0], 10));
+                }
+                localMap[ct].cajas.add(norm);
+                if (!validCajasMap[ct]) validCajasMap[ct] = new Set();
+                validCajasMap[ct].add(norm);
+            }
 
             // Deduplicar: prioridad REAL > APROBADO > PENDIENTE > HISTORIAL
             const PRIO = { REAL: 5, APROBADO: 4, PENDIENTE: 3, HISTORIAL: 2 };
             const cellMap = {}; // `codigo_tienda||caja||ano-mm` → row
+
             for (const r of allRows) {
+                const ctOriginal = (r.codigo_tienda || '').replace(/\s+/g, '');
+                const ct = normCT(ctOriginal);
                 const ano = r.ano?.value ?? r.ano;
                 const mes = r.mes?.value ?? r.mes;
                 const mk = `${ano}-${String(mes).padStart(2,'0')}`;
-                const cajaStr = String(r.caja?.value ?? r.caja ?? '');
                 
-                // FILTRAR COLUMNA "TOTAL" (que aparecía por error en la UI)
-                if (!cajaStr || cajaStr.toLowerCase() === 'total') continue;
+                let cajaNorm = String(r.caja?.value ?? r.caja ?? '').trim();
+                if (cajaNorm !== '__LOCAL__') {
+                    const m = cajaNorm.match(/\d+/);
+                    if (m) cajaNorm = String(parseInt(m[0], 10));
+                }
+                
+                // Incluir todas las cajas presentes en los datos (reales/históricos)
+                // (Ya no filtramos por validCajasMap para no perder visibilidad)
 
-                const k = `${r.codigo_tienda}||${cajaStr}||${mk}`;
+                const k = `${ct}||${cajaNorm}||${mk}`;
                 if (!cellMap[k] || PRIO[r.tipo] > PRIO[cellMap[k].tipo]) {
-                    const tasa = parseFloat(r.tasa?.value ?? r.tasa ?? 0);
-                    cellMap[k] = {
+                    const row = {
                         key:           k,
-                        codigo_tienda: r.codigo_tienda,
-                        local:         r.local,
-                        competidor:    r.competidor,
-                        caja:          cajaStr,
+                        codigo_tienda: ctOriginal,
+                        local:         r.local || (localMap[ct]?.local),
+                        competidor:    r.competidor || (localMap[ct]?.competidor),
+                        caja:          cajaNorm,
                         mes:           parseInt(mes),
                         ano:           parseInt(ano),
                         mk,
-                        tasa,
+                        tasa:          parseFloat(r.tasa?.value ?? r.tasa ?? 0),
                         tipo:          r.tipo,
                         status_busqueda: r.status_busqueda || 'OK'
                     };
+                    cellMap[k] = row;
+                    
+                    // Asegurar que el local existe (autoconstrucción)
+                    if (!localMap[ct]) {
+                        localMap[ct] = {
+                            codigo_tienda: ctOriginal,
+                            local:         row.local,
+                            competidor:    row.competidor,
+                            cajas:         new Set(),
+                            celdas:        {},
+                        };
+                    }
+                    
+                    localMap[ct].cajas.add(cajaNorm);
+                    localMap[ct].celdas[`${cajaNorm}||${mk}`] = row;
                 }
             }
 
@@ -483,22 +539,7 @@ app.get('/api/estimation-matrix', async (req, res) => {
             }
 
             // Agrupar por local — ahora incluye toda la ventana histórica
-            const localMap = {};
-            for (const cell of Object.values(cellMap)) {
-                if (!mesesSorted.includes(cell.mk)) continue;
-                const lk = cell.codigo_tienda;
-                if (!localMap[lk]) {
-                    localMap[lk] = {
-                        codigo_tienda: cell.codigo_tienda,
-                        local:         cell.local,
-                        competidor:    cell.competidor,
-                        cajas:         new Set(),
-                        celdas:        {},
-                    };
-                }
-                localMap[lk].cajas.add(cell.caja);
-                localMap[lk].celdas[`${cell.caja}||${cell.mk}`] = cell;
-            }
+            // ── Agregación ya realizada arriba durante la carga ──
 
             // Calcular caída % por caja (mes actual vs mes anterior en la ventana)
             for (const local of Object.values(localMap)) {
@@ -575,76 +616,14 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 return parseInt(a) * 100 + parseInt(m) > CUTOFF_KEY;
             });
 
-            // ── Inject cajas from cajas_config that have no data yet ──────────────────
-            // Cajas con manual=true y sin datos reales → tipo 'CAJA_NUEVA' (filtrable)
-            // Cajas con manual=false y sin datos reales → tipo 'GAP' normal
-            try {
-                const [cajasRows] = await bigquery.query({
-                    query: `SELECT REPLACE(codigo_tienda, ' ', '') AS codigo_tienda, caja, local, competidor, status, manual
-                            FROM \`${PROJECT_ID}.${DATASET_ID}.cajas_config\`
-                            WHERE status != 'DISCONTINUADA'`,
+            // ── Re-sort cajas after collection ──────────────────
+            for (const local of Object.values(localMap)) {
+                local.cajas = Array.from(local.cajas).sort((a, b) => {
+                    const na = parseInt(a), nb = parseInt(b);
+                    if (isNaN(na)) return -1;
+                    if (isNaN(nb)) return 1;
+                    return na - nb;
                 });
-                for (const cfg of cajasRows) {
-                    const ct        = cfg.codigo_tienda;
-                    const caja      = String(cfg.caja);
-                    if (!caja || caja.toLowerCase() === 'total') continue;
-                    const tipoNueva = cfg.manual ? 'CAJA_NUEVA' : 'GAP';
-                    if (localMap[ct]) {
-                        const cajaSet = new Set(localMap[ct].cajas);
-                        if (!cajaSet.has(caja)) {
-                            localMap[ct].cajas.push(caja);
-                            for (const mk of mesesRutina) {
-                                const ck = `${caja}||${mk}`;
-                                if (!localMap[ct].celdas[ck]) {
-                                    const [ano, mes] = mk.split('-');
-                                    localMap[ct].celdas[ck] = {
-                                        key:           `${ct}||${caja}||${mk}`,
-                                        codigo_tienda: ct,
-                                        local:         localMap[ct].local,
-                                        competidor:    localMap[ct].competidor,
-                                        caja,
-                                        mes:           parseInt(mes),
-                                        ano:           parseInt(ano),
-                                        mk,
-                                        tasa:          null,
-                                        tipo:          tipoNueva,
-                                    };
-                                }
-                            }
-                        }
-                    } else if (cfg.local && cfg.competidor) {
-                        localMap[ct] = {
-                            codigo_tienda: ct,
-                            local:         cfg.local,
-                            competidor:    cfg.competidor,
-                            cajas:         [caja],
-                            celdas:        {},
-                        };
-                        for (const mk of mesesRutina) {
-                            const [ano, mes] = mk.split('-');
-                            localMap[ct].celdas[`${caja}||${mk}`] = {
-                                key:           `${ct}||${caja}||${mk}`,
-                                codigo_tienda: ct,
-                                local:         cfg.local,
-                                competidor:    cfg.competidor,
-                                caja,
-                                mes:           parseInt(mes),
-                                ano:           parseInt(ano),
-                                mk,
-                                tasa:          null,
-                                tipo:          tipoNueva,
-                            };
-                        }
-                    }
-                }
-                // Re-sort cajas after injection
-                for (const local of Object.values(localMap)) {
-                    if (Array.isArray(local.cajas)) {
-                        local.cajas = [...new Set(local.cajas)].sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
-                    }
-                }
-            } catch(e) {
-                console.warn('[estimation-matrix] cajas_config inject failed:', e.message.slice(0, 100));
             }
 
             // ── GAP detection: para cajas ya existentes sin datos en meses de rutina ──
@@ -771,13 +750,22 @@ app.post('/api/save-estimation', async (req, res) => {
                 VALUES (S.codigo_tienda, S.local, S.competidor, S.caja, S.mes, S.ano, S.trx_diarias, S.metodo, S.aprobado, S.usuario, S.usuario_nombre, CURRENT_TIMESTAMP())
         `;
         const aprobadoBool = aprobado === true || aprobado === 'true';
+
+        // Normalización de llaves para evitar duplicados por espacios o ceros
+        const ct_norm   = String(codigo_tienda || '').replace(/\s+/g, '');
+        let caja_norm   = String(caja || '').trim();
+        if (caja_norm !== '__LOCAL__') {
+            const m = caja_norm.match(/\d+/);
+            if (m) caja_norm = String(parseInt(m[0], 10));
+        }
+
         const [job] = await bigquery.createQueryJob({
             query: MERGE_Q,
             params: {
-                codigo_tienda,
+                codigo_tienda:  ct_norm,
                 local:          local || '',
                 competidor:     competidor || '',
-                caja:           String(caja),
+                caja:           caja_norm,
                 mes:            parseInt(mes),
                 ano:            parseInt(ano),
                 trx_diarias:    parseFloat(trx_diarias),
@@ -1087,6 +1075,13 @@ app.post('/api/cajas-config', async (req, res) => {
         return res.status(400).json({ error: `status debe ser uno de: ${validStatuses.join(', ')}` });
     }
     try {
+        const ct_norm = String(codigo_tienda || '').replace(/\s+/g, '');
+        let caja_norm = String(caja || '').trim();
+        if (caja_norm !== '__LOCAL__') {
+            const m = caja_norm.match(/\d+/);
+            if (m) caja_norm = String(parseInt(m[0], 10));
+        }
+
         const MERGE_Q = `
             MERGE \`${PROJECT_ID}.${DATASET_ID}.cajas_config\` T
             USING (SELECT
@@ -1098,7 +1093,8 @@ app.post('/api/cajas-config', async (req, res) => {
                 @notas         AS notas,
                 @usuario       AS usuario
             ) S
-            ON T.codigo_tienda = S.codigo_tienda AND T.caja = S.caja
+            ON (REPLACE(T.codigo_tienda, ' ', '') = S.codigo_tienda)
+               AND (CAST(SAFE_CAST(REGEXP_EXTRACT(T.caja, r'(\d+)') AS INT64) AS STRING) = S.caja OR T.caja = S.caja)
             WHEN MATCHED THEN UPDATE SET
                 status     = S.status,
                 notas      = S.notas,
@@ -1109,14 +1105,18 @@ app.post('/api/cajas-config', async (req, res) => {
                 updated_at = CURRENT_TIMESTAMP()
             WHEN NOT MATCHED THEN INSERT
                 (codigo_tienda, caja, local, competidor, status, notas, usuario, manual, updated_at)
-                VALUES (S.codigo_tienda, S.caja, S.local, S.competidor, S.status, S.notas, S.usuario, FALSE, CURRENT_TIMESTAMP())
+                VALUES (S.codigo_tienda, S.caja, S.local, S.competidor, S.status, S.notas, S.usuario, ${manual !== undefined ? String(Boolean(manual)) : 'FALSE'}, CURRENT_TIMESTAMP())
         `;
         const [job] = await bigquery.createQueryJob({
             query: MERGE_Q,
             params: {
-                codigo_tienda, caja: String(caja),
-                local: local || '', competidor: competidor || '',
-                status, notas: notas || '', usuario: usuario || 'dashboard',
+                codigo_tienda: ct_norm, 
+                caja:          caja_norm,
+                local:         local || '', 
+                competidor:    competidor || '',
+                status, 
+                notas:         notas || '', 
+                usuario:       usuario || 'dashboard',
             },
         });
         await job.getQueryResults();

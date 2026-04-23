@@ -35,7 +35,7 @@ const COMPETITOR_TO_CATEGORY = {
 
 const API_BASE_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
-  : 'https://ngr-proxy-server-gvxb4rjzvq-uc.a.run.app';
+  : 'https://ngr-proxy-server-966549276703.us-central1.run.app';
 
 // Corte temporal: HISTORIAL cubre hasta este mes inclusive; OK rutina desde el mes siguiente
 // Formato: { ano: number, mes: number }  → Nov 2025 (HISTORIAL: 2022–Nov 2025 | OK: Dic 2025+)
@@ -495,7 +495,7 @@ export default function App({ user, onSignOut }) {
 
   // NGR own-store data (loaded once from /api/ngr-locales)
   const [ngrLocales, setNgrLocales] = useState([]);
-  const [includeNGR, setIncludeNGR] = useState(false);
+  const [includeNGR] = useState(true);
 
   // Log de login (se ejecuta una vez cuando el usuario está disponible)
   const loginLoggedRef = useRef(false);
@@ -1661,7 +1661,6 @@ export default function App({ user, onSignOut }) {
                 filteredTableData={sortedTableDataRoutine}
                 allRecords={marketShareRecords}
                 includeNGR={includeNGR}
-                onToggleNGR={() => setIncludeNGR(v => !v)}
               />
             )
           ) : (

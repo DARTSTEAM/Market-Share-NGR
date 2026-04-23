@@ -137,23 +137,6 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
     return (
         <div className="space-y-12 animate-in fade-in duration-700">
 
-            {/* NGR Toggle — Pill at top */}
-            <div className="flex items-center justify-between">
-                <div />
-                <button
-                    onClick={onToggleNGR}
-                    title={includeNGR ? 'Click para ver solo competencia' : 'Click para incluir locales propios NGR en el share'}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest border-2 transition-all duration-200 ${
-                        includeNGR
-                            ? 'bg-orange-500/20 border-orange-400 text-orange-400 shadow-[0_0_16px_rgba(249,115,22,0.25)]'
-                            : 'bg-slate-100 dark:bg-white/[0.06] border-slate-300 dark:border-white/20 text-slate-500 dark:text-white/50 hover:border-orange-400/50 hover:text-orange-400'
-                    }`}
-                >
-                    <span className={`w-2.5 h-2.5 rounded-full transition-all ${includeNGR ? 'bg-orange-400' : 'bg-slate-300 dark:bg-white/20'}`} />
-                    {includeNGR ? '★ Locales NGR incluidos en share' : '⊕ Incluir locales propios NGR'}
-                </button>
-            </div>
-
             {/* KPI Section */}
             <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <KPICard

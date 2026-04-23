@@ -7,7 +7,7 @@ import {
 
 const API = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
-  : 'https://ngr-proxy-server-gvxb4rjzvq-uc.a.run.app';
+  : 'https://ngr-proxy-server-966549276703.us-central1.run.app';
 
 const COMPETITOR_COLORS = {
   'KFC':           'bg-red-500/20 text-red-400 border-red-500/30',

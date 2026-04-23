@@ -12,6 +12,38 @@ import {
 } from 'recharts';
 import CustomSelect from './common/CustomSelect';
 
+const PC_PRESETS = [
+    { value: 'all', label: 'All (Todos los locales)' },
+    { value: 'PJ+PH+DMN', label: 'PJ+PH+DMN', brands: ['PJ', 'PH', 'DMN'] },
+    { value: 'PJ+DMN+LC', label: 'PJ+DMN+LC', brands: ['PJ', 'DMN', 'LC'] },
+    { value: 'PJ+PH+LC', label: 'PJ+PH+LC', brands: ['PJ', 'PH', 'LC'] },
+    { value: 'PJ+LC', label: 'PJ+LC', brands: ['PJ', 'LC'] },
+    { value: 'PJ+PH', label: 'PJ+PH', brands: ['PJ', 'PH'] },
+    { value: 'BB+BK', label: 'BB+BK', brands: ['BB', 'BK'] },
+    { value: 'BB+MCD', label: 'BB+MCD', brands: ['BB', 'MCD'] },
+];
+
+const BRAND_TO_ID = {
+    'papa johns': 'PJ',
+    'papa john': 'PJ',
+    'pizza hut': 'PH',
+    'dominos': 'DMN',
+    'domino\'s': 'DMN',
+    'little caesars': 'LC',
+    'bembos': 'BB',
+    'burger king': 'BK',
+    'mcdonalds': 'MCD',
+    'mcdonald\'s': 'MCD'
+};
+
+const getBrandId = (name) => {
+    const clean = norm(name).replace('(ngr)', '').trim();
+    for (const [key, id] of Object.entries(BRAND_TO_ID)) {
+        if (clean.includes(key) || key.includes(clean)) return id;
+    }
+    return null;
+};
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 const PALETTE = ['#ff5e00', '#0070f3', '#7c3aed', '#00b4a0', '#f59e0b', '#e11d48', '#0ea5e9', '#84cc16'];
 const MONTH_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -296,7 +328,7 @@ const ShareEvolutionChart = ({ monthData, competitors }) => {
 const norm = s => String(s || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
 
 // ─── Detail Modal ─────────────────────────────────────────────────────────────
-const PCDetailPanel = ({ pc: rawPc, evolutionData: rawEvolutionData, onClose, allPCs, currentIndex, onNavigate, ngrByPC = {}, showNGR }) => {
+const PCDetailPanel = ({ pc: rawPc, evolutionData: rawEvolutionData, onClose, allPCs, currentIndex, onNavigate, ngrByPC = {} }) => {
     if (!rawPc) return null;
 
     // Normalize and find NGR records for this PC
@@ -304,7 +336,7 @@ const PCDetailPanel = ({ pc: rawPc, evolutionData: rawEvolutionData, onClose, al
 
     // MERGE NGR into the current PC data for the charts
     const pc = useMemo(() => {
-        if (!showNGR || ngrForPC.length === 0) return rawPc;
+        if (ngrForPC.length === 0) return rawPc;
         
         const mergedByComp = [...rawPc.byComp];
         const mergedLocales = [...rawPc.locales];
@@ -334,7 +366,7 @@ const PCDetailPanel = ({ pc: rawPc, evolutionData: rawEvolutionData, onClose, al
             byComp: mergedByComp.sort((a, b) => b.prom - a.prom),
             locales: mergedLocales.sort((a, b) => b.prom - a.prom)
         };
-    }, [rawPc, ngrForPC, showNGR]);
+    }, [rawPc, ngrForPC]);
 
     // Main evolution data as provided by parent (now includes NGR history)
     const evolutionData = rawEvolutionData;
@@ -718,13 +750,12 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
     const [selectedPC, setSelectedPC] = useState(null);
     const [filterTipo, setFilterTipo] = useState('all');
     const [filterCadena, setFilterCadena] = useState('all');
-    const [filterComp, setFilterComp] = useState([]); // Array for multi-select
-    const [filterCat, setFilterCat] = useState('all'); // New category filter
-    const [groupMode, setGroupMode] = useState('brand'); // 'brand' | 'category' | 'ownership'
+    const [filterPreset, setFilterPreset] = useState('all'); // New: Comparativas predefinidas
+    const [filterCat, setFilterCat] = useState('all'); 
+    const [groupMode, setGroupMode] = useState('brand'); 
     const [sortMode, setSortMode] = useState('prom');
     const [visibleCount, setVisibleCount] = useState(8);
-    const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
-    const [showNGR, setShowNGR] = useState(false); // New: Mostrar marcas NGR propias
+    const [viewMode, setViewMode] = useState('cards'); 
 
     const ngrByPC = useMemo(() => {
         const map = {};
@@ -760,37 +791,35 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         // Process competition records and NGR records together
         const dataToProcess = [...allRecords];
         
-        if (showNGR) {
-            const targetMonth = filters?.month && filters.month !== 'all' ? (parseInt(filters.month) + 1) : null;
-            const targetYear = filters?.year && filters.year !== 'all' ? parseInt(filters.year) : null;
+        const targetMonth = filters?.month && filters.month !== 'all' ? (parseInt(filters.month) + 1) : null;
+        const targetYear = filters?.year && filters.year !== 'all' ? parseInt(filters.year) : null;
 
-            ngrLocales.forEach(r => {
-                // Strict date matching: if a filter is set, record must have matching date info
-                const rMonth = r.mes ? parseInt(r.mes) : null;
-                const rYear = r.ano ? parseInt(r.ano) : null;
+        ngrLocales.forEach(r => {
+            // Strict date matching: if a filter is set, record must have matching date info
+            const rMonth = r.mes ? parseInt(r.mes) : null;
+            const rYear = r.ano ? parseInt(r.ano) : null;
 
-                if (targetMonth && rMonth !== targetMonth) return;
-                if (targetYear && rYear !== targetYear) return;
+            if (targetMonth && rMonth !== targetMonth) return;
+            if (targetYear && rYear !== targetYear) return;
 
-                let pcName = r.punto_compartido;
-                if (!pcName || pcName === 'SI' || pcName === 'true') {
-                    pcName = r.cc_nombre || r.local;
-                }
-                
-                dataToProcess.push({
-                    punto_compartido: pcName,
-                    cc_punto_compartido: r.cc_punto_compartido || r.cc_nombre,
-                    competidor: r.marca + ' (NGR)',
-                    local: r.local,
-                    codigo_tienda: r.store_num || r.codigo_tienda || r.cod_tienda,
-                    transacciones: (parseFloat(r.trx_promedio) || 0) * 30,
-                    promedio: parseFloat(r.trx_promedio) || 0,
-                    mes: r.mes || targetMonth || 12,
-                    ano: r.ano || targetYear || 2025,
-                    status_busqueda: 'OK'
-                });
+            let pcName = r.punto_compartido;
+            if (!pcName || pcName === 'SI' || pcName === 'true') {
+                pcName = r.cc_nombre || r.local;
+            }
+            
+            dataToProcess.push({
+                punto_compartido: pcName,
+                cc_punto_compartido: r.cc_punto_compartido || r.cc_nombre,
+                competidor: r.marca + ' (NGR)',
+                local: r.local,
+                codigo_tienda: r.store_num || r.codigo_tienda || r.cod_tienda,
+                transacciones: (parseFloat(r.trx_promedio) || 0) * 30,
+                promedio: parseFloat(r.trx_promedio) || 0,
+                mes: r.mes || targetMonth || 12,
+                ano: r.ano || targetYear || 2025,
+                status_busqueda: 'OK'
             });
-        }
+        });
 
         dataToProcess.forEach(rec => {
             if (!rec.punto_compartido) return;
@@ -876,14 +905,14 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                     })
                     .sort((a, b) => b.prom - a.prom),
             }))
-            .filter(pc => pc.byComp.length >= (showNGR ? 1 : 2));
-    }, [allRecords, ngrLocales, showNGR]);
+            .filter(pc => pc.byComp.length >= 1);
+    }, [allRecords, ngrLocales]);
 
     // ─── Evolution data (from evolutionRecords — always last 12 months) ───────
     const pcEvolutionMap = useMemo(() => {
         const source = [...(evolutionRecords || allRecords)];
         
-        if (showNGR && ngrLocales?.length) {
+        if (ngrLocales?.length) {
             ngrLocales.forEach(r => {
                 const pcName = (r.punto_compartido && r.punto_compartido !== 'SI' && r.punto_compartido !== 'true') 
                     ? r.punto_compartido 
@@ -911,7 +940,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
             map[pcKey][mk][comp] = (map[pcKey][mk][comp] || 0) + prom;
         });
         return map;
-    }, [evolutionRecords, allRecords, ngrLocales, showNGR]);
+    }, [evolutionRecords, allRecords, ngrLocales]);
 
     const catOptions = useMemo(() => {
         const allowed = ['Pollo Frito', 'Pizza', 'Hamburguesa'];
@@ -922,13 +951,9 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         ];
     }, []);
 
-    const compOptions = useMemo(() => {
-        let comps = [...new Set(pcData.flatMap(p => p.byComp.map(c => c.name)))].sort();
-        if (filterCat !== 'all') {
-            comps = comps.filter(c => getCategory(c) === filterCat);
-        }
-        return comps.map(v => ({ value: v, label: v }));
-    }, [pcData, filterCat]);
+    const presetOptions = useMemo(() => {
+        return PC_PRESETS.map(p => ({ value: p.value, label: p.label }));
+    }, []);
 
     const filteredPCs = useMemo(() => {
         let data = [...pcData];
@@ -946,15 +971,18 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 }));
         }
 
-        // Filter by multi-select competitors — Isolate selected brands
-        if (filterComp.length > 0) {
-            data = data.filter(p => 
-                filterComp.some(target => p.byComp.some(c => c.name === target))
-            ).map(p => ({
-                ...p,
-                byComp: p.byComp.filter(c => filterComp.includes(c.name)),
-                locales: p.locales.filter(l => filterComp.includes(l.competidor))
-            }));
+        // Filter by preset combinations — Isolate selected brand groups
+        if (filterPreset !== 'all') {
+            const preset = PC_PRESETS.find(p => p.value === filterPreset);
+            if (preset) {
+                data = data.filter(p => 
+                    p.byComp.some(c => preset.brands.includes(getBrandId(c.name)))
+                ).map(p => ({
+                    ...p,
+                    byComp: p.byComp.filter(c => preset.brands.includes(getBrandId(c.name))),
+                    locales: p.locales.filter(l => preset.brands.includes(getBrandId(l.competidor)))
+                }));
+            }
         }
 
         // Apply Grouping Transformation if active
@@ -987,9 +1015,9 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         else data.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
 
         return data;
-    }, [pcData, filterTipo, filterCadena, filterComp, filterCat, groupMode, sortMode]);
+    }, [pcData, filterTipo, filterCadena, filterPreset, filterCat, groupMode, sortMode]);
 
-    React.useEffect(() => { setVisibleCount(8); }, [filterTipo, filterCadena, filterComp, filterCat, sortMode, groupMode]);
+    React.useEffect(() => { setVisibleCount(8); }, [filterTipo, filterCadena, filterPreset, filterCat, sortMode, groupMode]);
 
     const cadenaOptions = useMemo(() => {
         const vals = [...new Set(pcData.map(p => p.grupos_cc).filter(Boolean))].sort();
@@ -1010,7 +1038,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         setSelectedPC(prev => prev?.nombre === pc.nombre ? null : pc);
     };
 
-    // Keep selectedPC in sync with updated data (e.g. when showNGR toggle changes)
+    // Keep selectedPC in sync with updated data
     useEffect(() => {
         if (selectedPC) {
             const updated = filteredPCs.find(p => p.nombre === selectedPC.nombre);
@@ -1046,22 +1074,6 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
 
                 {/* Filters + View Toggle */}
                 <section className="flex flex-col gap-4">
-                    {/* NGR Toggle — Pill at top */}
-                    <div className="flex items-center justify-between px-1">
-                        <div />
-                        <button
-                            onClick={() => setShowNGR(prev => !prev)}
-                            title={showNGR ? 'Click para ver solo competencia' : 'Click para incluir locales propios NGR'}
-                            className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest border-2 transition-all duration-200 ${
-                                showNGR
-                                    ? 'bg-orange-500/20 border-orange-400 text-orange-400 shadow-[0_0_16px_rgba(249,115,22,0.25)]'
-                                    : 'bg-slate-100 dark:bg-white/[0.06] border-slate-300 dark:border-white/20 text-slate-500 dark:text-white/50 hover:border-orange-400/50 hover:text-orange-400'
-                            }`}
-                        >
-                            <span className={`w-2.5 h-2.5 rounded-full transition-all ${showNGR ? 'bg-orange-400' : 'bg-slate-300 dark:bg-white/20'}`} />
-                            {showNGR ? '★ Marcas NGR incluidas' : '⊕ Incluir marcas NGR'}
-                        </button>
-                    </div>
 
                     <div className="pwa-card no-hover p-4 flex flex-wrap gap-4 items-end border-slate-200 dark:border-white/5">
                         <div className="space-y-1">
@@ -1076,8 +1088,8 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                         </div>
 
                         <div className="space-y-1">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Competidores</span>
-                            <CustomSelect selected={filterComp} onChange={setFilterComp} width="w-48" options={compOptions} multi searchable label="Seleccionar..." />
+                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Comparativa</span>
+                            <CustomSelect selected={filterPreset} onChange={setFilterPreset} width="w-48" options={presetOptions} label="Seleccionar..." />
                         </div>
 
                         <div className="space-y-1">
@@ -1237,7 +1249,6 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                         currentIndex={filteredPCs.findIndex(p => p.nombre === selectedPC.nombre)}
                         onNavigate={(idx) => setSelectedPC(filteredPCs[idx])}
                         ngrByPC={ngrByPC}
-                        showNGR={showNGR}
                     />
                 )}
             </AnimatePresence>

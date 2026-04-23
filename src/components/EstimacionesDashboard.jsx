@@ -11,7 +11,7 @@ import {
 
 const API = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
-  : 'https://ngr-proxy-server-gvxb4rjzvq-uc.a.run.app';
+  : 'https://ngr-proxy-server-966549276703.us-central1.run.app';
 
 const MESES = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
                'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -19,7 +19,7 @@ const MESES = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
 const TIPO_CONFIG = {
   REAL:     { dot: 'bg-emerald-400', cell: 'bg-emerald-50   dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', label: 'Real',             icon: Wifi },
   HISTORIAL:{ dot: 'bg-slate-400',   cell: 'bg-slate-100    dark:bg-white/[0.06]',   text: 'text-slate-600   dark:text-white/70',    badge: 'bg-slate-500/15  text-slate-400  border-slate-500/30',  label: 'Historial',        icon: Database },
-  APROBADO: { dot: 'bg-teal-400',    cell: 'bg-teal-50      dark:bg-teal-500/10',    text: 'text-teal-700    dark:text-teal-300',    badge: 'bg-teal-500/15   text-teal-400   border-teal-500/30',   label: 'Aprobado',         icon: ShieldCheck },
+  APROBADO: { dot: 'bg-sky-400',     cell: 'bg-sky-50       dark:bg-sky-500/10',     text: 'text-sky-700     dark:text-sky-300',     badge: 'bg-sky-500/15    text-sky-400    border-sky-500/30',    label: 'Aprobado',         icon: ShieldCheck },
   PENDIENTE:{ dot: 'bg-amber-400',   cell: 'bg-amber-50     dark:bg-amber-500/10',   text: 'text-amber-700   dark:text-amber-300',   badge: 'bg-amber-500/15  text-amber-400  border-amber-500/30',  label: 'Pend. Aprobación', icon: Clock },
   GAP:      { dot: 'bg-red-400',     cell: '',                                        text: '',                                       badge: 'bg-red-500/15    text-red-400    border-red-500/30',    label: 'Gap',              icon: AlertTriangle },
 };
@@ -276,11 +276,11 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit, pendingEditPos, local, 
           <button
             onClick={() => setAprobado(!aprobado)}
             className={`w-full flex items-center justify-between p-2.5 rounded-xl border transition-all ${
-              aprobado ? 'bg-teal-500/10 border-teal-500/20 text-teal-600' : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400'
+              aprobado ? 'bg-sky-500/10 border-sky-500/20 text-sky-600' : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400'
             }`}
           >
             <div className="flex items-center gap-2">
-              <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition-all ${aprobado ? 'bg-teal-500 border-teal-500' : 'border-slate-300 dark:border-white/10'}`}>
+              <div className={`w-3.5 h-3.5 rounded flex items-center justify-center border transition-all ${aprobado ? 'bg-sky-500 border-sky-500' : 'border-slate-300 dark:border-white/10'}`}>
                 {aprobado && <Check size={10} className="text-white" strokeWidth={4} />}
               </div>
               <span className="text-[9px] font-black uppercase">Aprobar ahora</span>
@@ -294,7 +294,7 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit, pendingEditPos, local, 
               onClick={handleSave}
               disabled={saving || !valido}
               className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-40 transition-all ${
-                aprobado ? 'bg-teal-500 hover:bg-teal-600' : 'bg-accent-orange hover:bg-orange-600'
+                aprobado ? 'bg-sky-500 hover:bg-sky-600' : 'bg-accent-orange hover:bg-orange-600'
               }`}
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
@@ -462,7 +462,8 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
   const cfg = TIPO_CONFIG[cell.tipo] || TIPO_CONFIG.REAL;
 
   // ── Alarma por caída + estado revisado ──
-  const esCaidaAlarm = cell.caida_pct != null && cell.caida_pct <= -20;
+  // Alarma por caída (se suprime si la celda ya es un APROBADO manual)
+  const esCaidaAlarm = cell.caida_pct != null && cell.caida_pct <= -20 && cell.tipo !== 'APROBADO';
   const revisada = isRevisada && esCaidaAlarm;
 
   return (
@@ -594,7 +595,7 @@ function DeleteCajaButton({ cfg, user, onDeleted, onError }) {
               <div>
                 <p className="text-[11px] font-black uppercase tracking-widest text-red-600 dark:text-red-400">Eliminar caja</p>
                 <p className="text-[13px] font-black text-slate-800 dark:text-white mt-0.5">
-                  {cfg.local || cfg.codigo_tienda} · Caja {cfg.caja}
+                  {cfg.local || cfg.codigo_tienda} · {String(cfg.caja).toLowerCase().includes('caja') ? cfg.caja : `Caja ${cfg.caja}`}
                 </p>
               </div>
             </div>
@@ -882,7 +883,7 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
                                 className="px-3 py-2 text-right text-[8px] font-black uppercase tracking-widest text-slate-400"
                                 style={{ minWidth: 88 }}>
                               <div className="flex items-center justify-end gap-1">
-                                <span>Caja {caja}</span>
+                                <span>{String(caja).toLowerCase().includes('caja') ? caja : `Caja ${caja}`}</span>
                                 {/* Bell toggle inside header */}
                                 {onToggleCaja && (
                                   <button
@@ -1741,7 +1742,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
 
                               {/* Caja num */}
                               <p className="text-[11px] font-black text-slate-600 dark:text-white/60">
-                                Caja {cfg.caja}
+                                {String(cfg.caja).toLowerCase().includes('caja') ? cfg.caja : `Caja ${cfg.caja}`}
                               </p>
 
                               {/* Notas + usuario */}
