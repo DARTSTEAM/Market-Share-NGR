@@ -49,7 +49,7 @@ const SSTXDashboard = ({ records, filters }) => {
 
     // Normalización
     const normalizeBrand = (name) => {
-      let b = (name || '').trim().toUpperCase();
+      let b = String(name || '').trim().toUpperCase();
       if (b.includes('LITTLE') && b.includes('CEASAR')) return 'LITTLE CAESARS';
       if (b === 'MCD' || b.includes('MCDONAL')) return 'MCDONALDS';
       return b;
@@ -60,12 +60,13 @@ const SSTXDashboard = ({ records, filters }) => {
       if (!recordInScope(r)) return;
 
       // 2. Global Filters (Except date)
-      if (filters.competitor !== 'all' && r.competidor !== filters.competitor) return;
-      if (filters.category !== 'all' && COMPETITOR_TO_CATEGORY[r.competidor] !== filters.category) return;
-      if (filters.region !== 'all' && r.region !== filters.region) return;
-      if (filters.distrito !== 'all' && r.distrito !== filters.distrito) return;
-      if (filters.codigoTienda !== 'all' && r.codigo_tienda !== filters.codigoTienda) return;
-      if (filters.local !== 'all' && r.local !== filters.local) return;
+      if (filters.competitor.length > 0 && !filters.competitor.includes(r.competidor)) return;
+      if (filters.category.length > 0 && !filters.category.includes(COMPETITOR_TO_CATEGORY[r.competidor])) return;
+      if (filters.region.length > 0 && !filters.region.includes(r.region)) return;
+      if (filters.distrito.length > 0 && !filters.distrito.includes(r.distrito)) return;
+      if (filters.codigoTienda.length > 0 && !filters.codigoTienda.includes(r.codigo_tienda)) return;
+      if (filters.local.length > 0 && !filters.local.includes(r.local)) return;
+      if (filters.zona && filters.zona.length > 0 && !filters.zona.includes(r.zona)) return;
 
       const yr = parseInt(r.ano);
       const ms = parseInt(r.mes);
@@ -77,9 +78,7 @@ const SSTXDashboard = ({ records, filters }) => {
       brandNames.add(brand);
 
       if (!rawData[yr][ms]) rawData[yr][ms] = {};
-      const storeCodeRaw = (r.codigo_tienda || r.local || '').trim().toUpperCase();
-      const storeKey = `${brand}||${storeCodeRaw}`;
-      
+      const storeKey = `${r.local}||${r.caja ?? r.codigo_tienda ?? ''}`;
       if (!rawData[yr][ms][storeKey]) {
         rawData[yr][ms][storeKey] = { brand, name: r.local, code: r.codigo_tienda, sales: 0 };
       }

@@ -44,7 +44,7 @@ const BRAND_COLORS = {
 // Find best brand color by partial-matching the competitor name
 const getBrandColor = (name, fallbackIdx = 0) => {
     if (!name) return COMPETITOR_COLORS[fallbackIdx % COMPETITOR_COLORS.length];
-    const lower = name.toLowerCase().trim();
+    const lower = String(name || '').toLowerCase().trim();
     for (const [brand, color] of Object.entries(BRAND_COLORS)) {
         if (lower.includes(brand)) return color;
     }
@@ -125,7 +125,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
     const [selectedCompetitors, setSelectedCompetitors] = useState([]);
     const [filterCompetidor, setFilterCompetidor] = useState('all');
     const [filterCajaMes, setFilterCajaMes] = useState('all');
-    const [filterYear, setFilterYear] = useState('all');
+    const [filterYear, setFilterYear] = useState([]);
     const [sortCaja, setSortCaja] = useState('competidor_asc');
     const [evolucionMetric, setEvolucionMetric] = useState('trx_avg');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
@@ -264,7 +264,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
             if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF) return false;
             if (r.status_busqueda === 'OK'        && key <= CUTOFF) return false;
             if (r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL') return false;
-            if (filterYear !== 'all' && parseInt(r.ano) !== parseInt(filterYear)) return false;
+            if (filterYear.length > 0 && !filterYear.includes(String(r.ano))) return false;
             return r.mes && r.ano &&
                 selectedCategories.includes(competitorToCategory[r.competidor]) &&
                 (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor));
@@ -327,7 +327,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
                     const CUTOFF = 202511;
                     if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF) return false;
                     if (r.status_busqueda === 'OK'        && key <= CUTOFF) return false;
-                    if (filterYear !== 'all' && parseInt(r.ano) !== parseInt(filterYear)) return false;
+                    if (filterYear.length > 0 && !filterYear.includes(String(r.ano))) return false;
                     return (r.status_busqueda === 'OK' || r.status_busqueda === 'HISTORIAL')
                         && r.mes && r.ano && selectedCategories.includes(competitorToCategory[r.competidor]);
                 })
@@ -338,7 +338,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
     }, [records, selectedCategories, filterYear, competitorToCategory]);
 
     // Reset competitor filter when category changes
-    React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); setFilterYear('all'); }, [selectedCategories]);
+    React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); setFilterYear([]); }, [selectedCategories]);
 
     // ── Local pivot: (competidor, local) × month ──────────────────────
     const { cajaRows, cajaMonths } = useMemo(() => {
@@ -350,7 +350,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
             if (r.status_busqueda === 'OK'        && key <= CUTOFF2) return false;
             if (isEst                             && key <= CUTOFF2) return false; // estimados solo post-cutoff
             if (!isEst && r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL') return false;
-            if (filterYear !== 'all' && parseInt(r.ano) !== parseInt(filterYear)) return false;
+            if (filterYear.length > 0 && !filterYear.includes(String(r.ano))) return false;
             return r.mes && r.ano && r.local &&
                 selectedCategories.includes(competitorToCategory[r.competidor]) &&
                 (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor)) &&
@@ -683,9 +683,9 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Año:</span>
                     <div className="flex flex-wrap gap-1">
                         <button
-                            onClick={() => setFilterYear('all')}
+                            onClick={() => setFilterYear([])}
                             className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
-                                filterYear === 'all'
+                                filterYear.length === 0
                                     ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
                                     : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
                             }`}
@@ -693,9 +693,11 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
                         {availableYears.map(y => (
                             <button
                                 key={y}
-                                onClick={() => setFilterYear(String(y))}
+                                onClick={() => setFilterYear(prev => 
+                                    prev.includes(String(y)) ? prev.filter(v => v !== String(y)) : [...prev, String(y)]
+                                )}
                                 className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
-                                    filterYear === String(y)
+                                    filterYear.includes(String(y))
                                         ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
                                         : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
                                 }`}

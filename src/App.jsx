@@ -35,7 +35,7 @@ const COMPETITOR_TO_CATEGORY = {
 
 const API_BASE_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
-  : 'https://ngr-proxy-server-966549276703.us-central1.run.app';
+  : 'https://ngr-proxy-server-gvxb4rjzvq-uc.a.run.app';
 
 // Corte temporal: HISTORIAL cubre hasta este mes inclusive; OK rutina desde el mes siguiente
 // Formato: { ano: number, mes: number }  → Nov 2025 (HISTORIAL: 2022–Nov 2025 | OK: Dic 2025+)
@@ -531,8 +531,8 @@ export default function App({ user, onSignOut }) {
             // Normalización para evitar duplicados como "KFC07" y "KFC 07"
             const normalized = data.records.map(r => ({
               ...r,
-              codigo_tienda: (r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
-              local: (r.local || '').trim().toUpperCase()
+              codigo_tienda: String(r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
+              local: String(r.local || '').trim().toUpperCase()
             }));
             setRecords(normalized);
           }
@@ -573,8 +573,8 @@ export default function App({ user, onSignOut }) {
           if (fresh.records) {
             const normalized = fresh.records.map(r => ({
               ...r,
-              codigo_tienda: (r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
-              local: (r.local || '').trim().toUpperCase()
+              codigo_tienda: String(r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
+              local: String(r.local || '').trim().toUpperCase()
             }));
             setRecords(normalized);
           }
@@ -703,38 +703,32 @@ export default function App({ user, onSignOut }) {
 
   // Filter state
   const [filters, setFilters] = useState({
-    month: 'all',
-    year: 'all',
-    competitor: 'all',
-    local: 'all',
-    codigoTienda: 'all',
-    category: 'all',
-    channel: 'all',
-    region: 'all',
-    distrito: 'all'
+    month: [],
+    year: [],
+    competitor: [],
+    local: [],
+    codigoTienda: [],
+    category: [],
+    channel: [],
+    region: [],
+    distrito: [],
+    zona: []
   });
 
   // Derived Options for FilterBar
   const monthOptions = useMemo(() => {
     const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-    return [
-      { value: 'all', label: 'Todos los Meses' },
-      ...monthsArr.map(m => ({ value: m.toString(), label: months[m] }))
-    ];
+    return monthsArr.map(m => ({ value: m.toString(), label: months[m] }));
   }, [monthsArr]);
 
   const yearOptions = useMemo(() => {
-    return [
-      { value: 'all', label: 'Todos los Años' },
-      ...yearsArr.map(y => ({ value: y.toString(), label: y.toString() }))
-    ];
+    return yearsArr.map(y => ({ value: y.toString(), label: y.toString() }));
   }, [yearsArr]);
 
   const competitorOptions = useMemo(() => {
-    const baseOptions = [{ value: 'all', label: 'Todas las Cadenas' }];
-    const filteredComps = filters.category === 'all'
+    const filteredComps = filters.category.length === 0
       ? competitorsArr
-      : competitorsArr.filter(c => COMPETITOR_TO_CATEGORY[c] === filters.category);
+      : competitorsArr.filter(c => filters.category.includes(COMPETITOR_TO_CATEGORY[c]));
 
     const competitorItems = filteredComps.map(c => ({ value: c, label: c }));
 
@@ -744,7 +738,7 @@ export default function App({ user, onSignOut }) {
       .filter(b => !filteredComps.some(c => c.toUpperCase() === b.toUpperCase()))
       .map(b => ({ value: b, label: `${b} (propio)` }));
 
-    return [...baseOptions, ...competitorItems, ...ngrItems];
+    return [...competitorItems, ...ngrItems];
   }, [competitorsArr, filters.category]);
 
   const latestYear = useMemo(() => {
@@ -753,61 +747,92 @@ export default function App({ user, onSignOut }) {
 
   // Set default year if not set
   useEffect(() => {
-    if (latestYear !== 'all' && filters.year === 'all') {
-      setFilters(prev => ({ ...prev, year: latestYear }));
+    if (latestYear !== 'all' && filters.year.length === 0) {
+      setFilters(prev => ({ ...prev, year: [latestYear] }));
     }
-  }, [latestYear]);
+  }, [latestYear, filters.year.length]);
 
   // Location options filtered by competitor
   const locationOptions = useMemo(() => {
-    const baseOptions = [{ value: "all", label: "Todos los locales" }];
-
     let filteredRecordsForLocs = records;
-    if (filters.category !== 'all') {
-      filteredRecordsForLocs = filteredRecordsForLocs.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
+    if (filters.category.length > 0) {
+      filteredRecordsForLocs = filteredRecordsForLocs.filter(r => filters.category.includes(COMPETITOR_TO_CATEGORY[r.competidor]));
     }
-    if (filters.competitor !== 'all') {
-      filteredRecordsForLocs = filteredRecordsForLocs.filter(r => r.competidor === filters.competitor);
+    if (filters.competitor.length > 0) {
+      filteredRecordsForLocs = filteredRecordsForLocs.filter(r => filters.competitor.includes(r.competidor));
     }
 
-    const filteredLocs = Array.from(new Set(filteredRecordsForLocs.map(r => r.local))).filter(Boolean).sort();
-    return [...baseOptions, ...filteredLocs.map(l => ({ value: l, label: l }))];
+    // Get unique store name + code combinations
+    const storesMap = new Map();
+    filteredRecordsForLocs.forEach(r => {
+      if (r.local && r.local.toUpperCase() !== 'DESCONOCIDO') {
+        const code = r.codigo_tienda || r.cod_tienda || 'S/C';
+        const key = `${code} – ${r.local}`;
+        storesMap.set(r.local, key);
+      }
+    });
+
+    const sortedLocals = Array.from(storesMap.keys()).sort();
+    return sortedLocals.map(local => ({
+      value: local,
+      label: storesMap.get(local)
+    }));
   }, [filters.competitor, filters.category, records]);
 
   const codigoTiendaOptions = useMemo(() => {
-    const base = [{ value: 'all', label: 'Todos los Códigos' }];
     let filtered = records;
-    if (filters.category !== 'all') {
-      filtered = filtered.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
+    if (filters.category.length > 0) {
+      filtered = filtered.filter(r => filters.category.includes(COMPETITOR_TO_CATEGORY[r.competidor]));
     }
-    if (filters.competitor !== 'all') {
-      filtered = filtered.filter(r => r.competidor === filters.competitor);
+    if (filters.competitor.length > 0) {
+      filtered = filtered.filter(r => filters.competitor.includes(r.competidor));
     }
-    if (filters.local !== 'all') {
-      filtered = filtered.filter(r => r.local === filters.local);
+    if (filters.local.length > 0) {
+      filtered = filtered.filter(r => filters.local.includes(r.local));
     }
-    const codes = Array.from(new Set(filtered.map(r => r.codigo_tienda).filter(Boolean))).sort();
-    return [...base, ...codes.map(c => ({ value: c, label: c }))];
+    // Get unique code + name combinations
+    const codesMap = new Map();
+    filtered.forEach(r => {
+      const code = r.codigo_tienda || r.cod_tienda;
+      if (code) {
+        const name = r.local || 'S/N';
+        codesMap.set(code, `${code} – ${name}`);
+      }
+    });
+
+    const sortedCodes = Array.from(codesMap.keys()).sort();
+    return sortedCodes.map(code => ({
+      value: code,
+      label: codesMap.get(code)
+    }));
   }, [records, filters.category, filters.competitor, filters.local]);
 
   const regionOptions = useMemo(() => {
-    const base = [{ value: 'all', label: 'Todas las Regiones' }];
     let filtered = records;
-    if (filters.category !== 'all') filtered = filtered.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
-    if (filters.competitor !== 'all') filtered = filtered.filter(r => r.competidor === filters.competitor);
-    const vals = Array.from(new Set(filtered.map(r => r.region).filter(Boolean))).sort();
-    return [...base, ...vals.map(v => ({ value: v, label: v }))];
+    if (filters.category.length > 0) filtered = filtered.filter(r => filters.category.includes(COMPETITOR_TO_CATEGORY[r.competidor]));
+    if (filters.competitor.length > 0) filtered = filtered.filter(r => filters.competitor.includes(r.competidor));
+    const vals = Array.from(new Set(filtered.map(r => r.region).filter(v => v && v.toUpperCase() !== 'DESCONOCIDO'))).sort();
+    return vals.map(v => ({ value: v, label: v }));
   }, [records, filters.category, filters.competitor]);
 
   const distritoOptions = useMemo(() => {
-    const base = [{ value: 'all', label: 'Todos los Distritos' }];
     let filtered = records;
-    if (filters.category !== 'all') filtered = filtered.filter(r => COMPETITOR_TO_CATEGORY[r.competidor] === filters.category);
-    if (filters.competitor !== 'all') filtered = filtered.filter(r => r.competidor === filters.competitor);
-    if (filters.region !== 'all') filtered = filtered.filter(r => r.region === filters.region);
-    const vals = Array.from(new Set(filtered.map(r => r.distrito).filter(Boolean))).sort();
-    return [...base, ...vals.map(v => ({ value: v, label: v }))];
+    if (filters.category.length > 0) filtered = filtered.filter(r => filters.category.includes(COMPETITOR_TO_CATEGORY[r.competidor]));
+    if (filters.competitor.length > 0) filtered = filtered.filter(r => filters.competitor.includes(r.competidor));
+    if (filters.region.length > 0) filtered = filtered.filter(r => filters.region.includes(r.region));
+    const vals = Array.from(new Set(filtered.map(r => r.distrito).filter(v => v && v.toUpperCase() !== 'DESCONOCIDO'))).sort();
+    return vals.map(v => ({ value: v, label: v }));
   }, [records, filters.category, filters.competitor, filters.region]);
+
+  const zonaOptions = useMemo(() => {
+    let filtered = records;
+    if (filters.category.length > 0) filtered = filtered.filter(r => filters.category.includes(COMPETITOR_TO_CATEGORY[r.competidor]));
+    if (filters.competitor.length > 0) filtered = filtered.filter(r => filters.competitor.includes(r.competidor));
+    if (filters.region.length > 0) filtered = filtered.filter(r => filters.region.includes(r.region));
+    if (filters.distrito.length > 0) filtered = filtered.filter(r => filters.distrito.includes(r.distrito));
+    const vals = Array.from(new Set(filtered.map(r => r.zona).filter(v => v && v.toUpperCase() !== 'DESCONOCIDO'))).sort();
+    return vals.map(v => ({ value: v, label: v }));
+  }, [records, filters.category, filters.competitor, filters.region, filters.distrito]);
 
   const channelOptions = [
     { value: 'all', label: 'Todos los Canales' },
@@ -817,7 +842,6 @@ export default function App({ user, onSignOut }) {
   ];
 
   const categoryOptions = [
-    { value: "all", label: "Todas las Categorias" },
     { value: "Pollo Frito", label: "🍗 Pollo Frito" },
     { value: "Hamburguesa", label: "🍔 Hamburguesa" },
     { value: "Pizza",       label: "🍕 Pizza" },
@@ -827,24 +851,31 @@ export default function App({ user, onSignOut }) {
   const handleFilterChange = (key, value) => {
     setFilters(prev => {
       const newFilters = { ...prev, [key]: value };
-      if (key === 'category' && value !== prev.category) {
-        newFilters.competitor = 'all';
-        newFilters.local = 'all';
-        newFilters.codigoTienda = 'all';
-        newFilters.region = 'all';
-        newFilters.distrito = 'all';
+      // Cascade resets (if multi-select makes sense to reset dependents)
+      if (key === 'category' && JSON.stringify(value) !== JSON.stringify(prev.category)) {
+        newFilters.competitor = [];
+        newFilters.local = [];
+        newFilters.codigoTienda = [];
+        newFilters.region = [];
+        newFilters.distrito = [];
+        newFilters.zona = [];
       }
-      if (key === 'competitor' && value !== prev.competitor) {
-        newFilters.local = 'all';
-        newFilters.codigoTienda = 'all';
-        newFilters.region = 'all';
-        newFilters.distrito = 'all';
+      if (key === 'competitor' && JSON.stringify(value) !== JSON.stringify(prev.competitor)) {
+        newFilters.local = [];
+        newFilters.codigoTienda = [];
+        newFilters.region = [];
+        newFilters.distrito = [];
+        newFilters.zona = [];
       }
-      if (key === 'local' && value !== prev.local) {
-        newFilters.codigoTienda = 'all';
+      if (key === 'local' && JSON.stringify(value) !== JSON.stringify(prev.local)) {
+        newFilters.codigoTienda = [];
       }
-      if (key === 'region' && value !== prev.region) {
-        newFilters.distrito = 'all';
+      if (key === 'region' && JSON.stringify(value) !== JSON.stringify(prev.region)) {
+        newFilters.distrito = [];
+        newFilters.zona = [];
+      }
+      if (key === 'distrito' && JSON.stringify(value) !== JSON.stringify(prev.distrito)) {
+        newFilters.zona = [];
       }
       return newFilters;
     });
@@ -852,21 +883,22 @@ export default function App({ user, onSignOut }) {
 
   const handleResetFilters = () => {
     setFilters({
-      month: "all",
-      year: latestYear,
-      competitor: "all",
-      local: "all",
-      codigoTienda: "all",
-      category: "all",
-      channel: "all",
-      region: "all",
-      distrito: "all"
+      month: [],
+      year: latestYear !== 'all' ? [latestYear] : [],
+      competitor: [],
+      local: [],
+      codigoTienda: [],
+      category: [],
+      channel: [],
+      region: [],
+      distrito: [],
+      zona: []
     });
   };
 
   // NGR own brands — these come from ngrLocales not from records pipeline
   const NGR_OWN_BRANDS = useMemo(() => new Set(['POPEYES', 'Bembos', 'Papa Johns', 'CHINAWOK']), []);
-  const isNGRFilter = NGR_OWN_BRANDS.has(filters.competitor);
+  const isNGRFilter = filters.competitor.length > 0 && filters.competitor.some(c => NGR_OWN_BRANDS.has(c));
 
   // Map ngrLocales to competition-record format so the filter pipeline works transparently
   const ngrMappedRecords = useMemo(() => {
@@ -892,31 +924,40 @@ export default function App({ user, onSignOut }) {
   // 1. Core Data Filtering — when an NGR brand is selected, source from ngrMappedRecords
   const filteredRecords = useMemo(() => {
     // If filter is an NGR-only brand, use ngrMappedRecords instead of records
-    const sourceRecords = isNGRFilter ? ngrMappedRecords : records;
+    // Multi-select note: if ANY selected brand is NGR, we should probably combine or handle separately.
+    // For now, if ALL selected are NGR, use ngrMappedRecords.
+    const selectedAreNGR = filters.competitor.length > 0 && filters.competitor.every(c => NGR_OWN_BRANDS.has(c));
+    const sourceRecords = selectedAreNGR ? ngrMappedRecords : records;
 
     return sourceRecords.filter(rec => {
-      let mMatch = filters.month === 'all';
-      let yMatch = filters.year === 'all';
+      let mMatch = filters.month.length === 0;
+      let yMatch = filters.year.length === 0;
 
       if (!mMatch) {
-        if (rec.mes) mMatch = (parseInt(rec.mes) - 1).toString() === filters.month;
-        else if (rec.fecha) mMatch = new Date(rec.fecha).getMonth().toString() === filters.month;
+        let recMonthStr = '';
+        if (rec.mes) recMonthStr = (parseInt(rec.mes) - 1).toString();
+        else if (rec.fecha) recMonthStr = new Date(rec.fecha).getMonth().toString();
+        mMatch = filters.month.includes(recMonthStr);
       }
       if (!yMatch) {
-        if (rec.ano) yMatch = rec.ano.toString() === filters.year;
-        else if (rec.fecha) yMatch = new Date(rec.fecha).getFullYear().toString() === filters.year;
+        let recYearStr = '';
+        if (rec.ano) recYearStr = rec.ano.toString();
+        else if (rec.fecha) recYearStr = new Date(rec.fecha).getFullYear().toString();
+        yMatch = filters.year.includes(recYearStr);
       }
 
-      const cMatch = filters.competitor === 'all' || rec.competidor === filters.competitor;
-      const lMatch = filters.local === 'all' || rec.local === filters.local;
-      const ctMatch = filters.codigoTienda === 'all' || rec.codigo_tienda === filters.codigoTienda;
-      const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[rec.competidor] === filters.category;
-      const rMatch = filters.region === 'all' || rec.region === filters.region;
-      const dMatch = filters.distrito === 'all' || rec.distrito === filters.distrito;
+      const cMatch = filters.competitor.length === 0 || filters.competitor.includes(rec.competidor);
+      const lMatch = filters.local.length === 0 || filters.local.includes(rec.local);
+      const ctMatch = filters.codigoTienda.length === 0 || filters.codigoTienda.includes(rec.codigo_tienda);
+      const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[rec.competidor]);
+      const rMatch = filters.region.length === 0 || filters.region.includes(rec.region);
+      const dMatch = filters.distrito.length === 0 || filters.distrito.includes(rec.distrito);
+      const zMatch = filters.zona.length === 0 || filters.zona.includes(rec.zona);
+      const chMatch = filters.channel.length === 0 || filters.channel.includes(rec.canal);
 
-      return mMatch && yMatch && cMatch && lMatch && ctMatch && catMatch && rMatch && dMatch;
+      return mMatch && yMatch && cMatch && lMatch && ctMatch && catMatch && rMatch && dMatch && zMatch && chMatch;
     });
-  }, [records, ngrMappedRecords, isNGRFilter, filters]);
+  }, [records, ngrMappedRecords, filters]);
 
   // 1b. Market Share Specific Filtering (status OK + HISTORIAL, sin solapamiento)
   // When isNGRFilter, bypass recordInScope — NGR records are always valid
@@ -941,28 +982,30 @@ export default function App({ user, onSignOut }) {
       if (!recordInScope(r)) return false;
       if (!r.punto_compartido) return false;
       // Only apply non-date filters
-      const cMatch = filters.competitor === 'all' || r.competidor === filters.competitor;
-      const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[r.competidor] === filters.category;
-      const rMatch = filters.region === 'all' || r.region === filters.region;
-      const dMatch = filters.distrito === 'all' || r.distrito === filters.distrito;
-      if (!cMatch || !catMatch || !rMatch || !dMatch) return false;
+      const cMatch = filters.competitor.length === 0 || filters.competitor.includes(r.competidor);
+      const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[r.competidor]);
+      const rMatch = filters.region.length === 0 || filters.region.includes(r.region);
+      const dMatch = filters.distrito.length === 0 || filters.distrito.includes(r.distrito);
+      const zMatch = filters.zona.length === 0 || filters.zona.includes(r.zona);
+      if (!cMatch || !catMatch || !rMatch || !dMatch || !zMatch) return false;
       // Last 12 months window
       const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
       return key >= cutoffKeyMin;
     });
-  }, [records, filters.competitor, filters.category, filters.region, filters.distrito]);
+  }, [records, filters.competitor, filters.category, filters.region, filters.distrito, filters.zona]);
 
   // 1c. Core Tickets Filtering (facturas_v2)
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
-      const cMatch = filters.competitor === 'all' || t.competidor === filters.competitor;
-      const lMatch = filters.local === 'all' || t.local === filters.local;
-      const ctMatch = filters.codigoTienda === 'all' || t.codigo_tienda === filters.codigoTienda;
-      const catMatch = filters.category === 'all' || COMPETITOR_TO_CATEGORY[t.competidor] === filters.category;
-      const rMatch = filters.region === 'all' || t.region === filters.region;
-      const dMatch = filters.distrito === 'all' || t.distrito === filters.distrito;
+      const cMatch = filters.competitor.length === 0 || filters.competitor.includes(t.competidor);
+      const lMatch = filters.local.length === 0 || filters.local.includes(t.local);
+      const ctMatch = filters.codigoTienda.length === 0 || filters.codigoTienda.includes(t.codigo_tienda);
+      const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[t.competidor]);
+      const rMatch = filters.region.length === 0 || filters.region.includes(t.region);
+      const dMatch = filters.distrito.length === 0 || filters.distrito.includes(t.distrito);
+      const zMatch = filters.zona.length === 0 || filters.zona.includes(t.zona);
 
-      return cMatch && lMatch && ctMatch && catMatch && rMatch && dMatch;
+      return cMatch && lMatch && ctMatch && catMatch && rMatch && dMatch && zMatch;
     });
   }, [tickets, filters]);
 
@@ -975,7 +1018,7 @@ export default function App({ user, onSignOut }) {
     const filteredTicketsCount = filteredTickets.length;
     const totalImporteCount = filteredTickets.reduce((sum, t) => sum + (parseFloat(t.importe) || 0), 0);
     const ticketsSinLocalCount = tickets.filter(t => {
-      const matchesComp = filters.competitor === 'all' || t.competidor === filters.competitor;
+      const matchesComp = filters.competitor.length === 0 || filters.competitor.includes(t.competidor);
       return matchesComp && (!t.local || t.local === 'DESCONOCIDO' || t.local === 'Desconocido');
     }).length;
 
@@ -1397,6 +1440,7 @@ export default function App({ user, onSignOut }) {
       categoryOptions={categoryOptions}
       regionOptions={regionOptions}
       distritoOptions={distritoOptions}
+      zonaOptions={zonaOptions}
     />
   );
 
@@ -1568,12 +1612,12 @@ export default function App({ user, onSignOut }) {
               <div className="bg-white/40 dark:bg-white/[0.02] backdrop-blur-xl border border-slate-200 dark:border-white/5 p-1 rounded-xl flex gap-1 shadow-sm">
                 {(activeCategory === 'marketshare' ? [
                   { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
-                  { id: 'comparativos', icon: GitCompare, label: 'Comparativos' },
                   { id: 'puntos_compartidos', icon: MapPin, label: 'Puntos Compartidos' },
-                ] : [
+                ] : activeCategory === 'tickets' ? [
                   { id: 'tickets', icon: Ticket,      label: 'Tickets' },
                   { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' },
-                ]).map(sub => (
+                  { id: 'comparativos', icon: GitCompare, label: 'Comparativos' },
+                ] : []).map(sub => (
                   <button
                     key={sub.id}
                     onClick={() => setActiveSubTab(sub.id)}

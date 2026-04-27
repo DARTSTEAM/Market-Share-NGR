@@ -110,66 +110,78 @@ let cache = {
 const QUERY_RECORDS = `
   -- Mediciones actuales del pipeline Gemini
   SELECT
-    competidor, codigo_tienda, local, caja, status_busqueda,
-    transacciones_diferencial, ticket_actual, ticket_anterior,
-    fecha_y_hora_registro, fecha_anterior, filename_actual, filename_anterior,
-    delta_dias, ac, promedio_transacciones_diarias, mes, ano,
-    region, distrito,
-    punto_compartido, cc_punto_compartido, grupos_cc, marcas_en_pc, n_marcas_en_pc
-  FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01')
+    T.competidor, T.codigo_tienda, T.local, T.caja, T.status_busqueda,
+    T.transacciones_diferencial, T.ticket_actual, T.ticket_anterior,
+    T.fecha_y_hora_registro, T.fecha_anterior, T.filename_actual, T.filename_anterior,
+    T.delta_dias, T.ac, T.promedio_transacciones_diarias, T.mes, T.ano,
+    COALESCE(V.Region, T.region) AS region,
+    COALESCE(V.Distrito, T.distrito) AS distrito,
+    V.Zona AS zona,
+    T.punto_compartido, T.cc_punto_compartido, T.grupos_cc, T.marcas_en_pc, T.n_marcas_en_pc
+  FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01') T
+  LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.tiendas_v2\` V ON REPLACE(T.codigo_tienda, ' ', '') = REPLACE(V.Codigo_tienda, ' ', '')
 
   UNION ALL
 
   -- Estimaciones manuales APROBADAS: reemplazan a generar_estimaciones_mensuales
   -- Solo se incluyen en el dashboard las que fueron explícitamente aprobadas
   SELECT
-    competidor,
-    codigo_tienda,
-    local,
+    T.competidor,
+    T.codigo_tienda,
+    T.local,
     CAST(NULL AS STRING)                                      AS caja,
-    CONCAT('ESTIMADO-', IFNULL(metodo, 'MANUAL'))             AS status_busqueda,
-    CAST(ROUND(trx_diarias * 30) AS INT64)                    AS transacciones_diferencial,
+    CONCAT('ESTIMADO-', IFNULL(T.metodo, 'MANUAL'))           AS status_busqueda,
+    CAST(ROUND(T.trx_diarias * 30) AS INT64)                  AS transacciones_diferencial,
     CAST(NULL AS INT64)                                       AS ticket_actual,
     CAST(NULL AS INT64)                                       AS ticket_anterior,
-    DATETIME(updated_at)                                      AS fecha_y_hora_registro,
+    DATETIME(T.updated_at)                                    AS fecha_y_hora_registro,
     CAST(NULL AS DATETIME)                                    AS fecha_anterior,
     CAST(NULL AS STRING)                                      AS filename_actual,
     CAST(NULL AS STRING)                                      AS filename_anterior,
     CAST(30 AS INT64)                                         AS delta_dias,
     CAST(NULL AS INT64)                                       AS ac,
-    trx_diarias                                               AS promedio_transacciones_diarias,
-    mes,
-    ano,
-    CAST(NULL AS STRING)                                      AS region,
-    CAST(NULL AS STRING)                                      AS distrito,
+    T.trx_diarias                                             AS promedio_transacciones_diarias,
+    T.mes,
+    T.ano,
+    V.Region                                                  AS region,
+    V.Distrito                                                AS distrito,
+    V.Zona                                                    AS zona,
     CAST(NULL AS STRING)                                      AS punto_compartido,
     CAST(NULL AS STRING)                                      AS cc_punto_compartido,
     CAST(NULL AS STRING)                                      AS grupos_cc,
     CAST(NULL AS STRING)                                      AS marcas_en_pc,
     CAST(NULL AS INT64)                                       AS n_marcas_en_pc
-  FROM \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\`
-  WHERE aprobado = TRUE
+  FROM \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\` T
+  LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.tiendas_v2\` V ON REPLACE(T.codigo_tienda, ' ', '') = REPLACE(V.Codigo_tienda, ' ', '')
+  WHERE T.aprobado = TRUE
 
   UNION ALL
 
   -- Datos históricos 2022-2025 (archivo de campo, status = 'HISTORIAL')
   SELECT
-    competidor, codigo_tienda, local, caja, status_busqueda,
-    transacciones_diferencial, ticket_actual, ticket_anterior,
-    fecha_y_hora_registro, fecha_anterior, filename_actual, filename_anterior,
-    delta_dias, ac, promedio_transacciones_diarias, mes, ano,
-    region, distrito,
-    punto_compartido, cc_punto_compartido, grupos_cc, marcas_en_pc, n_marcas_en_pc
-  FROM \`${PROJECT_ID}.${DATASET_ID}.procesar_historial_tasas\`()
+    T.competidor, T.codigo_tienda, T.local, T.caja, T.status_busqueda,
+    T.transacciones_diferencial, T.ticket_actual, T.ticket_anterior,
+    T.fecha_y_hora_registro, T.fecha_anterior, T.filename_actual, T.filename_anterior,
+    T.delta_dias, T.ac, T.promedio_transacciones_diarias, T.mes, T.ano,
+    COALESCE(V.Region, T.region) AS region,
+    COALESCE(V.Distrito, T.distrito) AS distrito,
+    V.Zona AS zona,
+    T.punto_compartido, T.cc_punto_compartido, T.grupos_cc, T.marcas_en_pc, T.n_marcas_en_pc
+  FROM \`${PROJECT_ID}.${DATASET_ID}.procesar_historial_tasas\`() T
+  LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.tiendas_v2\` V ON REPLACE(T.codigo_tienda, ' ', '') = REPLACE(V.Codigo_tienda, ' ', '')
 `;
 
 const QUERY_TICKETS = `
   SELECT
-    competidor, codigo_tienda, local, canal_de_venta, importe_total,
-    numero_de_ticket, numero_de_caja, fecha, hora,
-    recargo_consumo, monto_tarifario, filename, fecha_carga
-  FROM \`${PROJECT_ID}.${DATASET_ID}.facturas_v2\`
-  ORDER BY fecha DESC, hora DESC
+    T.competidor, T.codigo_tienda, T.local, T.canal_de_venta, T.importe_total,
+    T.numero_de_ticket, T.numero_de_caja, T.fecha, T.hora,
+    T.recargo_consumo, T.monto_tarifario, T.filename, T.fecha_carga,
+    V.Region AS region,
+    V.Distrito AS distrito,
+    V.Zona AS zona
+  FROM \`${PROJECT_ID}.${DATASET_ID}.facturas_v2\` T
+  LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.tiendas_v2\` V ON REPLACE(T.codigo_tienda, ' ', '') = REPLACE(V.Codigo_tienda, ' ', '')
+  ORDER BY T.fecha DESC, T.hora DESC
 `;
 
 // ── Core fetch from BigQuery ─────────────────────────────────────────────────
@@ -205,6 +217,7 @@ async function fetchFromBigQuery() {
         ano: r.ano ?? '',
         region: r.region || '',
         distrito: r.distrito || '',
+        zona: r.zona || '',
         punto_compartido: r.punto_compartido || null,
         cc_punto_compartido: r.cc_punto_compartido || null,
         grupos_cc: r.grupos_cc || null,
@@ -216,8 +229,9 @@ async function fetchFromBigQuery() {
         competidor: t.competidor || '',
         codigo_tienda: t.codigo_tienda || '',
         local: t.local || '',
-        region: '',
-        distrito: '',
+        region: t.region || '',
+        distrito: t.distrito || '',
+        zona: t.zona || '',
         canal_de_venta: t.canal_de_venta || '',
         ticket: t.numero_de_ticket || '',
         importe: t.importe_total ?? 0,

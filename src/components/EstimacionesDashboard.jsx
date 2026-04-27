@@ -311,7 +311,7 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit, pendingEditPos, local, 
 
 
 // ── Celda individual ──────────────────────────────────────────────────────────
-function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, isRevisada, onMarkRevisada, isGapRevisado, onToggleGapRevisado, pendingEditPos, local, meses }) {
+function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, isRevisada, onMarkRevisada, isGapRevisado, onToggleGapRevisado, pendingEditPos, local, meses, className }) {
   const isEditing = pendingEdit?.key === cell.key;
 
   if (cell.tipo === 'GAP') {
@@ -319,7 +319,7 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
     const gapOk  = isGapRevisado;
     return (
       <td 
-        className="px-1.5 py-1.5 align-middle relative cursor-pointer" 
+        className={`px-1.5 py-1.5 align-middle relative cursor-pointer ${className || ''}`} 
         style={{ minWidth: 90 }} 
         onClick={e => { e.preventDefault(); e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
       >
@@ -383,7 +383,7 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
   if (esRetorno) {
     return (
       <td 
-        className="px-1.5 py-1.5 align-middle relative cursor-pointer" 
+        className={`px-1.5 py-1.5 align-middle relative cursor-pointer ${className || ''}`} 
         style={{ minWidth: 90 }} 
         onClick={e => { e.preventDefault(); e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
       >
@@ -416,7 +416,7 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
   if (cell.tipo === 'CAJA_NUEVA') {
     return (
       <td 
-        className="px-1.5 py-1.5 align-middle relative cursor-pointer" 
+        className={`px-1.5 py-1.5 align-middle relative cursor-pointer ${className || ''}`} 
         style={{ minWidth: 90 }} 
         onClick={e => { e.preventDefault(); e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
       >
@@ -441,7 +441,7 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
     const cfg = TIPO_CONFIG.PENDIENTE;
     return (
       <td
-        className={`px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-all ${cfg.cell} hover:brightness-95`}
+        className={`px-3 py-2.5 text-right align-middle group relative cursor-pointer select-none transition-all ${cfg.cell} hover:brightness-95 ${className || ''}`}
         onClick={e => { e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
       >
         {isEditing && (
@@ -472,7 +472,7 @@ function Celda({ cell, puntos, onSave, pendingEdit, onStartEdit, onCancelEdit, i
         revisada     ? 'bg-emerald-100 dark:bg-emerald-500/15 hover:brightness-95' :
         esCaidaAlarm ? 'bg-red-100 dark:bg-red-500/15 hover:brightness-95' :
                        `${cfg.cell} hover:brightness-95`
-      }`}
+      } ${className || ''}`}
       onClick={e => { e.stopPropagation(); onStartEdit(cell, e.currentTarget.getBoundingClientRect()); }}
     >
       {isEditing && (
@@ -640,7 +640,7 @@ function DeleteCajaButton({ cfg, user, onDeleted, onError }) {
 }
 
 function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal, revisadasMap = {}, onMarkRevisada, gapsRevisadosMap = {}, onToggleGapRevisado, pendingEditPos }) {
-  const esDesglose = !NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
+  const esDesglose = !NO_CAJA_DETAIL.has(String(local.competidor || '').toUpperCase().trim());
   const RUTINA_DESDE = '2025-12';
   const esRutina = (mk) => mk >= RUTINA_DESDE;
 
@@ -821,6 +821,34 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
 
         {/* Monthly Columns */}
         {meses.map(mk => {
+          if (!esDesglose) {
+            const cell = getEditableCellLocal(mk);
+            const [ano, mes] = mk.split('-');
+            const esRutinaMk = (parseInt(ano) * 100 + parseInt(mes)) > 202511;
+            
+            if (!cell) return <td key={mk} className="px-2 py-3 text-center border-l border-slate-100 dark:border-white/5 text-slate-300 dark:text-white/10">—</td>;
+            
+            return (
+              <Celda
+                key={mk}
+                cell={cell}
+                puntos={puntosLocal}
+                onSave={onSave}
+                pendingEdit={pendingEdit}
+                onStartEdit={onStartEdit}
+                onCancelEdit={onCancelEdit}
+                pendingEditPos={pendingEditPos}
+                local={local}
+                meses={fullMeses}
+                isRevisada={!!revisadasMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
+                onMarkRevisada={onMarkRevisada}
+                isGapRevisado={!!gapsRevisadosMap[`${cell.codigo_tienda}||${cell.caja}||${cell.mes}||${cell.ano}`]}
+                onToggleGapRevisado={onToggleGapRevisado}
+                className={`border-l border-slate-100 dark:border-white/5 ${esRutinaMk ? 'bg-orange-500/[0.02]' : ''}`}
+              />
+            );
+          }
+
           const { sum, hasGap } = totalesPorMes[mk] || { sum: 0, hasGap: false };
           const [ano, mes] = mk.split('-');
           const esRutinaMk = (parseInt(ano) * 100 + parseInt(mes)) > 202511;
@@ -1072,7 +1100,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
   // Conteos (excluye cajas silenciadas del total de gaps)
   const totalGaps = useMemo(() =>
     matrix.reduce((acc, local) => {
-      const noDesglose = NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
+      const noDesglose = NO_CAJA_DETAIL.has(String(local.competidor || '').toUpperCase().trim());
       if (noDesglose) {
         return acc + meses.filter(mk =>
           mk >= RUTINA_DESDE_GLOBAL &&
@@ -1110,7 +1138,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
   const totalCeldas = useMemo(() => {
     const rutinaMeses = meses.filter(mk => mk >= RUTINA_DESDE_GLOBAL);
     return matrix.reduce((acc, local) => {
-      const noDesglose = NO_CAJA_DETAIL.has(local.competidor?.toUpperCase().trim());
+      const noDesglose = NO_CAJA_DETAIL.has(String(local.competidor || '').toUpperCase().trim());
       if (noDesglose) return acc + rutinaMeses.length; // 1 fila × N meses
       return acc + local.cajas.filter(c => !isSilenciada(local.codigo_tienda, c)).length * rutinaMeses.length;
     }, 0);

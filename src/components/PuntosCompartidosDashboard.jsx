@@ -89,13 +89,14 @@ const CATEGORY_COLORS = {
 
 const getCategory = (name) => {
     if (!name) return 'Otros';
-    const clean = name.replace(' (NGR)', '').replace(' (ngr)', '').trim().toUpperCase();
+    const clean = String(name).replace(' (NGR)', '').replace(' (ngr)', '').trim().toUpperCase();
     return COMPETITOR_TO_CATEGORY[clean] || 'Otros';
 };
 
 function colorFor(name) {
     if (!name) return PALETTE[0];
-    const lower = name.toLowerCase().trim();
+    const sName = String(name);
+    const lower = sName.toLowerCase().trim();
     const cleanLower = lower.replace(' (ngr)', '').trim();
     
     // 1. Check if it's an EXACT category name (e.g. for "Group by Category" mode)
@@ -760,23 +761,23 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
     const ngrByPC = useMemo(() => {
         const map = {};
         if (!ngrLocales) return map;
-        
-        const targetMonth = filters?.month && filters.month !== 'all' ? (parseInt(filters.month) + 1) : null;
-        const targetYear = filters?.year && filters.year !== 'all' ? parseInt(filters.year) : null;
+        const targetMonths = (filters?.month && Array.isArray(filters.month) && filters.month.length > 0) ? filters.month.map(m => parseInt(m) + 1) : null;
+        const targetYears = (filters?.year && Array.isArray(filters.year) && filters.year.length > 0) ? filters.year.map(y => parseInt(y)) : null;
 
         ngrLocales.forEach(loc => {
             // Strict date matching: if a filter is set, record must have matching date info
             const locMonth = loc.mes ? parseInt(loc.mes) : null;
             const locYear = loc.ano ? parseInt(loc.ano) : null;
 
-            if (targetMonth && locMonth !== targetMonth) return;
-            if (targetYear && locYear !== targetYear) return;
+            if (targetMonths && !targetMonths.includes(locMonth)) return;
+            if (targetYears && !targetYears.includes(locYear)) return;
 
             let pcName = loc.punto_compartido;
-            if (!pcName || pcName === 'SI' || pcName === 'true') {
+            const sName = String(pcName || '').trim().toUpperCase();
+            if (!sName || sName === 'SI' || sName === 'TRUE') {
                  pcName = loc.cc_nombre || loc.local;
             }
-            if (!pcName) return;
+            if (!pcName || !String(pcName).trim()) return;
             const key = norm(pcName);
             if (!map[key]) map[key] = [];
             map[key].push(loc);
@@ -791,21 +792,23 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         // Process competition records and NGR records together
         const dataToProcess = [...allRecords];
         
-        const targetMonth = filters?.month && filters.month !== 'all' ? (parseInt(filters.month) + 1) : null;
-        const targetYear = filters?.year && filters.year !== 'all' ? parseInt(filters.year) : null;
+        const targetMonths = (filters?.month && Array.isArray(filters.month) && filters.month.length > 0) ? filters.month.map(m => parseInt(m) + 1) : null;
+        const targetYears = (filters?.year && Array.isArray(filters.year) && filters.year.length > 0) ? filters.year.map(y => parseInt(y)) : null;
 
         ngrLocales.forEach(r => {
             // Strict date matching: if a filter is set, record must have matching date info
             const rMonth = r.mes ? parseInt(r.mes) : null;
             const rYear = r.ano ? parseInt(r.ano) : null;
 
-            if (targetMonth && rMonth !== targetMonth) return;
-            if (targetYear && rYear !== targetYear) return;
+            if (targetMonths && !targetMonths.includes(rMonth)) return;
+            if (targetYears && !targetYears.includes(rYear)) return;
 
             let pcName = r.punto_compartido;
-            if (!pcName || pcName === 'SI' || pcName === 'true') {
+            const sName = String(pcName || '').trim().toUpperCase();
+            if (!sName || sName === 'SI' || sName === 'TRUE') {
                 pcName = r.cc_nombre || r.local;
             }
+            if (!pcName || !String(pcName).trim()) return;
             
             dataToProcess.push({
                 punto_compartido: pcName,
@@ -815,14 +818,14 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 codigo_tienda: r.store_num || r.codigo_tienda || r.cod_tienda,
                 transacciones: (parseFloat(r.trx_promedio) || 0) * 30,
                 promedio: parseFloat(r.trx_promedio) || 0,
-                mes: r.mes || targetMonth || 12,
-                ano: r.ano || targetYear || 2025,
+                mes: r.mes || (targetMonths?.[0]) || 12,
+                ano: r.ano || (targetYears?.[0]) || 2025,
                 status_busqueda: 'OK'
             });
         });
 
         dataToProcess.forEach(rec => {
-            if (!rec.punto_compartido) return;
+            if (!rec.punto_compartido || !String(rec.punto_compartido).trim()) return;
 
             const pcKey = String(rec.punto_compartido).toUpperCase().trim();
             
@@ -914,7 +917,8 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
         
         if (ngrLocales?.length) {
             ngrLocales.forEach(r => {
-                const pcName = (r.punto_compartido && r.punto_compartido !== 'SI' && r.punto_compartido !== 'true') 
+                const sName = String(r.punto_compartido || '').trim().toUpperCase();
+                const pcName = (sName && sName !== 'SI' && sName !== 'TRUE') 
                     ? r.punto_compartido 
                     : r.local;
 
@@ -930,7 +934,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
 
         const map = {};
         source.forEach(rec => {
-            if (!rec.punto_compartido || !rec.mes || !rec.ano) return;
+            if (!rec.punto_compartido || !String(rec.punto_compartido).trim() || !rec.mes || !rec.ano) return;
             const pcKey = String(rec.punto_compartido).toUpperCase().trim();
             const comp = rec.competidor;
             const prom = parseFloat(rec.promedio || rec.prom) || 0;

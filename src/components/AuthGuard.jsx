@@ -21,7 +21,7 @@ const ALLOWED_EMAILS   = new Set([
 
 function isAuthorized(email) {
   if (!email) return false;
-  const e = email.toLowerCase().trim();
+  const e = String(email || '').toLowerCase().trim();
   if (ALLOWED_EMAILS.has(e)) return true;
   return ALLOWED_DOMAINS.some(d => e.endsWith(`@${d}`));
 }
@@ -51,7 +51,7 @@ function LoginScreen({ onLoginGoogle, onLoginMicrosoft, loading, error, setError
 
   const handleSendLink = async (e) => {
     e.preventDefault();
-    const trimmed = email.toLowerCase().trim();
+    const trimmed = String(email || '').toLowerCase().trim();
     if (!trimmed) return;
 
     if (!isAuthorized(trimmed)) {

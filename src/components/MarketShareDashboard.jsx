@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     TrendingUp,
     Users,
@@ -74,8 +74,15 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
             const canal = channelOptions[hash % channelOptions.length];
 
             // Estimated rows don't have a real channel — skip channel filter for them
-            if (!item.isEstimado && filters.channel !== 'all' && canal.toLowerCase() !== filters.channel.toLowerCase() && filters.channel.toLowerCase() !== (canal === 'Recojo en tienda' ? 'tienda' : canal.toLowerCase())) {
-                return null;
+            if (!item.isEstimado && filters.channel.length > 0) {
+                const canalLow = canal.toLowerCase();
+                const isSelected = filters.channel.some(c => {
+                    if (c == null || typeof c === 'object') return false;
+                    const cLow = String(c).toLowerCase();
+                    if (cLow === 'all') return true;
+                    return cLow === canalLow || cLow === (canalLow === 'recojo en tienda' ? 'tienda' : canalLow);
+                });
+                if (!isSelected) return null;
             }
 
             return {
@@ -134,18 +141,68 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
 
     const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 
+    const BRAND_THEMES = {
+        'KFC':           { color: '#e4002b', bg: 'bg-[#e4002b]/10' },
+        'MCDONALDS':     { color: '#ffc72c', bg: 'bg-[#ffc72c]/10' },
+        'BURGER KING':   { color: '#f58220', bg: 'bg-[#f58220]/10' },
+        'BEMBOS':        { color: '#005596', bg: 'bg-[#005596]/10' },
+        'POPEYES':       { color: '#ff8200', bg: 'bg-[#ff8200]/10' },
+        'LITTLE CAESARS': { color: '#ff6600', bg: 'bg-[#ff6600]/10' },
+        'PIZZA HUT':     { color: '#ee3124', bg: 'bg-[#ee3124]/10' },
+        'PAPA JOHNS':    { color: '#007a33', bg: 'bg-[#007a33]/10' },
+        'CHINAWOK':      { color: '#e20613', bg: 'bg-[#e20613]/10' },
+        'DEFAULT':       { color: '#f97316', bg: 'bg-accent-orange/10' }
+    };
+
+    const selectedBrands = useMemo(() => {
+        if (filters.competitor.length > 0) return filters.competitor;
+        // If no competitor filter but category selected, show all in that category
+        if (filters.category.length > 0) {
+            return Object.keys(BRAND_THEMES).filter(b => {
+                const cat = {
+                    'KFC': 'Pollo Frito', 'POPEYES': 'Pollo Frito',
+                    'MCDONALDS': 'Hamburguesa', 'BEMBOS': 'Hamburguesa', 'BURGER KING': 'Hamburguesa',
+                    'DOMINOS': 'Pizza', 'LITTLE CAESARS': 'Pizza', 'PIZZA HUT': 'Pizza', 'PAPA JOHNS': 'Pizza',
+                    'CHINAWOK': 'Chifas'
+                }[b];
+                return filters.category.includes(cat);
+            });
+        }
+        return [];
+    }, [filters.competitor, filters.category]);
+
     return (
-        <div className="space-y-12 animate-in fade-in duration-700">
+        <div className="space-y-8 animate-in fade-in duration-700">
+
+            {/* Brand Banners Section */}
+            <AnimatePresence>
+                {selectedBrands.length > 0 && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="flex flex-wrap gap-3"
+                    >
+                        {selectedBrands.map(brand => {
+                            const theme = BRAND_THEMES[brand.toUpperCase()] || BRAND_THEMES.DEFAULT;
+                            return (
+                                <div 
+                                    key={brand}
+                                    className={`px-4 py-2 rounded-2xl border border-slate-200 dark:border-white/5 ${theme.bg} flex items-center gap-3 shadow-sm`}
+                                >
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.color }} />
+                                    <span className="text-[10px] font-black uppercase tracking-tighter italic text-slate-700 dark:text-white/90">
+                                        {brand}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* KPI Section */}
-            <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <KPICard
-                    title="Transacciones Totales"
-                    value={new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(reactiveMetrics.totalVentas || 0)}
-                    subtitle="Transacciones registradas en el periodo"
-                    icon={DollarSign}
-                    trend={+8.5}
-                />
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <KPICard
                     title="Promedio de Transacciones Diarias"
                     value={new Intl.NumberFormat('en-US').format(reactiveMetrics.totalTransDailyAvg || 0)}

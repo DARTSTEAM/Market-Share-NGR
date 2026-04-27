@@ -240,10 +240,10 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
     };
 
     const [filters, setFilters] = useState({
-        competidor:   globalFilters?.competitor || 'all',
-        local:        globalFilters?.local      || 'all',
-        codigoTienda: 'all',
-        mes:          'all',
+        competidor:   Array.isArray(globalFilters?.competitor) ? globalFilters.competitor : (globalFilters?.competitor && globalFilters.competitor !== 'all' ? [globalFilters.competitor] : []),
+        local:        Array.isArray(globalFilters?.local) ? globalFilters.local : (globalFilters?.local && globalFilters.local !== 'all' ? [globalFilters.local] : []),
+        codigoTienda: [],
+        mes:          [],
     });
 
     const handleFilterChange = (key, value) => {
@@ -260,12 +260,12 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
     };
 
     const clearFilters = () => {
-        setFilters({ competidor: 'all', local: 'all', codigoTienda: 'all', mes: 'all' });
+        setFilters({ competidor: [], local: [], codigoTienda: [], mes: [] });
         setSearchTerm('');
         setCurrentPage(1);
     };
 
-    const isFiltered = Object.values(filters).some(v => v !== 'all') || !!searchTerm;
+    const isFiltered = filters.competidor.length > 0 || filters.local.length > 0 || filters.codigoTienda.length > 0 || filters.mes.length > 0 || !!searchTerm;
 
     // ── Filter options ──────────────────────────────
     const competitors = useMemo(() =>
@@ -299,13 +299,13 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
                 || (t.competidor || '').toLowerCase().includes(s)
                 || (t.codigo_tienda || '').toLowerCase().includes(s);
 
-            const matchesComp    = filters.competidor === 'all'   || t.competidor === filters.competidor;
-            const matchesLocal   = filters.local === 'all'        || t.local === filters.local;
-            const matchesCodigo  = filters.codigoTienda === 'all' || t.codigo_tienda === filters.codigoTienda;
-            const matchesMes     = filters.mes === 'all' || (() => {
+            const matchesComp    = filters.competidor.length === 0   || filters.competidor.includes(t.competidor);
+            const matchesLocal   = filters.local.length === 0        || filters.local.includes(t.local);
+            const matchesCodigo  = filters.codigoTienda.length === 0 || filters.codigoTienda.includes(t.codigo_tienda);
+            const matchesMes     = filters.mes.length === 0 || (() => {
                 if (!t.fecha) return false;
                 const d = new Date(t.fecha);
-                return !isNaN(d) && String(d.getMonth() + 1) === filters.mes;
+                return !isNaN(d) && filters.mes.includes(String(d.getMonth() + 1));
             })();
 
             return matchesSearch && matchesComp && matchesLocal && matchesCodigo && matchesMes;
@@ -337,8 +337,8 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
         const totalImporte = filteredTickets.reduce((s, t) => s + (parseFloat(t.importe ?? t.importe_total) || 0), 0);
         const sinLocal    = filteredTickets.filter(t => !t.local || t.local === 'DESCONOCIDO').length;
         const routineStats = records.reduce((acc, r) => {
-            const mc = filters.competidor === 'all' || r.competidor === filters.competidor;
-            const ml = filters.local === 'all' || r.local === filters.local;
+            const mc = filters.competidor.length === 0 || filters.competidor.includes(r.competidor);
+            const ml = filters.local.length === 0 || filters.local.includes(r.local);
             if (mc && ml) { r.status_busqueda === 'OK' ? acc.cerradas++ : acc.conError++; }
             return acc;
         }, { cerradas: 0, conError: 0 });
@@ -449,36 +449,37 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
                 <div className="flex flex-wrap gap-3 items-center">
                     <div className="w-52 shrink-0">
                         <CustomSelect
+                            multiSelect={true}
                             selected={filters.competidor}
                             onChange={v => handleFilterChange('competidor', v)}
-                            options={competitors.map(c => ({ value: c, label: c === 'all' ? 'Todos los Competidores' : c }))}
+                            options={competitors.filter(c => c !== 'all').map(c => ({ value: c, label: c }))}
                             icon={<Store size={14} />}
                         />
                     </div>
                     <div className="w-56 shrink-0">
                         <CustomSelect
+                            multiSelect={true}
                             selected={filters.local}
                             onChange={v => handleFilterChange('local', v)}
-                            options={locations.map(l => ({ value: l, label: l === 'all' ? 'Todos los Locales' : l }))}
+                            options={locations.filter(l => l !== 'all').map(l => ({ value: l, label: l }))}
                             icon={<MapPin size={14} />}
                         />
                     </div>
                     <div className="w-44 shrink-0">
                         <CustomSelect
+                            multiSelect={true}
                             selected={filters.codigoTienda}
                             onChange={v => handleFilterChange('codigoTienda', v)}
-                            options={codigosTienda.map(c => ({ value: c, label: c === 'all' ? 'Todos los Códigos' : c }))}
+                            options={codigosTienda.filter(c => c !== 'all').map(c => ({ value: c, label: c }))}
                             icon={<Hash size={14} />}
                         />
                     </div>
                     <div className="w-44 shrink-0">
                         <CustomSelect
+                            multiSelect={true}
                             selected={filters.mes}
                             onChange={v => handleFilterChange('mes', v)}
-                            options={[
-                                { value: 'all', label: 'Todos los Meses' },
-                                ...meses.map(m => ({ value: String(m), label: MONTH_NAMES[m - 1] }))
-                            ]}
+                            options={meses.map(m => ({ value: String(m), label: MONTH_NAMES[m - 1] }))}
                             icon={<Calendar size={14} />}
                         />
                     </div>

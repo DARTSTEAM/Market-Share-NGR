@@ -39,7 +39,10 @@ async function processData() {
       ac: parseInt(row.ac) || 0,
       promedio: parseFloat(row.promedio_transacciones_diarias) || 0,
       mes: row.mes || '',
-      ano: row.ano || ''
+      ano: row.ano || '',
+      region: row.region || '',
+      distrito: row.distrito || '',
+      zona: row.zona || ''
     }));
 
   const tickets = ticketsRaw.map(row => ({
@@ -53,7 +56,10 @@ async function processData() {
     fecha: row.fecha || '',
     hora: row.hora || '',
     filename: row.filename || '',
-    fecha_carga: row.fecha_carga || ''
+    fecha_carga: row.fecha_carga || '',
+    region: row.region || '',
+    distrito: row.distrito || '',
+    zona: row.zona || ''
   }));
 
   fs.writeFileSync(jsonPath, JSON.stringify({ records, tickets }, null, 2));

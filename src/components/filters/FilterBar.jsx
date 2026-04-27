@@ -14,6 +14,7 @@ const FilterBar = ({
     categoryOptions = [],
     regionOptions = [],
     distritoOptions = [],
+    zonaOptions = [],
     onReset
 }) => {
     return (
@@ -26,6 +27,7 @@ const FilterBar = ({
                     selected={filters.month}
                     onChange={(val) => onFilterChange('month', val)}
                     width="w-32"
+                    multi
                 />
                 <CustomSelect
                     label="Año"
@@ -33,6 +35,7 @@ const FilterBar = ({
                     selected={filters.year}
                     onChange={(val) => onFilterChange('year', val)}
                     width="w-24"
+                    multi
                 />
             </div>
 
@@ -45,6 +48,7 @@ const FilterBar = ({
                 selected={filters.category}
                 onChange={(val) => onFilterChange('category', val)}
                 width="w-44"
+                multi
             />
 
             <div className="h-8 w-[1px] bg-slate-300 dark:bg-white/10 hidden md:block" />
@@ -53,17 +57,27 @@ const FilterBar = ({
             <CustomSelect
                 label="Región"
                 options={regionOptions}
-                selected={filters.region || 'all'}
+                selected={filters.region}
                 onChange={(val) => onFilterChange('region', val)}
                 width="w-40"
+                multi
             />
             <CustomSelect
                 label="Distrito"
                 options={distritoOptions}
-                selected={filters.distrito || 'all'}
+                selected={filters.distrito}
                 onChange={(val) => onFilterChange('distrito', val)}
                 width="w-48"
                 searchable
+                multi
+            />
+            <CustomSelect
+                label="Zona"
+                options={zonaOptions}
+                selected={filters.zona}
+                onChange={(val) => onFilterChange('zona', val)}
+                width="w-40"
+                multi
             />
 
             <div className="h-8 w-[1px] bg-slate-300 dark:bg-white/10 hidden md:block" />
@@ -75,6 +89,7 @@ const FilterBar = ({
                 selected={filters.competitor}
                 onChange={(val) => onFilterChange('competitor', val)}
                 width="w-48"
+                multi
             />
             <CustomSelect
                 label="Local"
@@ -83,15 +98,17 @@ const FilterBar = ({
                 onChange={(val) => onFilterChange('local', val)}
                 width="w-48"
                 searchable
+                multi
             />
-            {codigoTiendaOptions.length > 1 && (
+            {codigoTiendaOptions.length > 0 && (
                 <CustomSelect
                     label="Cód. Tienda"
                     options={codigoTiendaOptions}
-                    selected={filters.codigoTienda || 'all'}
+                    selected={filters.codigoTienda}
                     onChange={(val) => onFilterChange('codigoTienda', val)}
                     width="w-40"
                     searchable
+                    multi
                 />
             )}
             <button

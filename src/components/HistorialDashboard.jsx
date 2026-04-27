@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, Store, CalendarDays, TrendingUp, Search, X, Clock } from 'lucide-react';
+import { BookOpen, Store, CalendarDays, TrendingUp, Search, X, Clock, MapPin, Hash, Calendar } from 'lucide-react';
+import CustomSelect from './common/CustomSelect';
 
 const MES_NAMES = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Set', 'Oct', 'Nov', 'Dic'];
 const MES_FULL  = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -8,10 +9,10 @@ const MES_FULL  = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
 
 export default function HistorialDashboard({ records }) {
   const [search, setSearch]               = useState('');
-  const [filterAno, setFilterAno]         = useState('all');
-  const [filterMes, setFilterMes]         = useState('all');
-  const [filterRegion, setFilterRegion]   = useState('all');
-  const [filterLocal, setFilterLocal]     = useState('all');
+  const [filterAno, setFilterAno]         = useState([]);
+  const [filterMes, setFilterMes]         = useState([]);
+  const [filterRegion, setFilterRegion]   = useState([]);
+  const [filterLocal, setFilterLocal]     = useState([]);
   const [page, setPage]                   = useState(1);
   const PAGE_SIZE = 50;
 
@@ -22,10 +23,10 @@ export default function HistorialDashboard({ records }) {
   );
 
   // ── Opciones de filtros ───────────────────────────────────────────────────
-  const anos    = useMemo(() => [...new Set(historial.map(r => r.ano))].sort((a,b) => b-a), [historial]);
-  const meses   = useMemo(() => [...new Set(historial.map(r => r.mes))].sort((a,b) => a-b), [historial]);
-  const regions = useMemo(() => [...new Set(historial.map(r => r.region).filter(Boolean))].sort(), [historial]);
-  const locals  = useMemo(() => [...new Set(historial.map(r => r.local).filter(Boolean))].sort(), [historial]);
+  const anos    = useMemo(() => [...new Set(historial.map(r => r.ano))].sort((a,b) => b-a).map(a => ({ value: String(a), label: String(a) })), [historial]);
+  const meses   = useMemo(() => [...new Set(historial.map(r => r.mes))].sort((a,b) => a-b).map(m => ({ value: String(m), label: MES_FULL[m] })), [historial]);
+  const regions = useMemo(() => [...new Set(historial.map(r => r.region).filter(v => v && v.toUpperCase() !== 'DESCONOCIDO'))].sort().map(r => ({ value: r, label: r })), [historial]);
+  const locals  = useMemo(() => [...new Set(historial.map(r => r.local).filter(v => v && v.toUpperCase() !== 'DESCONOCIDO'))].sort().map(l => ({ value: l, label: l })), [historial]);
 
   // ── KPIs ─────────────────────────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -41,10 +42,10 @@ export default function HistorialDashboard({ records }) {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return historial.filter(r => {
-      if (filterAno    !== 'all' && String(r.ano) !== filterAno) return false;
-      if (filterMes    !== 'all' && String(r.mes) !== filterMes) return false;
-      if (filterRegion !== 'all' && r.region !== filterRegion)   return false;
-      if (filterLocal  !== 'all' && r.local  !== filterLocal)    return false;
+      if (filterAno.length > 0    && !filterAno.includes(String(r.ano))) return false;
+      if (filterMes.length > 0    && !filterMes.includes(String(r.mes))) return false;
+      if (filterRegion.length > 0 && !filterRegion.includes(r.region))   return false;
+      if (filterLocal.length > 0  && !filterLocal.includes(r.local))    return false;
       if (q && !`${r.local} ${r.codigo_tienda} ${r.caja} ${r.distrito}`
                 .toLowerCase().includes(q)) return false;
       return true;
@@ -54,12 +55,12 @@ export default function HistorialDashboard({ records }) {
   const pageCount  = Math.ceil(filtered.length / PAGE_SIZE);
   const pageData   = filtered.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
 
-  const hasFilters = search || filterAno !== 'all' || filterMes !== 'all' ||
-                     filterRegion !== 'all' || filterLocal !== 'all';
+  const hasFilters = search || filterAno.length > 0 || filterMes.length > 0 ||
+                     filterRegion.length > 0 || filterLocal.length > 0;
 
   const clearFilters = () => {
-    setSearch(''); setFilterAno('all'); setFilterMes('all');
-    setFilterRegion('all'); setFilterLocal('all'); setPage(1);
+    setSearch(''); setFilterAno([]); setFilterMes([]);
+    setFilterRegion([]); setFilterLocal([]); setPage(1);
   };
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -118,25 +119,50 @@ export default function HistorialDashboard({ records }) {
             />
           </div>
 
-          <select value={filterAno} onChange={e => { setFilterAno(e.target.value); setPage(1); }} className={selClass}>
-            <option value="all">Todos los años</option>
-            {anos.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
+          <div className="w-40 shrink-0">
+            <CustomSelect
+              label="Año"
+              multiSelect={true}
+              selected={filterAno}
+              onChange={v => { setFilterAno(v); setPage(1); }}
+              options={anos}
+              icon={<Calendar size={14} />}
+            />
+          </div>
 
-          <select value={filterMes} onChange={e => { setFilterMes(e.target.value); setPage(1); }} className={selClass}>
-            <option value="all">Todos los meses</option>
-            {meses.map(m => <option key={m} value={m}>{MES_FULL[m]}</option>)}
-          </select>
+          <div className="w-48 shrink-0">
+            <CustomSelect
+              label="Mes"
+              multiSelect={true}
+              selected={filterMes}
+              onChange={v => { setFilterMes(v); setPage(1); }}
+              options={meses}
+              icon={<Calendar size={14} />}
+            />
+          </div>
 
-          <select value={filterRegion} onChange={e => { setFilterRegion(e.target.value); setPage(1); }} className={selClass}>
-            <option value="all">Todas las regiones</option>
-            {regions.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
+          <div className="w-48 shrink-0">
+            <CustomSelect
+              label="Región"
+              multiSelect={true}
+              selected={filterRegion}
+              onChange={v => { setFilterRegion(v); setPage(1); }}
+              options={regions}
+              icon={<MapPin size={14} />}
+            />
+          </div>
 
-          <select value={filterLocal} onChange={e => { setFilterLocal(e.target.value); setPage(1); }} className={selClass}>
-            <option value="all">Todos los locales</option>
-            {locals.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
+          <div className="w-56 shrink-0">
+            <CustomSelect
+              label="Local"
+              multiSelect={true}
+              selected={filterLocal}
+              onChange={v => { setFilterLocal(v); setPage(1); }}
+              options={locals}
+              icon={<Store size={14} />}
+              searchable
+            />
+          </div>
 
           {hasFilters && (
             <button onClick={clearFilters}
