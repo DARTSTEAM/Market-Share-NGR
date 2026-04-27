@@ -10,7 +10,7 @@ import {
     Filter,
     BookOpen,
 } from 'lucide-react';
-import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
+import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, AreaChart, Area, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
 import CustomSelect from './common/CustomSelect';
 
 const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
@@ -22,8 +22,8 @@ const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
             <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center">
                 <Icon className="text-accent-orange w-5 h-5" />
             </div>
-            {trend && (
-                <span className={`text-[10px] font-black px-2 py-1 rounded-full ${trend > 0 ? 'bg-accent-lemon/10 text-emerald-600 dark:text-accent-lemon' : 'bg-red-500/10 text-red-500'}`}>
+            {trend != null && (
+                <span className={`text-[10px] font-black px-2 py-1 rounded-full ${trend > 0 ? 'bg-accent-lemon/10 text-emerald-600 dark:text-accent-lemon' : trend < 0 ? 'bg-red-500/10 text-red-500' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>
                     {trend > 0 ? '+' : ''}{trend}%
                 </span>
             )}
@@ -208,55 +208,60 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                     value={new Intl.NumberFormat('en-US').format(reactiveMetrics.totalTransDailyAvg || 0)}
                     subtitle="Promedio de transacciones generadas por día"
                     icon={TrendingUp}
-                    trend={+12.1}
+                    trend={reactiveMetrics.momDailyAvg != null ? parseFloat(reactiveMetrics.momDailyAvg.toFixed(1)) : null}
                 />
                 <KPICard
                     title="Transacciones por Local"
                     value={new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(reactiveMetrics.avgTransPerLocal || 0)}
                     subtitle="Promedio de transacciones por sede"
                     icon={Users}
-                    trend={-2.4}
+                    trend={reactiveMetrics.momPerLocal != null ? parseFloat(reactiveMetrics.momPerLocal.toFixed(1)) : null}
                 />
             </section>
 
-            {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Evolution Chart */}
-                <section className="pwa-card p-8 space-y-6 border-slate-200 dark:border-white/5 flex flex-col">
-                    <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
+            {/* ── NGR vs Competencia full-width view ── */}
+            {includeNGR && (
+                <section className="pwa-card border-slate-200 dark:border-white/5 overflow-hidden">
+                    {/* Header */}
+                    <div className="p-6 border-b border-slate-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-3">
                         <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
-                            <div className={`w-1.5 h-6 rounded-full ${includeNGR ? 'bg-orange-400' : 'bg-accent-orange'}`} />
-                            {includeNGR ? 'NGR vs Competencia' : 'Evolución Transacciones Registradas'}
+                            <div className="w-1.5 h-6 rounded-full bg-orange-400" />
+                            NGR vs Competencia
+                            <span className="text-[9px] font-bold text-slate-400 dark:text-white/30 normal-case tracking-normal italic ml-1">trx diarias promedio</span>
                         </h3>
                         <div className="flex items-center gap-2">
-                            {/* Suma / Share toggle — only when NGR is active */}
-                            {includeNGR && (
-                                <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-white/[0.04] rounded-lg border border-slate-200 dark:border-white/10">
-                                    {[{ k: 'sum', label: 'Suma' }, { k: 'share', label: 'Share %' }].map(({ k, label }) => (
-                                        <button
-                                            key={k}
-                                            onClick={() => setNgrChartMode(k)}
-                                            className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${
-                                                ngrChartMode === k
-                                                    ? 'bg-orange-500 text-white shadow-sm'
-                                                    : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                            }`}
-                                        >{label}</button>
-                                    ))}
-                                </div>
+                            {/* Var% badge */}
+                            {reactiveMetrics?.momDailyAvg != null && (
+                                <span className={`text-[9px] font-black px-2.5 py-1 rounded-full ${reactiveMetrics.momDailyAvg >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-500/10 text-red-500'}`}>
+                                    var% trx {reactiveMetrics.momDailyAvg >= 0 ? '+' : ''}{reactiveMetrics.momDailyAvg.toFixed(1)}%
+                                </span>
                             )}
-                            <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
+                            {/* Evolutive mode toggle */}
+                            <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-white/[0.04] rounded-lg border border-slate-200 dark:border-white/10">
+                                {[{ k: 'sum', label: 'Abs' }, { k: 'share', label: 'Share %' }].map(({ k, label }) => (
+                                    <button
+                                        key={k}
+                                        onClick={() => setNgrChartMode(k)}
+                                        className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${
+                                            ngrChartMode === k
+                                                ? 'bg-orange-500 text-white shadow-sm'
+                                                : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                        }`}
+                                    >{label}</button>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
-
-                    <div className="flex-1 w-full mt-2" style={{ minHeight: '320px' }}>
-                        <ResponsiveContainer width="100%" height={320}>
-                            {includeNGR ? (
-                                /* NGR vs Competencia — stacked (sum) or 100% share */
+                    {/* Two-column: evolutive left, pie right */}
+                    <div className="grid grid-cols-1 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-white/5">
+                        {/* Evolutive chart — 3/5 */}
+                        <div className="lg:col-span-3 p-6" style={{ minHeight: '340px' }}>
+                            <ResponsiveContainer width="100%" height={300}>
                                 <AreaChart
                                     data={chartData.map(d => {
-                                        const comp = d.tickets ?? d.historial ?? 0;
+                                        // Both series use daily avg: d.promedio for comp, d.ngrTrx for NGR
+                                        const comp = d.promedio ?? d.historialProm ?? 0;
                                         const ngr  = d.ngrTrx ?? 0;
                                         const total = comp + ngr;
                                         if (ngrChartMode === 'share') {
@@ -269,24 +274,24 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                         }
                                         return { ...d, competencia: comp, ngr };
                                     })}
-                                    margin={{ top: 10, right: 20, left: 10, bottom: 20 }}
+                                    margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
                                 >
                                     <defs>
-                                        <linearGradient id="colorNGR" x1="0" y1="0" x2="0" y2="1">
+                                        <linearGradient id="colorNGR2" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%"  stopColor="#F26522" stopOpacity={0.85} />
-                                            <stop offset="95%" stopColor="#F26522" stopOpacity={0.1} />
+                                            <stop offset="95%" stopColor="#F26522" stopOpacity={0.05} />
                                         </linearGradient>
-                                        <linearGradient id="colorComp" x1="0" y1="0" x2="0" y2="1">
+                                        <linearGradient id="colorComp2" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
-                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.05} />
+                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
                                         </linearGradient>
                                     </defs>
                                     <XAxis
                                         dataKey="name"
-                                        stroke={theme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"}
-                                        fontSize={10}
-                                        tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
-                                        interval={Math.floor(chartData.length / 10)}
+                                        stroke={theme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}
+                                        fontSize={9}
+                                        tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)" }}
+                                        interval={Math.max(0, Math.floor(chartData.length / 8) - 1)}
                                         tickFormatter={(str) => {
                                             if (!str || !str.includes('-')) return str;
                                             const [y, m] = str.split('-');
@@ -296,345 +301,109 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                     />
                                     <YAxis
                                         fontSize={9}
-                                        tick={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)' }}
+                                        tick={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)' }}
                                         tickFormatter={v =>
                                             ngrChartMode === 'share'
                                                 ? `${v}%`
-                                                : v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : v
+                                                : v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(Math.round(v))
                                         }
                                         domain={ngrChartMode === 'share' ? [0, 100] : ['auto', 'auto']}
+                                        width={38}
                                     />
                                     <RechartsTooltip
-                                        contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.92)' : '#fff', border: '1px solid rgba(249,115,22,0.3)', borderRadius: '12px', fontWeight: 'bold' }}
+                                        contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.92)' : '#fff', border: '1px solid rgba(249,115,22,0.3)', borderRadius: '12px', fontWeight: 'bold', fontSize: '11px' }}
                                         formatter={(value, name, props) => {
                                             const label = name === 'ngr' ? '★ NGR Propio' : 'Competencia';
                                             if (ngrChartMode === 'share') {
                                                 const rawVal = name === 'ngr' ? props.payload._rawNgr : props.payload._rawComp;
                                                 return [
-                                                    `${value.toFixed(1)}%  (${rawVal != null ? rawVal.toLocaleString('es-PE') : '—'} trx)`,
+                                                    `${value.toFixed(1)}%  (${rawVal != null ? rawVal.toLocaleString('es-PE') : '—'} trx/día)`,
                                                     label
                                                 ];
                                             }
-                                            return [value != null ? value.toLocaleString('es-PE') : '—', label];
+                                            return [value != null ? `${value.toLocaleString('es-PE')} trx/día` : '—', label];
                                         }}
                                     />
                                     <Area type="monotone" dataKey="competencia" name="competencia"
                                         stroke="#8b5cf6" strokeWidth={1.5}
-                                        fillOpacity={1} fill="url(#colorComp)" connectNulls stackId="a" />
+                                        fillOpacity={1} fill="url(#colorComp2)" connectNulls stackId="a" />
                                     <Area type="monotone" dataKey="ngr" name="ngr"
-                                        stroke="#F26522" strokeWidth={2}
-                                        fillOpacity={1} fill="url(#colorNGR)" connectNulls stackId="a" />
+                                        stroke="#F26522" strokeWidth={2.5}
+                                        fillOpacity={1} fill="url(#colorNGR2)" connectNulls stackId="a" />
                                 </AreaChart>
-                            ) : (
-                                /* Original single-area chart */
-                                <AreaChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 20 }}>
-                                    <defs>
-                                        <linearGradient id="colorTrend" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%"  stopColor="#ff5e00" stopOpacity={0.8} />
-                                            <stop offset="95%" stopColor="#ff5e00" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="colorHistorial" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
-                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <XAxis
-                                        dataKey="name"
-                                        stroke={theme === 'dark' ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.1)"}
-                                        fontSize={10}
-                                        tick={{ fill: theme === 'dark' ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)" }}
-                                        interval={showHistorial ? Math.floor(chartData.length / 10) : 0}
-                                        tickFormatter={(str) => {
-                                            if (!str || !str.includes('-')) return str;
-                                            const [y, m] = str.split('-');
-                                            const months = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
-                                            return `${months[parseInt(m) - 1]} ${y.slice(-2)}`;
-                                        }}
-                                    />
-                                    <RechartsTooltip
-                                        contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.9)' : '#fff', border: '1px solid rgba(139,92,246,0.2)', borderRadius: '12px', fontWeight: 'bold' }}
-                                        formatter={(value, name) => [
-                                            value != null ? value.toLocaleString('es-PE') : '—',
-                                            name === 'historial' ? 'Historial campo' : 'Mediciones OK'
-                                        ]}
-                                        itemStyle={{ color: '#ff5e00' }}
-                                    />
-                                    {showHistorial && chartMetric === 'trx' && (
-                                        <Area type="monotone" dataKey="historial" name="historial"
-                                            stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 3"
-                                            fillOpacity={1} fill="url(#colorHistorial)" connectNulls />
-                                    )}
-                                    {showHistorial && chartMetric === 'prom_diario' && (
-                                        <Area type="monotone" dataKey="historialProm" name="historialProm"
-                                            stroke="#8b5cf6" strokeWidth={1.5} strokeDasharray="4 3"
-                                            fillOpacity={1} fill="url(#colorHistorial)" connectNulls />
-                                    )}
-                                    {chartMetric === 'trx' ? (
-                                        <Area type="monotone" dataKey="tickets" name="tickets"
-                                            stroke="#ff5e00" strokeWidth={2}
-                                            fillOpacity={1} fill="url(#colorTrend)" connectNulls />
-                                    ) : (
-                                        <Area type="monotone" dataKey="promedio" name="promedio"
-                                            stroke="#ff5e00" strokeWidth={2}
-                                            fillOpacity={1} fill="url(#colorTrend)" connectNulls />
-                                    )}
-                                </AreaChart>
-                            )}
-                        </ResponsiveContainer>
-                    </div>
-                </section>
+                            </ResponsiveContainer>
+                        </div>
 
-                {/* Market Share Chart (Pie Chart) */}
-                <section className="pwa-card p-8 space-y-6 border-slate-200 dark:border-white/5 flex flex-col">
-                    <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
-                        <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
-                            <div className="w-1.5 h-6 bg-accent-blue rounded-full" />
-                            Market Share Total
-                        </h3>
-                        <PieChart className="w-4 h-4 text-slate-400 dark:text-white/20" />
-                    </div>
-                    <div className="flex-1 w-full flex items-center justify-center mt-6" style={{ minHeight: '340px' }}>
-                        <ResponsiveContainer width="100%" height={340}>
-                            <RechartsPieChart>
-                                <Pie
-                                    data={[...shareData].sort((a, b) => b.value - a.value)}
-                                    cx="50%"
-                                    cy="45%"
-                                    innerRadius="38%"
-                                    outerRadius="58%"
-                                    paddingAngle={3}
-                                    dataKey="value"
-                                    stroke="none"
-                                    label={false}
-                                >
-                                    {[...shareData].sort((a, b) => b.value - a.value).map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <RechartsTooltip
-                                    contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.8)' : '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontWeight: 'bold' }}
-                                    itemStyle={{ color: theme === 'dark' ? '#fff' : '#1e293b' }}
-                                    formatter={(value, name) => [`${((value / shareData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(1)}%`, name]}
-                                />
-                                <RechartsLegend
-                                    iconType="circle"
-                                    iconSize={8}
-                                    formatter={(value, entry) => (
-                                        <span style={{ fontSize: '9px', fontWeight: 900, fontStyle: 'italic', textTransform: 'uppercase', letterSpacing: '0.05em', color: theme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)' }}>
-                                            {value} {((entry.payload.value / shareData.reduce((a, b) => a + b.value, 0)) * 100).toFixed(0)}%
-                                        </span>
-                                    )}
-                                />
-                            </RechartsPieChart>
-                        </ResponsiveContainer>
-                    </div>
-                </section>
-            </div>
-
-            {/* Mix por Canal */}
-            <section className="pwa-card p-8 space-y-8 border-slate-200 dark:border-white/5">
-                <div className="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
-                    <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
-                        <div className="w-1.5 h-6 bg-slate-400 dark:bg-white/20 rounded-full" />
-                        Mix por Canal por Competidor (Estimado)
-                    </h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                    {channelMix.map((comp, i) => (
-                        <div key={i} className="space-y-3 p-4 bg-slate-50 dark:bg-white/[0.02] rounded-2xl border border-slate-200 dark:border-white/5">
-                            <div className="flex justify-between items-center">
-                                <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest truncate pr-2">{comp.name}</span>
-                                <span className="text-[8px] font-black text-accent-orange">LIVE</span>
+                        {/* Pie + brand table — 2/5 */}
+                        <div className="lg:col-span-2 p-6 flex flex-col gap-4">
+                            {/* Donut */}
+                            <div style={{ height: 180 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <RechartsPieChart>
+                                        <Pie
+                                            data={[...shareData].sort((a, b) => b.value - a.value)}
+                                            cx="50%" cy="50%"
+                                            innerRadius="42%" outerRadius="65%"
+                                            paddingAngle={2}
+                                            dataKey="value"
+                                            stroke="none"
+                                            label={false}
+                                        >
+                                            {[...shareData].sort((a, b) => b.value - a.value).map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <RechartsTooltip
+                                            contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.92)' : '#fff', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '12px', fontWeight: 'bold', fontSize: '11px' }}
+                                            formatter={(value, name) => {
+                                                const total = shareData.reduce((a, b) => a + b.value, 0);
+                                                return [`${((value / total) * 100).toFixed(1)}%  (${value.toLocaleString('es-PE')} trx/día)`, name];
+                                            }}
+                                        />
+                                    </RechartsPieChart>
+                                </ResponsiveContainer>
                             </div>
-                            <div className="space-y-4">
-                                {[
-                                    { name: 'Delivery', val: comp.Delivery, color: 'bg-accent-orange' },
-                                    { name: 'Recojo Tienda', val: comp['Drive-Thru'], color: 'bg-accent-blue' },
-                                    { name: 'Salón', val: comp['Salón'], color: 'bg-slate-300 dark:bg-white/20' }
-                                ].map((channel, j) => (
-                                    <div key={j} className="space-y-1">
-                                        <div className="flex justify-between text-[8px] font-bold text-slate-500 dark:text-white/40 uppercase tracking-widest">
-                                            <span>{channel.name}</span>
-                                            <span>{channel.val}%</span>
-                                        </div>
-                                        <div className="h-1.5 w-full bg-slate-200 dark:bg-white/5 rounded-full overflow-hidden">
-                                            <motion.div
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${channel.val}%` }}
-                                                className={`h-full ${channel.color}`}
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </section>
 
-            {/* Audit Table */}
-            <section className="pwa-card overflow-hidden border-slate-200 dark:border-white/5">
-                <div className="p-6 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] flex flex-wrap gap-3 items-center justify-between">
-                    <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
-                        <TableIcon className="w-4 h-4 text-accent-orange" />
-                        Tabla de Auditoría y Detalle
-                    </h3>
-                    <div className="flex items-center gap-3 flex-wrap">
-                        {/* Sort dropdown */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar por</span>
-                            <CustomSelect
-                                label="Ordenar"
-                                width="w-44"
-                                selected={sortKey + '_' + sortDir}
-                                onChange={(val) => {
-                                    const [key, dir] = val.split('_');
-                                    setSortKey(key);
-                                    setSortDir(dir);
-                                }}
-                                options={[
-                                    { value: 'promDiario_desc', label: 'Prom. Diario ↓' },
-                                    { value: 'promDiario_asc', label: 'Prom. Diario ↑' },
-                                    { value: 'codigo_tienda_asc', label: 'Cód. Tienda A→Z' },
-                                    { value: 'codigo_tienda_desc', label: 'Cód. Tienda Z→A' },
-                                    { value: 'competidor_asc', label: 'Competidor A→Z' },
-                                    { value: 'competidor_desc', label: 'Competidor Z→A' },
-                                    { value: 'local_asc', label: 'Local A→Z' },
-                                    { value: 'local_desc', label: 'Local Z→A' },
-                                    { value: 'canal_asc', label: 'Canal A→Z' },
-                                ]}
-                            />
-                        </div>
-                        <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 flex items-center gap-2 text-[10px] font-bold text-slate-500 dark:text-white/60">
-                            <Filter className="w-3 h-3" />
-                            Mostrando {filteredByEstimado.length} registros
-                        </div>
-
-                        {/* Toggle Solo Estimados */}
-                        <button
-                            onClick={() => { setOnlyEstimados(v => !v); setCurrentPage(1); }}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
-                                onlyEstimados
-                                    ? 'bg-amber-400/20 border-amber-400/50 text-amber-600 dark:text-amber-400 shadow-inner'
-                                    : 'bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/50 hover:border-amber-400/40 hover:text-amber-500'
-                            }`}
-                        >
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: onlyEstimados ? '#f59e0b' : '#94a3b8', display: 'inline-block', transition: 'background 0.2s' }} />
-                            Solo Estimados
-                            {onlyEstimados && (
-                                <span className="bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-[8px] leading-none">
-                                    {filteredByEstimado.length}
-                                </span>
-                            )}
-                        </button>
-                    </div>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-[#f8fafc] dark:bg-black/20 border-b border-slate-200 dark:border-white/10 text-slate-500 dark:text-white/40 font-black text-[9px] uppercase tracking-[0.2em]">
-                            <tr>
-                                <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('competidor')}>Competidor{sortIcon('competidor')}</th>
-                                <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('codigo_tienda')}>Cód. Tienda{sortIcon('codigo_tienda')}</th>
-                                <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('local')}>Sede / Local{sortIcon('local')}</th>
-                                <th className="px-6 py-5 cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('canal')}>Canal{sortIcon('canal')}</th>
-                                <th className="px-6 py-5 text-center">Caja</th>
-                                <th className="px-6 py-5 text-center cursor-pointer hover:text-accent-orange transition-colors select-none" onClick={() => handleSort('promDiario')}>Prom. Diario{sortIcon('promDiario')}</th>
-                                <th className="px-6 py-5 text-center">Momento (A/C)</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[11px] text-slate-700 dark:text-white/70">
-                            {paginatedData.map((row) => {
-                                const isEst = row.isEstimado;
-                                const dotColor = isEst ? (CONFIANZA_DOT[row.confianza] || '#94a3b8') : null;
-                                return (
-                                <tr
-                                    key={row.competidor + row.local + String(row.caja)}
-                                    className={`transition-colors group border-l-4 ${
-                                        isEst
-                                            ? 'border-dashed bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-50/70 dark:hover:bg-amber-900/15'
-                                            : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/[0.03]'
-                                    }`}
-                                    style={isEst ? { borderLeftColor: dotColor } : {}}
-                                >
-                                    <td className="px-6 py-5">
-                                        {(() => {
-                                            const color = shareData.find(s => s.name === row.competidor)?.color || '#94a3b8';
+                            {/* Brand breakdown table */}
+                            <div className="flex-1 overflow-y-auto space-y-1.5">
+                                {(() => {
+                                    const total = shareData.reduce((a, b) => a + b.value, 0);
+                                    return [...shareData]
+                                        .sort((a, b) => b.value - a.value)
+                                        .map((brand, i) => {
+                                            const sharePct = total > 0 ? (brand.value / total * 100) : 0;
+                                            const isNGR = ['POPEYES','BEMBOS','PAPA JOHNS','CHINAWOK'].includes(brand.name?.toUpperCase());
                                             return (
-                                                <span
-                                                    className="font-black text-[10px] tracking-widest px-3 py-1.5 rounded-full border inline-block truncate max-w-[140px]"
-                                                    style={{ color, backgroundColor: `${color}15`, borderColor: `${color}30` }}
-                                                >
-                                                    {row.competidor}
-                                                </span>
+                                                <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                                                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: brand.color }} />
+                                                    <span className={`text-[9px] font-black uppercase tracking-widest flex-1 truncate ${isNGR ? 'text-orange-500' : 'text-slate-700 dark:text-white/70'}`}>
+                                                        {isNGR && '★ '}{brand.name}
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-slate-400 dark:text-white/30 tabular-nums">
+                                                        {brand.value.toLocaleString('es-PE')}
+                                                    </span>
+                                                    <span className="text-[9px] font-black tabular-nums min-w-[38px] text-right" style={{ color: brand.color }}>
+                                                        {sharePct.toFixed(1)}%
+                                                    </span>
+                                                </div>
                                             );
-                                        })()}
-                                    </td>
-                                    <td className="px-6 py-5 font-black text-[10px] text-accent-orange/80 font-mono tracking-tight">{row.codigo_tienda || '-'}</td>
-                                    <td className="px-6 py-5 font-bold uppercase text-[10px] text-slate-500 dark:text-white/60">{row.local}</td>
-                                    <td className="px-6 py-5">
-                                        {isEst ? (
-                                            <span className="inline-flex items-center gap-1">
-                                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
-                                                <span className="font-black text-[9px] uppercase tracking-widest" style={{ color: dotColor }}>
-                                                    Est. {row.confianza?.replace('_', ' ')}
-                                                </span>
-                                            </span>
-                                        ) : (
-                                            <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
-                                                {row.canal}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-5 text-center font-bold text-slate-500 dark:text-white/40">
-                                        {isEst ? <span className="opacity-30 text-[10px]">—</span> : (row.caja || '-')}
-                                    </td>
-                                    <td className="px-6 py-5 text-center font-black font-mono" style={isEst ? { color: dotColor } : {}} >
-                                        {isEst && <span className="opacity-60 mr-0.5">~</span>}{row.promDiario.toFixed ? row.promDiario.toFixed(1) : row.promDiario}
-                                    </td>
-                                    <td className="px-6 py-5 text-center">
-                                        {isEst ? (
-                                            <span className="text-[9px] font-bold text-slate-400 italic">estimado</span>
-                                        ) : (
-                                            <div className="flex justify-center gap-1.5">
-                                                {[-1, 0, 1].map(v => (
-                                                    <div
-                                                        key={v}
-                                                        className={`w-2 h-2 rounded-full transition-shadow ${row.ac === v ? (v === -1 ? 'bg-accent-orange shadow-[0_0_8px_rgba(255,126,75,0.6)]' : v === 0 ? 'bg-accent-blue shadow-[0_0_8px_rgba(0,112,243,0.6)]' : 'bg-accent-lemon shadow-[0_0_8px_rgba(204,255,0,0.6)]') : 'bg-slate-200 dark:bg-white/10'}`}
-                                                    />
-                                                ))}
-                                            </div>
-                                        )}
-                                    </td>
-                                </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-                {totalPages > 1 && (
-                    <div className="p-4 flex justify-between items-center bg-slate-50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/10">
-                        <span className="text-xs font-bold text-slate-500 dark:text-white/40">
-                            Mostrando {(currentPage - 1) * ITEMS_PER_PAGE_MAIN + 1} a {Math.min(currentPage * ITEMS_PER_PAGE_MAIN, displayTableData.length)} de {displayTableData.length} registros
-                        </span>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1}
-                                className="px-3 py-1.5 rounded-md bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-white/80 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
-                            >
-                                Anterior
-                            </button>
-                            <button
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage === totalPages}
-                                className="px-3 py-1.5 rounded-md bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-white/80 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
-                            >
-                                Siguiente
-                            </button>
+                                        });
+                                })()}
+                                {shareData.length === 0 && (
+                                    <p className="text-[10px] text-slate-400 dark:text-white/20 text-center py-8">Sin datos para el período</p>
+                                )}
+                            </div>
                         </div>
                     </div>
-                )}
-            </section>
+                </section>
+            )}
+
+            <StoreEvolutionChart
+                allRecords={allRecords}
+                shareData={shareData}
+                currentFilters={filters}
+            />
+
             <MonthlyTransactionsTable
                 allRecords={allRecords}
                 shareData={shareData}
@@ -644,107 +413,374 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
     );
 }
 
+/* ─── Store Evolution Chart ───────────────────────────────────────────────── */
+const StoreEvolutionChart = ({ allRecords, shareData, currentFilters }) => {
+    const theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    const [selectedMonth, setSelectedMonth] = useState(null); // index into months array
+
+    // Same 12M months logic (arrays-aware)
+    const months = useMemo(() => {
+        const now = new Date();
+        const yearArr  = Array.isArray(currentFilters.year)  ? currentFilters.year  : [];
+        const monthArr = Array.isArray(currentFilters.month) ? currentFilters.month : [];
+        const anchorYear  = yearArr.length  > 0 ? Math.max(...yearArr.map(Number))  : now.getFullYear();
+        const anchorMonth = monthArr.length > 0 ? Math.max(...monthArr.map(Number)) : now.getMonth();
+
+        const list = [];
+        const endDate = new Date(anchorYear, anchorMonth + 1, 1);
+        for (let i = 11; i >= 0; i--) {
+            const d = new Date(endDate.getFullYear(), endDate.getMonth() - i, 1);
+            const mLabel = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
+            const yLabel = d.getFullYear().toString().slice(-2);
+            list.push({
+                label: `${mLabel.charAt(0).toUpperCase() + mLabel.slice(1)} ${yLabel}`,
+                month: d.getMonth(),
+                year:  d.getFullYear(),
+            });
+        }
+        return list;
+    }, [currentFilters.year, currentFilters.month]);
+
+    // Build: for each month → Set of active store keys
+    const monthStores = useMemo(() => {
+        // Map: `${year}__${month}` -> Set<storeKey>
+        const map = {};
+        allRecords.forEach(rec => {
+            let y, m;
+            if (rec.mes != null && rec.ano != null) {
+                y = parseInt(rec.ano); m = parseInt(rec.mes) - 1;
+            } else if (rec.fecha_y_hora_registro || rec.fecha) {
+                const d = new Date(rec.fecha_y_hora_registro || rec.fecha);
+                if (!isNaN(d)) { y = d.getFullYear(); m = d.getMonth(); }
+            }
+            if (y == null || isNaN(y) || m == null || isNaN(m)) return;
+            if (!rec.local) return;
+
+            const mk = `${y}__${m}`;
+            if (!map[mk]) map[mk] = new Set();
+            // Store key = codigo_tienda if available, else local name (for matching across months)
+            const sk = rec.codigo_tienda || rec.local;
+            map[mk].add(JSON.stringify({ key: sk, local: rec.local, codigo: rec.codigo_tienda || '', competidor: rec.competidor }));
+        });
+        return map;
+    }, [allRecords]);
+
+    // Build chart data and deltas
+    const { chartData, deltas } = useMemo(() => {
+        const cData = [];
+        const dels  = {}; // index -> { added: [], removed: [] }
+
+        months.forEach((mo, idx) => {
+            const mk = `${mo.year}__${mo.month}`;
+            const stores = monthStores[mk] || new Set();
+            const parsed = [...stores].map(s => JSON.parse(s));
+            const count  = parsed.length;
+
+            cData.push({
+                name:  mo.label,
+                count,
+                stores: parsed,
+            });
+
+            if (idx > 0) {
+                const prevParsed = [...(monthStores[`${months[idx-1].year}__${months[idx-1].month}`] || new Set())].map(s => JSON.parse(s));
+                const prevKeys   = new Set(prevParsed.map(s => s.key));
+                const currKeys   = new Set(parsed.map(s => s.key));
+
+                const added   = parsed.filter(s => !prevKeys.has(s.key));
+                const removed = prevParsed.filter(s => !currKeys.has(s.key));
+
+                if (added.length > 0 || removed.length > 0) {
+                    dels[idx] = { added, removed };
+                }
+            }
+        });
+        return { chartData: cData, deltas: dels };
+    }, [months, monthStores]);
+
+    const hasChanges = Object.keys(deltas).length > 0;
+    const focusIdx   = selectedMonth ?? (chartData.length - 1);
+    const focusDelta = deltas[focusIdx];
+
+    // Custom dot to highlight months with changes
+    const CustomDot = (props) => {
+        const { cx, cy, index } = props;
+        const hasDelta = !!deltas[index];
+        if (!hasDelta) return <circle cx={cx} cy={cy} r={3} fill="#f97316" strokeWidth={0} />;
+        return (
+            <g>
+                <circle cx={cx} cy={cy} r={7} fill="rgba(239,68,68,0.15)" />
+                <circle cx={cx} cy={cy} r={4} fill="#ef4444" />
+            </g>
+        );
+    };
+
+    return (
+        <section className="pwa-card border-slate-200 dark:border-white/5 overflow-hidden">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
+                    <div className="w-1.5 h-6 rounded-full bg-blue-400" />
+                    Evolutivo de Tiendas Activas
+                    <span className="text-[9px] font-bold text-slate-400 dark:text-white/30 normal-case tracking-normal italic ml-1">rolling 12M · click mes para ver detalle</span>
+                </h3>
+                <div className="flex items-center gap-2">
+                    {hasChanges && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                            <div className="w-2 h-2 rounded-full bg-red-400" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-red-500">Cambios detectados</span>
+                        </div>
+                    )}
+                    <div className="px-3 py-1 rounded-full bg-accent-orange/10 border border-accent-orange/20">
+                        <span className="text-[10px] font-black uppercase text-accent-orange">
+                            {chartData[chartData.length - 1]?.count ?? 0} tiendas activas
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Line Chart */}
+                <div className="lg:col-span-2" style={{ height: 260 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                            data={chartData}
+                            margin={{ top: 10, right: 10, left: -10, bottom: 5 }}
+                            onClick={(e) => {
+                                if (e?.activeTooltipIndex != null) setSelectedMonth(e.activeTooltipIndex);
+                            }}
+                        >
+                            <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)'} />
+                            <XAxis
+                                dataKey="name"
+                                fontSize={9}
+                                tick={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.45)' }}
+                                tickLine={false}
+                            />
+                            <YAxis
+                                allowDecimals={false}
+                                fontSize={9}
+                                tick={{ fill: theme === 'dark' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.4)' }}
+                                tickLine={false}
+                                axisLine={false}
+                            />
+                            <RechartsTooltip
+                                contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.92)' : '#fff', border: '1px solid rgba(249,115,22,0.3)', borderRadius: '12px', fontWeight: 'bold' }}
+                                formatter={(value, name, props) => {
+                                    const idx = props?.payload && chartData.findIndex(d => d.name === props.payload.name);
+                                    const delta = idx != null && idx > 0 ? deltas[idx] : null;
+                                    const lines = [`${value} tiendas`];
+                                    if (delta?.added?.length)   lines.push(`+${delta.added.length} nuevas`);
+                                    if (delta?.removed?.length) lines.push(`-${delta.removed.length} salieron`);
+                                    return [lines.join('  ·  '), 'Tiendas activas'];
+                                }}
+                            />
+                            <Line
+                                type="monotone"
+                                dataKey="count"
+                                stroke="#f97316"
+                                strokeWidth={2.5}
+                                dot={<CustomDot />}
+                                activeDot={{ r: 6, fill: '#f97316' }}
+                            />
+                        </LineChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* Delta Panel */}
+                <div className="flex flex-col gap-3">
+                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">
+                        {selectedMonth != null ? `Cambios en ${chartData[selectedMonth]?.name ?? ''}` : 'Último mes con cambios'}
+                    </div>
+
+                    {focusDelta ? (
+                        <div className="space-y-3 overflow-y-auto max-h-[220px] pr-1 custom-scrollbar">
+                            {focusDelta.added.length > 0 && (
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Incorporadas ({focusDelta.added.length})</span>
+                                    </div>
+                                    {focusDelta.added.map((s, i) => {
+                                        const color = shareData.find(sd => sd.name === s.competidor)?.color || '#94a3b8';
+                                        return (
+                                            <div key={i} className="flex items-center gap-2 pl-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
+                                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                                                <div className="flex flex-col min-w-0">
+                                                    {s.codigo && <span className="text-[8px] font-black font-mono text-accent-orange/70">{s.codigo}</span>}
+                                                    <span className="text-[9px] font-bold text-slate-700 dark:text-white/70 uppercase truncate">{s.local}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            {focusDelta.removed.length > 0 && (
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-red-500">Dadas de baja ({focusDelta.removed.length})</span>
+                                    </div>
+                                    {focusDelta.removed.map((s, i) => {
+                                        const color = shareData.find(sd => sd.name === s.competidor)?.color || '#94a3b8';
+                                        return (
+                                            <div key={i} className="flex items-center gap-2 pl-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20">
+                                                <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                                                <div className="flex flex-col min-w-0">
+                                                    {s.codigo && <span className="text-[8px] font-black font-mono text-accent-orange/70">{s.codigo}</span>}
+                                                    <span className="text-[9px] font-bold text-slate-700 dark:text-white/70 uppercase truncate">{s.local}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-8 text-center">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
+                                <TrendingUp className="w-5 h-5 text-slate-300 dark:text-white/20" />
+                            </div>
+                            <p className="text-[9px] font-bold text-slate-400 dark:text-white/20 uppercase tracking-widest">
+                                {selectedMonth != null ? 'Sin cambios en este mes' : 'Sin cambios en el período'}
+                            </p>
+                            {selectedMonth != null && (
+                                <button onClick={() => setSelectedMonth(null)} className="text-[9px] font-black text-accent-orange/60 hover:text-accent-orange underline transition-colors">
+                                    Ver último cambio
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Month navigator pills */}
+                    {hasChanges && (
+                        <div className="flex flex-wrap gap-1 pt-2 border-t border-slate-100 dark:border-white/5">
+                            {Object.keys(deltas).map(Number).map(idx => (
+                                <button
+                                    key={idx}
+                                    onClick={() => setSelectedMonth(idx)}
+                                    className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest transition-all ${
+                                        focusIdx === idx
+                                            ? 'bg-accent-orange text-white'
+                                            : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/40 hover:bg-orange-50 hover:text-accent-orange'
+                                    }`}
+                                >
+                                    {chartData[idx]?.name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </section>
+    );
+};
+
 const ITEMS_PER_PAGE_MONTHLY = 15;
 
 const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => {
     const [localFilters, setLocalFilters] = useState({
         competidor: 'all',
         local: 'all',
-        caja: 'all'
     });
     const [currentPage, setCurrentPage] = useState(1);
-    const [matrixMetric, setMatrixMetric] = useState('prom_diario');
 
-
-    // Generate real months based on available data or a rolling 12M from selection
+    // Generate rolling 12M months.
+    // currentFilters.year/.month are string arrays, e.g. ['2025'] / ['0','3'] (0=Jan)
     const months = useMemo(() => {
+        const now = new Date();
+        const yearArr  = Array.isArray(currentFilters.year)  ? currentFilters.year  : [];
+        const monthArr = Array.isArray(currentFilters.month) ? currentFilters.month : [];
+        const anchorYear  = yearArr.length  > 0 ? Math.max(...yearArr.map(Number))  : now.getFullYear();
+        const anchorMonth = monthArr.length > 0 ? Math.max(...monthArr.map(Number)) : now.getMonth();
+
         const list = [];
-        const selectedYear = parseInt(currentFilters.year);
-        const selectedMonth = currentFilters.month === 'all' ? 11 : parseInt(currentFilters.month);
-
-        // Use the selected month/year as the END of the 12 month period
-        const endDate = new Date(selectedYear || 2026, selectedMonth, 1);
-
+        const endDate = new Date(anchorYear, anchorMonth + 1, 1);
         for (let i = 11; i >= 0; i--) {
             const d = new Date(endDate.getFullYear(), endDate.getMonth() - i, 1);
-            const m = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
-            const y = d.getFullYear().toString().slice(-2);
+            const mLabel = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
+            const yLabel = d.getFullYear().toString().slice(-2);
             list.push({
-                label: `${m.charAt(0).toUpperCase() + m.slice(1)} ${y}`,
+                label: `${mLabel.charAt(0).toUpperCase() + mLabel.slice(1)} ${yLabel}`,
                 month: d.getMonth(),
-                year: d.getFullYear(),
-                key: `${d.getFullYear()}-${d.getMonth()}`
+                year:  d.getFullYear(),
             });
         }
         return list;
     }, [currentFilters.year, currentFilters.month]);
 
+    // Aggregate by TIENDA (local). Includes real + estimado records.
     const matrixData = useMemo(() => {
-        const localMonthMap = {};
-        const promMonthMap = {};
-        const countMonthMap = {};
+        const storeMonthMap = {}; // `${local}__${year}__${month0}` -> { prom, count }
+        const storeMetaMap = {}; // `${local}` -> { competidor, local }
 
         allRecords.forEach(rec => {
             let y, m;
-            if (rec.mes && rec.ano) {
+            if (rec.mes != null && rec.ano != null) {
                 y = parseInt(rec.ano);
-                m = parseInt(rec.mes) - 1;
-            } else {
+                m = parseInt(rec.mes) - 1; // mes is 1-indexed in Firestore
+            } else if (rec.fecha_y_hora_registro || rec.fecha) {
                 const date = new Date(rec.fecha_y_hora_registro || rec.fecha);
-                y = date.getFullYear();
-                m = date.getMonth();
+                if (!isNaN(date)) { y = date.getFullYear(); m = date.getMonth(); }
             }
+            if (y == null || isNaN(y) || m == null || isNaN(m)) return;
 
-            const key = `${rec.local}||${rec.caja ?? ''}_${y}_${m}`;
-            if (!localMonthMap[key]) { localMonthMap[key] = 0; promMonthMap[key] = 0; countMonthMap[key] = 0; }
-            localMonthMap[key] += parseInt(rec.transacciones_diferencial || rec.transacciones) || 0;
-            promMonthMap[key]  += parseFloat(rec.promedio) || 0;
-            countMonthMap[key] += 1;
-        });
+            const storeKey = rec.local;
+            if (!storeKey) return;
 
-        const localsMetadata = {};
-        allRecords.forEach(rec => {
-            const rowKey = `${rec.local}||${rec.caja ?? ''}`;
-            if (!localsMetadata[rowKey]) {
-                localsMetadata[rowKey] = {
-                    competidor: rec.competidor,
-                    local: rec.local,
-                    caja: rec.caja || '-',
-                    cajasTotal: rec.caja || 1
+            const monthKey = `${storeKey}__${y}__${m}`;
+            // promedio for competitor records, trx_promedio for NGR records
+            const dailyAvg = parseFloat(rec.promedio) || parseFloat(rec.trx_promedio) || 0;
+
+            if (!storeMonthMap[monthKey]) storeMonthMap[monthKey] = { prom: 0, count: 0 };
+            storeMonthMap[monthKey].prom  += dailyAvg;
+            storeMonthMap[monthKey].count += 1;
+
+            if (!storeMetaMap[storeKey]) {
+                storeMetaMap[storeKey] = {
+                    competidor:    rec.competidor,
+                    local:         rec.local,
+                    codigo_tienda: rec.codigo_tienda || rec.store_num || '',
                 };
             }
         });
 
-        return Object.values(localsMetadata).map(meta => {
-            const monthly = months.map(m => {
-                const key = `${meta.local}||${meta.caja ?? ''}_${m.year}_${m.month}`;
-                return localMonthMap[key] || 0;
+        return Object.values(storeMetaMap).map(meta => {
+            const monthlyProm = months.map(mo => {
+                const mk = `${meta.local}__${mo.year}__${mo.month}`;
+                const entry = storeMonthMap[mk];
+                if (!entry || entry.count === 0) return 0;
+                return entry.prom / entry.count;
             });
-            const monthlyProm = months.map(m => {
-                const key = `${meta.local}||${meta.caja ?? ''}_${m.year}_${m.month}`;
-                const count = countMonthMap[key] || 1;
-                return promMonthMap[key] != null ? (promMonthMap[key] / count) : 0;
-            });
+
+            const lastM = monthlyProm[monthlyProm.length - 1];
+            const prevM = monthlyProm[monthlyProm.length - 2];
+            const mom = (prevM > 0) ? ((lastM - prevM) / prevM) * 100 : null;
+
             return {
                 ...meta,
-                monthly,
                 monthlyProm,
-                total: monthly.reduce((a, b) => a + b, 0),
-                totalProm: monthlyProm.reduce((a, b) => a + b, 0) / 12
+                totalProm: monthlyProm.reduce((a, b) => a + b, 0) / 12,
+                mom,
             };
-        }).filter(row => row.total > 0);
+        }).filter(row => row.monthlyProm.some(v => v > 0));
     }, [allRecords, months]);
+
+    // Flag top decliners (bottom 20% by MoM)
+    const declinerThreshold = useMemo(() => {
+        const moms = matrixData.map(r => r.mom).filter(v => v != null && v < 0).sort((a, b) => a - b);
+        if (moms.length === 0) return null;
+        return moms[Math.floor(moms.length * 0.2)] ?? moms[moms.length - 1];
+    }, [matrixData]);
 
     const filteredMatrix = useMemo(() => {
         return matrixData.filter(row => {
             const mComp = localFilters.competidor === 'all' || row.competidor === localFilters.competidor;
-            const mLoc = localFilters.local === 'all' || row.local === localFilters.local;
-            const mCaj = localFilters.caja === 'all' || String(row.caja) === localFilters.caja;
-            return mComp && mLoc && mCaj;
-        });
+            const mLoc  = localFilters.local === 'all' || row.local === localFilters.local;
+            return mComp && mLoc;
+        }).sort((a, b) => (b.totalProm - a.totalProm));
     }, [matrixData, localFilters]);
 
-    // Reset to page 1 when filters change
     useEffect(() => { setCurrentPage(1); }, [filteredMatrix]);
 
     const totalPages = Math.ceil(filteredMatrix.length / ITEMS_PER_PAGE_MONTHLY);
@@ -754,49 +790,30 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
     );
 
     const monthlyTotals = useMemo(() => {
-        const totals = new Array(12).fill(0);
         const totalsP = new Array(12).fill(0);
         filteredMatrix.forEach(row => {
-            row.monthly.forEach((val, i) => { totals[i] += val; });
             row.monthlyProm.forEach((val, i) => { totalsP[i] += val; });
         });
-        return { trx: totals, prom: totalsP };
+        return totalsP;
     }, [filteredMatrix]);
 
-    const grandTotal = useMemo(() => filteredMatrix.reduce((sum, row) => sum + row.total, 0), [filteredMatrix]);
-    const grandTotalProm = useMemo(() => filteredMatrix.length > 0 ? filteredMatrix.reduce((sum, row) => sum + row.totalProm, 0) / filteredMatrix.length : 0, [filteredMatrix]);
+    const grandTotalProm = useMemo(() =>
+        filteredMatrix.length > 0 ? filteredMatrix.reduce((s, r) => s + r.totalProm, 0) : 0,
+        [filteredMatrix]
+    );
 
-    // Internal Cascading Filters Logic
     const competitors = useMemo(() => ['all', ...new Set(matrixData.map(d => d.competidor))], [matrixData]);
-
-    const locations = useMemo(() => {
+    const locations   = useMemo(() => {
         const base = ['all'];
-        const filtered = localFilters.competidor === 'all'
-            ? matrixData
-            : matrixData.filter(d => d.competidor === localFilters.competidor);
-        return [...base, ...new Set(filtered.map(d => d.local))];
+        const pool = localFilters.competidor === 'all' ? matrixData : matrixData.filter(d => d.competidor === localFilters.competidor);
+        return [...base, ...new Set(pool.map(d => d.local))];
     }, [matrixData, localFilters.competidor]);
-
-    const boxes = useMemo(() => {
-        const base = ['all'];
-        const filtered = matrixData.filter(d => {
-            const mComp = localFilters.competidor === 'all' || d.competidor === localFilters.competidor;
-            const mLoc = localFilters.local === 'all' || d.local === localFilters.local;
-            return mComp && mLoc;
-        });
-        return [...base, ...new Set(filtered.map(d => String(d.caja)))];
-    }, [matrixData, localFilters.competidor, localFilters.local]);
 
     const handleLocalFilterChange = (key, value) => {
         setLocalFilters(prev => {
-            const newFilters = { ...prev, [key]: value };
-            if (key === 'competidor') {
-                newFilters.local = 'all';
-                newFilters.caja = 'all';
-            } else if (key === 'local') {
-                newFilters.caja = 'all';
-            }
-            return newFilters;
+            const nf = { ...prev, [key]: value };
+            if (key === 'competidor') nf.local = 'all';
+            return nf;
         });
     };
 
@@ -807,19 +824,20 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                     <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
                         <TrendingUp className="w-4 h-4 text-accent-orange" />
                         Matriz de Transacciones Mensuales (Rolling 12M)
+                        <span className="text-[9px] font-bold text-slate-400 dark:text-white/30 normal-case tracking-normal italic ml-1">prom. diario por tienda · real + estimado</span>
                     </h3>
                     <div className="flex items-center gap-3">
-                        <div className="px-3 py-1 rounded-lg bg-accent-orange/10 border border-accent-orange/20">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-accent-orange">Prom. Diario</span>
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                            <div className="w-2 h-2 rounded-full bg-red-400" />
+                            <span className="text-[9px] font-black uppercase tracking-widest text-red-500">Mayor decrecimiento MoM</span>
                         </div>
                         <div className="px-3 py-1 bg-accent-orange/10 rounded-full border border-accent-orange/20">
                             <span className="text-[10px] font-black uppercase text-accent-orange">
-                                Pág. {currentPage} de {totalPages || 1} · {filteredMatrix.length} locales
+                                Pág. {currentPage} de {totalPages || 1} · {filteredMatrix.length} tiendas
                             </span>
                         </div>
                     </div>
                 </div>
-
                 <div className="flex flex-wrap gap-4 pt-2">
                     <div className="space-y-1.5">
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Competidor</span>
@@ -839,92 +857,83 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                             width="w-40"
                         />
                     </div>
-                    <div className="space-y-1.5">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Caja</span>
-                        <CustomSelect
-                            selected={localFilters.caja}
-                            onChange={(v) => handleLocalFilterChange('caja', v)}
-                            options={boxes.map(b => ({ value: b, label: b === 'all' ? 'Todas' : `Caja ${b}` }))}
-                            width="w-32"
-                        />
-                    </div>
                 </div>
             </div>
 
             <div className="overflow-x-auto relative custom-scrollbar max-h-[600px]">
-                <table className="w-full text-left border-collapse min-w-[1200px]">
+                <table className="w-full text-left border-collapse min-w-[1100px]">
                     <thead className="bg-[#f8fafc] dark:bg-black/40 text-slate-500 dark:text-white/40 font-black text-[9px] uppercase tracking-[0.1em] sticky top-0 z-30">
                         <tr>
                             <th className="px-4 py-4 sticky left-0 z-40 bg-[#f8fafc] dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] min-w-[120px]">Competidor</th>
-                            <th className="px-4 py-4 sticky left-[120px] z-40 bg-[#f8fafc] dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] min-w-[160px]">Local</th>
-                            <th className="px-4 py-4 sticky left-[280px] z-40 bg-[#f8fafc] dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] min-w-[80px]">Caja</th>
+                            <th className="px-4 py-4 sticky left-[120px] z-40 bg-[#f8fafc] dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] min-w-[180px]">Tienda</th>
                             {months.map(m => (
                                 <th key={m.label} className="px-3 py-4 text-center min-w-[80px] border-l border-slate-200 dark:border-white/5">{m.label}</th>
                             ))}
-                            <th className="px-4 py-4 text-center bg-accent-orange/5 text-accent-orange font-bold min-w-[100px]">Total</th>
+                            <th className="px-3 py-4 text-center min-w-[80px] border-l border-slate-200 dark:border-white/5 text-slate-400">Var%</th>
+                            <th className="px-4 py-4 text-center bg-accent-orange/5 text-accent-orange font-bold min-w-[90px]">Prom 12M</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[10px] text-slate-700 dark:text-white/70">
-                        {/* Totals Row (Sticky under the header) */}
+                        {/* Totals Row */}
                         <tr className="bg-slate-100 dark:bg-white/10 font-black text-slate-900 dark:text-white sticky top-[44px] z-20 backdrop-blur-md">
-                            <td colSpan="3" className="px-4 py-3 sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.1)] text-right uppercase italic text-accent-orange">Totales Consolidados</td>
-                            {monthlyTotals.trx.map((total, i) => {
-                                const pVal = monthlyTotals.prom[i];
-                                return (
-                                    <td key={i} className="px-3 py-3 text-center text-accent-orange font-mono border-l border-slate-200 dark:border-white/5">
-                                        {matrixMetric === 'ambos' ? (
-                                            <div className="flex flex-col items-center gap-0.5">
-                                                <span>{new Intl.NumberFormat('es-ES').format(total)}</span>
-                                                <span className="text-violet-400 text-[9px]">{pVal.toFixed(1)}</span>
-                                            </div>
-                                        ) : matrixMetric === 'prom_diario' ? pVal.toFixed(1)
-                                          : new Intl.NumberFormat('es-ES').format(total)}
-                                    </td>
-                                );
-                            })}
+                            <td colSpan="2" className="px-4 py-3 sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.1)] text-right uppercase italic text-accent-orange">Totales Consolidados</td>
+                            {monthlyTotals.map((total, i) => (
+                                <td key={i} className="px-3 py-3 text-center text-accent-orange font-mono border-l border-slate-200 dark:border-white/5">
+                                    {total > 0 ? total.toFixed(1) : <span className="opacity-30">-</span>}
+                                </td>
+                            ))}
+                            <td className="px-3 py-3 text-center border-l border-slate-200 dark:border-white/5 text-slate-400">—</td>
                             <td className="px-4 py-3 text-center bg-accent-orange text-white font-black shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]">
-                                {matrixMetric === 'prom_diario' ? grandTotalProm.toFixed(1)
-                                    : new Intl.NumberFormat('es-ES').format(grandTotal)}
+                                {grandTotalProm.toFixed(1)}
                             </td>
                         </tr>
 
-                        {displayedRows.map((row, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors group">
-                                <td className="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-1 h-3 rounded-full" style={{ backgroundColor: shareData.find(s => s.name === row.competidor)?.color || '#ccc' }} />
-                                        <span className="font-bold truncate text-[9px] uppercase tracking-tighter">{row.competidor}</span>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-3 sticky left-[120px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] font-medium text-slate-500 truncate">{row.local}</td>
-                                <td className="px-4 py-3 sticky left-[280px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] text-center font-bold opacity-50">{row.caja}</td>
-                                {row.monthly.map((val, i) => {
-                                    const pVal = row.monthlyProm[i];
-                                    return (
-                                        <td key={i} className="px-3 py-3 text-center font-mono border-l border-slate-100 dark:border-white/[0.02]">
-                                            {matrixMetric === 'ambos' ? (
-                                                val > 0 ? (
-                                                    <div className="flex flex-col items-center gap-0.5">
-                                                        <span className={`font-mono ${val > 2500 ? 'text-emerald-500 font-bold' : ''}`}>{new Intl.NumberFormat('es-ES').format(val)}</span>
-                                                        <span className="text-violet-400 text-[9px] font-bold">{pVal.toFixed(1)}</span>
-                                                    </div>
-                                                ) : <span className="opacity-20">-</span>
-                                            ) : matrixMetric === 'prom_diario' ? (
-                                                pVal > 0 ? <span className="text-violet-400 font-bold">{pVal.toFixed(1)}</span> : <span className="opacity-20">-</span>
-                                            ) : (
-                                                <span className={`${val > 2500 ? 'text-emerald-500 font-bold' : val === 0 ? 'opacity-20' : ''}`}>
-                                                    {val === 0 ? '-' : new Intl.NumberFormat('es-ES').format(val)}
-                                                </span>
+                        {displayedRows.map((row, idx) => {
+                            const isDecliner = declinerThreshold != null && row.mom != null && row.mom <= declinerThreshold;
+                            const brandColor = shareData.find(s => s.name === row.competidor)?.color || '#ccc';
+                            return (
+                                <tr key={idx} className={`transition-colors group ${
+                                    isDecliner
+                                        ? 'bg-red-50/60 dark:bg-red-900/10 border-l-4 border-red-400'
+                                        : 'border-l-4 border-transparent hover:bg-slate-50/80 dark:hover:bg-white/[0.02]'
+                                }`}>
+                                    <td className="px-4 py-3 sticky left-0 z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)]" style={isDecliner ? { backgroundColor: 'rgb(254 242 242 / 0.9)' } : {}}>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-1 h-3 rounded-full" style={{ backgroundColor: brandColor }} />
+                                            <span className="font-bold truncate text-[9px] uppercase tracking-tighter">{row.competidor}</span>
+                                        </div>
+                                    </td>
+                                     <td className="px-4 py-3 sticky left-[120px] z-10 bg-white dark:bg-slate-900 shadow-[2px_0_5px_rgba(0,0,0,0.05)] truncate" style={isDecliner ? { backgroundColor: 'rgb(254 242 242 / 0.9)' } : {}}>
+                                        <div className="flex flex-col gap-0.5">
+                                            {row.codigo_tienda && (
+                                                <span className="text-[8px] font-black font-mono text-accent-orange/80 tracking-tight">{row.codigo_tienda}</span>
                                             )}
+                                            <span className="text-[10px] font-medium text-slate-600 dark:text-white/60 uppercase truncate">{row.local}</span>
+                                        </div>
+                                    </td>
+                                    {row.monthlyProm.map((val, i) => (
+                                        <td key={i} className="px-3 py-3 text-center font-mono border-l border-slate-100 dark:border-white/[0.02]">
+                                            {val > 0
+                                                ? <span className={val > 200 ? 'text-emerald-500 font-bold' : ''}>{val.toFixed(1)}</span>
+                                                : <span className="opacity-20">-</span>
+                                            }
                                         </td>
-                                    );
-                                })}
-                                <td className="px-4 py-3 text-center bg-accent-orange/[0.02] font-black text-accent-orange group-hover:bg-accent-orange/[0.05]">
-                                    {matrixMetric === 'prom_diario' ? row.totalProm.toFixed(1)
-                                        : new Intl.NumberFormat('es-ES').format(row.total)}
-                                </td>
-                            </tr>
-                        ))}
+                                    ))}
+                                    <td className="px-3 py-3 text-center border-l border-slate-100 dark:border-white/[0.02]">
+                                        {row.mom != null ? (
+                                            <span className={`text-[9px] font-black ${
+                                                row.mom >= 0 ? 'text-emerald-500' : isDecliner ? 'text-red-500' : 'text-slate-400'
+                                            }`}>
+                                                {row.mom >= 0 ? '+' : ''}{row.mom.toFixed(1)}%
+                                            </span>
+                                        ) : <span className="opacity-20">—</span>}
+                                    </td>
+                                    <td className="px-4 py-3 text-center bg-accent-orange/[0.02] font-black text-accent-orange group-hover:bg-accent-orange/[0.05]">
+                                        {row.totalProm.toFixed(1)}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -939,23 +948,19 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
             ) : totalPages > 1 && (
                 <div className="p-4 flex justify-between items-center bg-slate-50 dark:bg-white/[0.02] border-t border-slate-200 dark:border-white/10">
                     <span className="text-xs font-bold text-slate-500 dark:text-white/40">
-                        Mostrando {(currentPage - 1) * ITEMS_PER_PAGE_MONTHLY + 1} a {Math.min(currentPage * ITEMS_PER_PAGE_MONTHLY, filteredMatrix.length)} de {filteredMatrix.length} locales
+                        Mostrando {(currentPage - 1) * ITEMS_PER_PAGE_MONTHLY + 1} a {Math.min(currentPage * ITEMS_PER_PAGE_MONTHLY, filteredMatrix.length)} de {filteredMatrix.length} tiendas
                     </span>
                     <div className="flex gap-2">
                         <button
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
                             className="px-3 py-1.5 rounded-md bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-white/80 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
-                        >
-                            Anterior
-                        </button>
+                        >Anterior</button>
                         <button
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages}
                             className="px-3 py-1.5 rounded-md bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-700 dark:text-white/80 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-white/10 transition-colors"
-                        >
-                            Siguiente
-                        </button>
+                        >Siguiente</button>
                     </div>
                 </div>
             )}

@@ -921,13 +921,16 @@ export default function App({ user, onSignOut }) {
     }));
   }, [ngrLocales]);
 
-  // 1. Core Data Filtering — when an NGR brand is selected, source from ngrMappedRecords
+  // 1. Core Data Filtering
+  // Source = records + ngrMappedRecords merged, so NGR brands flow through
+  // the same category/competitor filter pipeline as competitor brands.
   const filteredRecords = useMemo(() => {
-    // If filter is an NGR-only brand, use ngrMappedRecords instead of records
-    // Multi-select note: if ANY selected brand is NGR, we should probably combine or handle separately.
-    // For now, if ALL selected are NGR, use ngrMappedRecords.
+    // Determine the base source:
+    // - If ALL selected competitors are NGR → use only ngrMappedRecords
+    // - Otherwise, combine records + ngrMappedRecords so NGR brands
+    //   are included when they match the active filters (category, etc.)
     const selectedAreNGR = filters.competitor.length > 0 && filters.competitor.every(c => NGR_OWN_BRANDS.has(c));
-    const sourceRecords = selectedAreNGR ? ngrMappedRecords : records;
+    const sourceRecords = selectedAreNGR ? ngrMappedRecords : [...records, ...ngrMappedRecords];
 
     return sourceRecords.filter(rec => {
       let mMatch = filters.month.length === 0;
@@ -960,10 +963,10 @@ export default function App({ user, onSignOut }) {
   }, [records, ngrMappedRecords, filters]);
 
   // 1b. Market Share Specific Filtering (status OK + HISTORIAL, sin solapamiento)
-  // When isNGRFilter, bypass recordInScope — NGR records are always valid
+  // NGR records (_isNGR) always pass — they are valid by construction.
   const marketShareRecords = useMemo(() => {
-    if (isNGRFilter) return filteredRecords; // NGR records don't need CUTOFF_KEY check
-    return filteredRecords.filter(recordInScope);
+    if (isNGRFilter) return filteredRecords; // NGR-only filter: skip scope check
+    return filteredRecords.filter(r => r._isNGR || recordInScope(r));
   }, [filteredRecords, isNGRFilter]);
 
   // 1b2. Puntos Compartidos evolution records — last 12 months, ignores date filter
@@ -1014,7 +1017,7 @@ export default function App({ user, onSignOut }) {
     const totalTransactions = marketShareRecords.reduce((sum, r) => sum + (parseFloat(r.transacciones) || 0), 0);
     const totalDailyAvg = marketShareRecords.reduce((sum, r) => sum + (parseFloat(r.promedio) || 0), 0);
 
-    // Tickets from facturas_v2 (Filtered specifically for this tab if needed, but here simple match)
+    // Tickets from facturas_v2
     const filteredTicketsCount = filteredTickets.length;
     const totalImporteCount = filteredTickets.reduce((sum, t) => sum + (parseFloat(t.importe) || 0), 0);
     const ticketsSinLocalCount = tickets.filter(t => {
@@ -1022,19 +1025,16 @@ export default function App({ user, onSignOut }) {
       return matchesComp && (!t.local || t.local === 'DESCONOCIDO' || t.local === 'Desconocido');
     }).length;
 
-    // Routine Stats - Always use full filteredRecords to show audit health
+    // Routine Stats
     const routineStats = filteredRecords.reduce((acc, r) => {
       if (r.status_busqueda === 'OK')        acc.cerradas++;
       else if (r.status_busqueda !== 'HISTORIAL' && !r.status_busqueda?.startsWith('ESTIMADO-')) acc.conError++;
       return acc;
     }, { cerradas: 0, conError: 0 });
 
-    // Audit counts — count over ALL filteredRecords (not just marketShare scope)
     const localesAnalizados = new Set(filteredRecords.map(r => r.local).filter(Boolean)).size;
     const cajasAnalizadas   = new Set(filteredRecords.map(r => `${r.local}||${r.caja ?? ''}`)).size;
 
-    // "Sin registro": cajas (unique local+caja combos) that have at least one non-OK, non-HISTORIAL,
-    // non-ESTIMADO record — i.e. they are flagged with a real alarm status
     const cajasConAlarma = new Set(
       filteredRecords
         .filter(r =>
@@ -1045,6 +1045,89 @@ export default function App({ user, onSignOut }) {
         .map(r => `${r.local}||${r.caja ?? ''}`)
     ).size;
 
+    // ── Month-over-Month variation (sliding window) ──
+    // Uses r.promedio (already daily avg) — no extra computation needed
+    const byMonth = {};
+    marketShareRecords.forEach(r => {
+      if (!r.mes || !r.ano) return;
+      const k = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2,'0')}`;
+      byMonth[k] = (byMonth[k] || 0) + (parseFloat(r.promedio) || 0);
+    });
+    const allMonthKeys = Object.keys(byMonth).sort();
+
+    // MoM per local (uses promedio already on r.promedio)
+    const localsByMonth = {};
+    marketShareRecords.forEach(r => {
+      if (!r.mes || !r.ano) return;
+      const k = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2,'0')}`;
+      if (!localsByMonth[k]) localsByMonth[k] = { prom: 0, locals: new Set() };
+      localsByMonth[k].prom += (parseFloat(r.promedio) || 0);
+      localsByMonth[k].locals.add(r.local);
+    });
+
+    // Sliding window: selected months vs same N months before
+    const selMonths  = filters.month; // ['0','1',...] 0-indexed
+    const selYears   = filters.year;  // ['2025',...]
+    let momDailyAvg  = null;
+    let momPerLocal  = null;
+
+    if (selMonths.length > 0 && selYears.length > 0) {
+      const selYear = parseInt(selYears[0]);
+      const N = selMonths.length;
+      // 1-indexed month numbers for selected period
+      const selNums = selMonths.map(m => parseInt(m) + 1).sort((a, b) => a - b);
+      // Current window sum
+      let curSum = 0;
+      selNums.forEach(m => {
+        const k = `${selYear}-${String(m).padStart(2,'0')}`;
+        curSum += byMonth[k] || 0;
+      });
+      // Previous window: N months before the earliest selected month
+      const earliestM = selNums[0];
+      let prevSum = 0;
+      let curSumLocal = 0; let prevSumLocal = 0;
+      let curLocals = new Set(); let prevLocals = new Set();
+      for (let i = 0; i < N; i++) {
+        // Current period per-local
+        const cm = selNums[i];
+        const ck = `${selYear}-${String(cm).padStart(2,'0')}`;
+        if (localsByMonth[ck]) {
+          curSumLocal += localsByMonth[ck].prom;
+          localsByMonth[ck].locals.forEach(l => curLocals.add(l));
+        }
+        // Previous period
+        let pm = earliestM - N + i;
+        let py = selYear;
+        if (pm <= 0) { pm += 12; py -= 1; }
+        const pk = `${py}-${String(pm).padStart(2,'0')}`;
+        prevSum += byMonth[pk] || 0;
+        if (localsByMonth[pk]) {
+          prevSumLocal += localsByMonth[pk].prom;
+          localsByMonth[pk].locals.forEach(l => prevLocals.add(l));
+        }
+      }
+      if (prevSum > 0) momDailyAvg = ((curSum - prevSum) / prevSum) * 100;
+      if (prevLocals.size > 0 && curLocals.size > 0) {
+        const curAvg  = curSumLocal  / curLocals.size;
+        const prevAvg = prevSumLocal / prevLocals.size;
+        if (prevAvg > 0) momPerLocal = ((curAvg - prevAvg) / prevAvg) * 100;
+      }
+    } else {
+      // No month filter: compare last 2 available months from data
+      if (allMonthKeys.length >= 2) {
+        const cur  = byMonth[allMonthKeys[allMonthKeys.length - 1]];
+        const prev = byMonth[allMonthKeys[allMonthKeys.length - 2]];
+        if (prev > 0) momDailyAvg = ((cur - prev) / prev) * 100;
+        const curM  = localsByMonth[allMonthKeys[allMonthKeys.length - 1]];
+        const prevM = localsByMonth[allMonthKeys[allMonthKeys.length - 2]];
+        if (curM && prevM && prevM.locals.size > 0) {
+          const curAvg  = curM.prom  / curM.locals.size;
+          const prevAvg = prevM.prom / prevM.locals.size;
+          if (prevAvg > 0) momPerLocal = ((curAvg - prevAvg) / prevAvg) * 100;
+        }
+      }
+    }
+
     return {
       totalVentas: totalTransactions,
       totalTickets: filteredTicketsCount,
@@ -1054,40 +1137,45 @@ export default function App({ user, onSignOut }) {
       cajasConError: routineStats.conError,
       totalTransDailyAvg: totalDailyAvg,
       avgTransPerLocal: totalTransactions / (new Set(marketShareRecords.map(r => r.local)).size || 1),
-      // Audit summary
       localesAnalizados,
       cajasAnalizadas,
       cajasSinRegistro: cajasConAlarma,
+      momDailyAvg,
+      momPerLocal,
     };
-  }, [filteredRecords, marketShareRecords, filteredTickets, tickets, filters.competitor]);
+  }, [filteredRecords, marketShareRecords, filteredTickets, tickets, filters.competitor, filters.month, filters.year]);
 
   // 3. Reactive Share Data (Exclusive for Market Share)
-  // When includeNGR=true, NGR brands are added to the share pool
-  // using trx_promedio summed over the same date window as marketShareRecords.
+  // When includeNGR=true, NGR brands are added to the share pool.
+  // NGR records are excluded from the competitor loop to avoid double-counting.
   const reactiveShareDataRoutine = useMemo(() => {
-    // --- Competitor totals from pipeline records ---
+    // --- Competitor totals — use r.promedio (daily avg, already computed) ---
     const totalsByComp = {};
     marketShareRecords.forEach(r => {
+      if (r._isNGR) return;
       if (!totalsByComp[r.competidor]) totalsByComp[r.competidor] = 0;
-      totalsByComp[r.competidor] += (parseFloat(r.transacciones) || 0);
+      totalsByComp[r.competidor] += (parseFloat(r.promedio) || 0);
     });
 
-    // --- Optional: add NGR brands ---
+    // --- Optional: add NGR brands — use r.trx_promedio (daily avg, already computed) ---
     if (includeNGR && ngrLocales.length > 0) {
-      // Match EXACT year-month combinations present in marketShareRecords
-      // (using Set for precision instead of min/max range)
+      // Match EXACT year-month combinations present in marketShareRecords (competitors only)
       const periodSet = new Set(
         marketShareRecords
-          .filter(r => r.ano && r.mes)
+          .filter(r => !r._isNGR && r.ano && r.mes)
           .map(r => `${Number(r.ano)}-${Number(r.mes)}`)
       );
 
       ngrLocales
-        .filter(r => periodSet.has(`${r.ano}-${r.mes}`))
+        .filter(r => {
+          if (!periodSet.has(`${r.ano}-${r.mes}`)) return false;
+          if (filters.category.length > 0 && !filters.category.includes(COMPETITOR_TO_CATEGORY[r.marca])) return false;
+          if (filters.competitor.length > 0 && !filters.competitor.includes(r.marca)) return false;
+          return true;
+        })
         .forEach(r => {
           if (!totalsByComp[r.marca]) totalsByComp[r.marca] = 0;
-          // trx_total = total mensual (comparable con transacciones_diferencial de competencia)
-          totalsByComp[r.marca] += (r.trx_total || 0);
+          totalsByComp[r.marca] += (r.trx_promedio || 0);
         });
     }
 
@@ -1121,7 +1209,7 @@ export default function App({ user, onSignOut }) {
         return { name, value, color, isNGR: !!(includeNGR && ['POPEYES','Bembos','Papa Johns','CHINAWOK'].includes(name)) };
       })
       .sort((a, b) => b.value - a.value);
-  }, [marketShareRecords, includeNGR, ngrLocales]);
+  }, [marketShareRecords, includeNGR, ngrLocales, filters]);
 
   // 3b. Reactive Share Data (For Competitor Analysis - based on facturas_v2)
   const reactiveShareDataTickets = useMemo(() => {
@@ -1159,11 +1247,12 @@ export default function App({ user, onSignOut }) {
 
   // 4. Reactive Trend Data (Market Share - OK records + HISTORIAL overlay)
   const reactiveTrendDataRoutine = useMemo(() => {
-    // OK records by month: sum trx + sum promedio
+    // OK records by month: sum trx + sum promedio — competitors only (NGR handled separately below)
     const okData = {};
     const okProm = {};
     marketShareRecords.forEach(r => {
       if (!r.mes || !r.ano) return;
+      if (r._isNGR) return; // NGR added separately via ngrData to avoid double-counting
       const key = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2, '0')}`;
       okData[key] = (okData[key] || 0) + (parseFloat(r.transacciones) || 0);
       okProm[key] = (okProm[key] || 0) + (parseFloat(r.promedio) || 0);
@@ -1183,7 +1272,7 @@ export default function App({ user, onSignOut }) {
 
     const allKeys = [...new Set([...Object.keys(okData), ...Object.keys(histData)])].sort();
 
-    // When includeNGR: compute NGR trx by month (same period filter)
+    // When includeNGR: compute NGR avg daily trx by month (trx_promedio, same metric as competition)
     const ngrData = {};
     if (includeNGR && ngrLocales.length > 0) {
       const periodSet = new Set(
@@ -1192,7 +1281,8 @@ export default function App({ user, onSignOut }) {
       ngrLocales.forEach(r => {
         const key = `${r.ano}-${String(r.mes).padStart(2, '0')}`;
         if (!periodSet.size || periodSet.has(key)) {
-          ngrData[key] = (ngrData[key] || 0) + (r.trx_total || 0);
+          // Use trx_promedio (daily avg) to match the promedio field used for competition
+          ngrData[key] = (ngrData[key] || 0) + (r.trx_promedio || 0);
         }
       });
     }
@@ -1533,7 +1623,7 @@ export default function App({ user, onSignOut }) {
               >
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-              {activeCategory !== 'tickets' && activeCategory !== 'clientes' && activeCategory !== 'estimaciones' && globalFilterBar}
+              {activeCategory !== 'tickets' && activeCategory !== 'estimaciones' && globalFilterBar}
 
               {/* ── User avatar + logout ── */}
               {user && (
@@ -1566,6 +1656,7 @@ export default function App({ user, onSignOut }) {
                   { id: 'marketshare',  icon: PieChartIcon,   label: 'Market Share' },
                   { id: 'sstx',         icon: GitCompare,     label: 'SSTX' },
                   { id: 'tickets',      icon: Ticket,         label: 'Tickets' },
+                  { id: 'alarmas',      icon: ShieldAlert,    label: 'Alarmas' },
                   { id: 'clientes',     icon: Users,          label: 'Clientes' },
                   { id: 'estimaciones', icon: ClipboardEdit,  label: 'Estimaciones' },
                   { id: 'actividad',    icon: Activity,       label: 'Actividad' },
@@ -1575,7 +1666,6 @@ export default function App({ user, onSignOut }) {
                   onClick={() => {
                     setActiveCategory(cat.id);
                     if (cat.id === 'marketshare') setActiveSubTab('marketshare');
-                    else if (cat.id === 'tickets') setActiveSubTab('tickets');
                     else setActiveSubTab('');
                   }}
                   className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeCategory === cat.id ? 'bg-accent-orange text-white shadow-lg' : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'}`}
@@ -1602,28 +1692,25 @@ export default function App({ user, onSignOut }) {
 
         {/* Floating Sub-tabs Bar */}
         <AnimatePresence>
-          {(activeCategory === 'marketshare' || activeCategory === 'tickets') && (
+          {(activeCategory === 'marketshare') && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               className="flex justify-center -mt-4 mb-4"
             >
-              <div className="bg-white/40 dark:bg-white/[0.02] backdrop-blur-xl border border-slate-200 dark:border-white/5 p-1 rounded-xl flex gap-1 shadow-sm">
+              <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl border border-slate-200 dark:border-white/10 p-1.5 rounded-2xl flex gap-1.5 shadow-lg shadow-slate-200/50 dark:shadow-none ring-1 ring-black/5">
                 {(activeCategory === 'marketshare' ? [
-                  { id: 'marketshare', icon: PieChartIcon, label: 'Market Share' },
-                  { id: 'puntos_compartidos', icon: MapPin, label: 'Puntos Compartidos' },
-                ] : activeCategory === 'tickets' ? [
-                  { id: 'tickets', icon: Ticket,      label: 'Tickets' },
-                  { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' },
-                  { id: 'comparativos', icon: GitCompare, label: 'Comparativos' },
+                  { id: 'marketshare',       icon: PieChartIcon, label: 'Market Share' },
+                  { id: 'puntos_compartidos', icon: MapPin,        label: 'Puntos Compartidos' },
+                  { id: 'comparativos',       icon: GitCompare,    label: 'Comparativos' },
                 ] : []).map(sub => (
                   <button
                     key={sub.id}
                     onClick={() => setActiveSubTab(sub.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeSubTab === sub.id ? 'bg-white dark:bg-white/10 text-accent-orange shadow-sm' : 'text-slate-400 dark:text-white/20 hover:text-slate-600 dark:hover:text-white/60'}`}
+                    className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all duration-300 ${activeSubTab === sub.id ? 'bg-white dark:bg-white/10 text-accent-orange shadow-md scale-[1.02]' : 'text-slate-400 dark:text-white/20 hover:text-slate-600 dark:hover:text-white/60 hover:bg-white/50 dark:hover:bg-white/5'}`}
                   >
-                    <sub.icon size={12} />
+                    <sub.icon size={14} />
                     {sub.label}
                   </button>
                 ))}
@@ -1651,6 +1738,7 @@ export default function App({ user, onSignOut }) {
               records={recordsWithNGR}
               competitorToCategory={COMPETITOR_TO_CATEGORY}
               ngrLocales={ngrLocales}
+              filters={filters}
             />
           ) : activeCategory === 'competitor' ? (
             <CompetitorAnalysis
@@ -1707,29 +1795,30 @@ export default function App({ user, onSignOut }) {
                 includeNGR={includeNGR}
               />
             )
+          ) : activeCategory === 'alarmas' ? (
+            <AlarmasDashboard
+              key="alarmas"
+              user={user}
+              records={records}
+              tickets={tickets}
+              cajasConfig={cajasConfig}
+              onCajasConfigChange={setCajasConfig}
+              alarmasRevisadas={alarmasRevisadas}
+              onAlarmasRevisadasChange={setAlarmasRevisadas}
+              onUpdateTicket={handleUpdateTicket}
+              isRefreshing={isRefreshing}
+            />
           ) : (
-            activeSubTab === 'alarmas' ? (
-              <AlarmasDashboard
-                key="alarmas"
-                records={records}
-                tickets={tickets}
-                cajasConfig={cajasConfig}
-                onCajasConfigChange={setCajasConfig}
-                onUpdateTicket={handleUpdateTicket}
-                isRefreshing={isRefreshing}
-              />
-            ) : (
-              <TicketsDashboard
-                key="tickets"
-                tickets={tickets}
-                records={records}
-                shareData={reactiveShareDataTickets}
-                globalFilters={filters}
-                onFilterChange={setFilters}
-                onUpdateTicket={handleUpdateTicket}
-                isRefreshing={isRefreshing}
-              />
-            )
+            <TicketsDashboard
+              key="tickets"
+              tickets={tickets}
+              records={records}
+              shareData={reactiveShareDataTickets}
+              globalFilters={filters}
+              onFilterChange={setFilters}
+              onUpdateTicket={handleUpdateTicket}
+              isRefreshing={isRefreshing}
+            />
           )}
         </AnimatePresence>
 

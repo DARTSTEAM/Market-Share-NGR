@@ -17,7 +17,42 @@ const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','A
 
 const getImageUrl = (filename) => {
     if (!filename) return null;
+    // Base URL is fixed, we vary the path in the onError handler if it fails
     return `https://storage.googleapis.com/ngr-market-share/Tickets%20JPG/Tickets%20JPG/${encodeURIComponent(filename)}`;
+};
+
+const handleImageError = (e, filename) => {
+    if (!filename) return;
+    const attempt = parseInt(e.target.dataset.attempt || '0', 10);
+    const bucketBase = "https://storage.googleapis.com/ngr-market-share/";
+    
+    // Extension variants
+    const fname = filename.toString();
+    const isJpg = fname.toLowerCase().endsWith('.jpg');
+    const altExtension = isJpg 
+        ? (fname.endsWith('.jpg') ? fname.replace('.jpg', '.JPG') : fname.replace('.JPG', '.jpg'))
+        : fname;
+
+    const paths = [
+        `Tickets%20JPG/${encodeURIComponent(fname)}`,          // Single nested
+        `Tickets%202026/${encodeURIComponent(fname)}`,         // 2026 folder
+        `Tickets/${encodeURIComponent(fname)}`,              // Alternate folder
+        `${encodeURIComponent(fname)}`,                      // Root
+        `Tickets%20JPG/Tickets%20JPG/${encodeURIComponent(altExtension)}`, // Case flip nested
+        `Tickets%20JPG/${encodeURIComponent(altExtension)}`, // Case flip single
+        `Tickets/${encodeURIComponent(altExtension)}`,      // Case flip alt
+    ];
+
+    if (attempt < paths.length) {
+        e.target.dataset.attempt = attempt + 1;
+        e.target.src = bucketBase + paths[attempt];
+    } else {
+        e.target.onerror = null;
+        // Set a data-failed attribute to hide or show placeholder via CSS if preferred, 
+        // but here we just replace with placeholder
+        e.target.src = 'https://placehold.co/600x800?text=Imagen+No+Disponible';
+        e.target.classList.add('opacity-50', 'grayscale');
+    }
 };
 
 // ─────────────────────────────────────────────
@@ -153,7 +188,7 @@ const EditModal = ({ ticket, onClose, onSave, isSaving, onPrev, onNext, navInfo 
                                     onClick={handleImgClick}
                                     style={{ transformOrigin: origin }}
                                     className={`object-contain transition-all duration-300 select-none ${zoomed ? 'scale-[1.8] cursor-zoom-out' : 'w-full h-full cursor-zoom-in'}`}
-                                    onError={() => setImgError(true)}
+                                    onError={(e) => handleImageError(e, form.filename)}
                                 />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-300 dark:text-white/20 p-8">
@@ -565,7 +600,7 @@ const TicketsDashboard = ({ tickets, records = [], shareData, globalFilters, onF
                                                         src={imgUrl}
                                                         alt="ticket"
                                                         className="w-full h-full object-cover group-hover/img:scale-110 transition-transform duration-300"
-                                                        onError={e => { e.target.onerror = null; e.target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-white/5"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-slate-300"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`; }}
+                                                        onError={e => handleImageError(e, t.filename)}
                                                     />
                                                     <div className="absolute inset-0 bg-accent-orange/0 group-hover/img:bg-accent-orange/20 transition-colors flex items-center justify-center">
                                                         <ZoomIn size={12} className="text-white opacity-0 group-hover/img:opacity-100 transition-opacity" />

@@ -120,40 +120,17 @@ const SectionTable = ({ title, headerColor = '#1e3a5f', rows, months, renderCell
 );
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) => {
-    const [selectedCategories, setSelectedCategories] = useState(['Hamburguesa']);
-    const [selectedCompetitors, setSelectedCompetitors] = useState([]);
-    const [filterCompetidor, setFilterCompetidor] = useState('all');
-    const [filterCajaMes, setFilterCajaMes] = useState('all');
-    const [filterYear, setFilterYear] = useState([]);
+const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [], filters }) => {
+    const selectedCategories = filters?.category?.length > 0 ? filters.category : ['Hamburguesa'];
+    const selectedCompetitors = filters?.competitor || [];
+    const filterYear = filters?.year || [];
+
     const [sortCaja, setSortCaja] = useState('competidor_asc');
     const [evolucionMetric, setEvolucionMetric] = useState('trx_avg');
     const [sortEvol, setSortEvol] = useState('competidor_asc');
 
-    // Available years from all valid records (OK + HISTORIAL in scope)
-    const availableYears = useMemo(() => {
-        const CUTOFF = 202511;
-        const years = new Set(
-            records
-                .filter(r => {
-                    const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
-                    if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF) return false;
-                    if (r.status_busqueda === 'OK' && key <= CUTOFF) return false;
-                    return (r.status_busqueda === 'OK' || r.status_busqueda === 'HISTORIAL') && r.ano;
-                })
-                .map(r => parseInt(r.ano))
-        );
-        return [...years].sort((a, b) => b - a);
-    }, [records]);
 
-    const toggleCategory = (cat) => {
-        setSelectedCategories(prev =>
-            prev.includes(cat)
-                ? prev.length > 1 ? prev.filter(c => c !== cat) : prev
-                : [...prev, cat]
-        );
-        setSelectedCompetitors([]);
-    };
+
     const [topMetric, setTopMetric] = useState('prom_diario'); // show prom diario only
     const [exporting, setExporting] = useState(false);
     const [expandDistribucion, setExpandDistribucion] = useState(false);
@@ -244,7 +221,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
         }
     }, [exportSelections, selectedCategories, EXPORT_SECTIONS]);
     const categories = ['Pollo Frito', 'Hamburguesa', 'Pizza', 'Chifas'];
-    const allCatsSelected = selectedCategories.length === categories.length;
+
 
     // Confidence dot colors for ESTIMADO-* rows
     const CONFIANZA_DOT = {
@@ -264,10 +241,19 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
             if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF) return false;
             if (r.status_busqueda === 'OK'        && key <= CUTOFF) return false;
             if (r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL') return false;
+            
+            // Global Filters
             if (filterYear.length > 0 && !filterYear.includes(String(r.ano))) return false;
-            return r.mes && r.ano &&
-                selectedCategories.includes(competitorToCategory[r.competidor]) &&
-                (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor));
+            if (filters?.month?.length > 0 && !filters.month.includes(String(parseInt(r.mes) - 1))) return false;
+            if (!selectedCategories.includes(competitorToCategory[r.competidor])) return false;
+            if (selectedCompetitors.length > 0 && !selectedCompetitors.includes(r.competidor)) return false;
+            if (filters?.local?.length > 0 && !filters.local.includes(r.local)) return false;
+            if (filters?.region?.length > 0 && !filters.region.includes(r.region)) return false;
+            if (filters?.distrito?.length > 0 && !filters.distrito.includes(r.distrito)) return false;
+            if (filters?.zona?.length > 0 && !filters.zona.includes(r.zona)) return false;
+            if (filters?.codigoTienda?.length > 0 && !filters.codigoTienda.includes(r.codigo_tienda)) return false;
+
+            return !!(r.mes && r.ano);
         });
 
         // Derive sorted months
@@ -316,29 +302,11 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
         pivot['__total__'] = pivotTotal;
 
         return { months, competitors, pivot };
-    }, [records, selectedCategories, selectedCompetitors, filterYear, competitorToCategory]);
+    }, [records, selectedCategories, selectedCompetitors, filterYear, filters, competitorToCategory]);
 
-    // ── Competitors in this category (for sub-filter) ─────────────────────────
-    const categoryCompetitors = useMemo(() => {
-        const set = new Set(
-            records
-                .filter(r => {
-                    const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
-                    const CUTOFF = 202511;
-                    if (r.status_busqueda === 'HISTORIAL' && key > CUTOFF) return false;
-                    if (r.status_busqueda === 'OK'        && key <= CUTOFF) return false;
-                    if (filterYear.length > 0 && !filterYear.includes(String(r.ano))) return false;
-                    return (r.status_busqueda === 'OK' || r.status_busqueda === 'HISTORIAL')
-                        && r.mes && r.ano && selectedCategories.includes(competitorToCategory[r.competidor]);
-                })
-                .map(r => r.competidor)
-                .filter(Boolean)
-        );
-        return Array.from(set).sort();
-    }, [records, selectedCategories, filterYear, competitorToCategory]);
 
-    // Reset competitor filter when category changes
-    React.useEffect(() => { setFilterCompetidor('all'); setFilterCajaMes('all'); setFilterYear([]); }, [selectedCategories]);
+
+
 
     // ── Local pivot: (competidor, local) × month ──────────────────────
     const { cajaRows, cajaMonths } = useMemo(() => {
@@ -350,11 +318,22 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
             if (r.status_busqueda === 'OK'        && key <= CUTOFF2) return false;
             if (isEst                             && key <= CUTOFF2) return false; // estimados solo post-cutoff
             if (!isEst && r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL') return false;
+            
+            // Global Filters
             if (filterYear.length > 0 && !filterYear.includes(String(r.ano))) return false;
-            return r.mes && r.ano && r.local &&
-                selectedCategories.includes(competitorToCategory[r.competidor]) &&
-                (selectedCompetitors.length === 0 || selectedCompetitors.includes(r.competidor)) &&
-                (filterCompetidor === 'all' || r.competidor === filterCompetidor);
+            if (filters?.month?.length > 0 && !filters.month.includes(String(parseInt(r.mes) - 1))) return false;
+            if (!selectedCategories.includes(competitorToCategory[r.competidor])) return false;
+            if (selectedCompetitors.length > 0 && !selectedCompetitors.includes(r.competidor)) return false;
+            if (filters?.local?.length > 0 && !filters.local.includes(r.local)) return false;
+            if (filters?.region?.length > 0 && !filters.region.includes(r.region)) return false;
+            if (filters?.distrito?.length > 0 && !filters.distrito.includes(r.distrito)) return false;
+            if (filters?.zona?.length > 0 && !filters.zona.includes(r.zona)) return false;
+            if (filters?.codigoTienda?.length > 0 && !filters.codigoTienda.includes(r.codigo_tienda)) return false;
+
+            // Internal sub-filter
+            if (filterCompetidor !== 'all' && r.competidor !== filterCompetidor) return false;
+
+            return !!(r.mes && r.ano && r.local);
         });
 
         const pivotMap = {};
@@ -400,16 +379,22 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
         cajaRows.forEach(r => { r.localTotal = localTotals[r.local] || 1; });
 
         return { cajaRows, cajaMonths };
-    }, [records, selectedCategories, selectedCompetitors, filterCompetidor, filterYear, competitorToCategory]);
+    }, [records, selectedCategories, selectedCompetitors, filterYear, filters, competitorToCategory]);
 
     // ── Display rows for Distribución table (filtered by month + sorted) ────────
     const distribRows = useMemo(() => {
         const withTrx = cajaRows.map(row => {
-            // Use promedio diario average instead of total trx
-            const promSum = filterCajaMes === 'all'
-                ? Object.keys(row.promedios || {}).reduce((s, mk) => s + (row.promedios[mk] / (row.promCounts[mk] || 1)), 0)
-                : (row.promedios?.[filterCajaMes] != null ? row.promedios[filterCajaMes] / (row.promCounts[filterCajaMes] || 1) : 0);
-            return { ...row, displayTrx: promSum };
+            // If header filters select specific months, we should probably average them.
+            // If nothing selected, average all.
+            const targetMonths = filters?.month?.length > 0 ? filters.month : Object.keys(row.promedios || {});
+            
+            const promSum = targetMonths.reduce((s, mk) => {
+                const val = row.promedios?.[mk];
+                return s + (val != null ? val / (row.promCounts[mk] || 1) : 0);
+            }, 0);
+            const avgProm = targetMonths.length > 0 ? promSum / targetMonths.length : 0;
+
+            return { ...row, displayTrx: avgProm };
         });
         // Recompute local totals for the selected period
         const localTotals = {};
@@ -426,7 +411,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
             if (sortCaja === 'pct_desc') return b.pct - a.pct;
             return 0;
         });
-    }, [cajaRows, filterCajaMes, sortCaja]);
+    }, [cajaRows, sortCaja, filters]);
 
     // Build rows for each table (competitors + total)
     const rows = useMemo(() => {
@@ -647,111 +632,12 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
                         </div>
                     )}
 
-                    {/* Category Selector — multi-toggle */}
-                    <div className="flex gap-1 p-1 bg-slate-100/50 dark:bg-white/[0.03] rounded-2xl border border-slate-200 dark:border-white/5 shadow-inner">
-                        <button
-                            onClick={() => { setSelectedCategories([...categories]); setSelectedCompetitors([]); }}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all duration-300 ${
-                                allCatsSelected
-                                    ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
-                                    : 'text-slate-400 dark:text-white/30 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'
-                            }`}
-                        >
-                            Todas
-                        </button>
-                        {categories.map(cat => (
-                            <button
-                                key={cat}
-                                onClick={() => toggleCategory(cat)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${
-                                    selectedCategories.includes(cat)
-                                        ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
-                                        : 'text-slate-500 dark:text-white/40 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/5'
-                                }`}
-                            >
-                                <span className="text-base leading-none">{CATEGORY_EMOJI[cat]}</span>
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
                 </div>
             </header>
 
-            {/* ── Year filter — siempre visible ──────────────────────── */}
-            {availableYears.length > 0 && (
-                <div className="pwa-card p-4 flex flex-wrap items-center gap-3">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Año:</span>
-                    <div className="flex flex-wrap gap-1">
-                        <button
-                            onClick={() => setFilterYear([])}
-                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
-                                filterYear.length === 0
-                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                            }`}
-                        >Todos</button>
-                        {availableYears.map(y => (
-                            <button
-                                key={y}
-                                onClick={() => setFilterYear(prev => 
-                                    prev.includes(String(y)) ? prev.filter(v => v !== String(y)) : [...prev, String(y)]
-                                )}
-                                className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
-                                    filterYear.includes(String(y))
-                                        ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                        : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                }`}
-                            >{y}</button>
-                        ))}
-                    </div>
-                </div>
-            )}
 
-            {/* ── Competitor filter — solo cuando hay más de uno ──────── */}
-            {categoryCompetitors.length > 1 && (
-                <div className="pwa-card p-4 flex flex-wrap items-center gap-3">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Competidores:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                        <button
-                            onClick={() => setSelectedCompetitors([])}
-                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
-                                selectedCompetitors.length === 0
-                                    ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                    : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                            }`}
-                        >Todos</button>
-                        {categoryCompetitors.map(comp => {
-                            const bColor = getBrandColor(comp, categoryCompetitors.indexOf(comp));
-                            const isSelected = selectedCompetitors.includes(comp);
-                            return (
-                                <button
-                                    key={comp}
-                                    onClick={() => setSelectedCompetitors(prev =>
-                                        prev.includes(comp) ? prev.filter(c => c !== comp) : [...prev, comp]
-                                    )}
-                                    className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${
-                                        isSelected
-                                            ? 'border-current text-white'
-                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                    }`}
-                                    style={isSelected ? { backgroundColor: bColor, borderColor: bColor } : {}}
-                                >
-                                    <span
-                                        className="w-2 h-2 rounded-full flex-shrink-0"
-                                        style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.6)' : bColor }}
-                                    />
-                                    {comp}
-                                </button>
-                            );
-                        })}
-                    </div>
-                    {selectedCompetitors.length > 0 && (
-                        <span className="text-[9px] font-black uppercase tracking-widest text-accent-orange ml-auto">
-                            {selectedCompetitors.length} seleccionado{selectedCompetitors.length !== 1 ? 's' : ''}
-                        </span>
-                    )}
-                </div>
-            )}
+
+
 
             <div className="space-y-6">
                 {!hasData ? (
@@ -826,44 +712,9 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
 
                                 {/* Controls for Distribución table */}
                                 <div ref={refDistribucion} className="space-y-3">
-                                    {/* Row 1: Competitor filter */}
-                                    {categoryCompetitors.length > 1 && (
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Competidor:</span>
-                                            <div className="flex flex-wrap gap-1">
-                                                {['all', ...categoryCompetitors].map(comp => (
-                                                    <button
-                                                        key={comp}
-                                                        onClick={() => setFilterCompetidor(comp)}
-                                                        className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCompetidor === comp
-                                                            ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                            : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                                            }`}
-                                                    >
-                                                        {comp === 'all' ? 'Todos' : comp}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {/* Row 2: Month filter + Sort */}
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">Mes:</span>
-                                        <div className="flex flex-wrap gap-1">
-                                            {[{ key: 'all', label: 'Todos' }, ...cajaMonths].map(m => (
-                                                <button
-                                                    key={m.key}
-                                                    onClick={() => setFilterCajaMes(m.key)}
-                                                    className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border ${filterCajaMes === m.key
-                                                        ? 'bg-accent-orange/20 border-accent-orange/50 text-accent-orange'
-                                                        : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                                        }`}
-                                                >
-                                                    {m.label || 'Todos'}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <div className="ml-auto flex items-center gap-2">
+                                    {/* Row 1: Sort */}
+                                    <div className="flex flex-wrap items-center justify-end gap-3">
+                                        <div className="flex items-center gap-2">
                                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
                                             <select
                                                 value={sortCaja}
@@ -886,7 +737,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [] }) =
                                         <thead className="sticky top-0 z-10">
                                             <tr>
                                                 <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={4}>
-                                                    Distribución de Ventas por Local {filterCajaMes !== 'all' ? `— ${cajaMonths.find(m => m.key === filterCajaMes)?.label}` : ''}
+                                                    Distribución de Ventas por Local
                                                 </th>
                                             </tr>
                                             <tr className="bg-slate-100 dark:bg-white/[0.04]">

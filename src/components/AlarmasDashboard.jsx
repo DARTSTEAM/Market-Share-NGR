@@ -24,7 +24,8 @@ import {
     Store,
     TrendingUp,
     ArrowUpDown,
-    BellOff
+    BellOff,
+    Check
 } from 'lucide-react';
 import CustomSelect from './common/CustomSelect';
 
@@ -57,8 +58,74 @@ const ITEMS_PER_PAGE = 10;
 
 const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
-const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigChange, onUpdateTicket, isRefreshing }) => {
-    const [activeTab, setActiveTab] = useState('alarmas'); // 'alarmas' | 'estimados'
+const AlarmasDashboard = ({ 
+    user,
+    records, 
+    tickets, 
+    cajasConfig = [], 
+    onCajasConfigChange, 
+    alarmasRevisadas = [],
+    onAlarmasRevisadasChange,
+    onUpdateTicket, 
+    isRefreshing 
+}) => {
+    const [activeTab, setActiveTab] = useState('alarmas'); // 'alarmas' | 'estimados' | 'resueltas'
+    const [notifications, setNotifications] = useState([]);
+    
+    const notify = (type, msg) => {
+        const id = Date.now();
+        setNotifications(prev => [...prev, { id, type, msg }]);
+        setTimeout(() => {
+            setNotifications(prev => prev.filter(n => n.id !== id));
+        }, 3000);
+    };
+
+    const handleMarkRevisada = async (r, marcar) => {
+        const cell = {
+            codigo_tienda: r.codigo_tienda,
+            caja: String(r.caja),
+            mes: r.mes,
+            ano: r.ano
+        };
+
+        // Optimistic update
+        onAlarmasRevisadasChange?.(prev =>
+            marcar
+                ? [...prev, { ...cell, revisado_por: user?.email || 'dashboard' }]
+                : prev.filter(rev => !(rev.codigo_tienda === cell.codigo_tienda && String(rev.caja) === String(cell.caja) && rev.mes === cell.mes && rev.ano === cell.ano))
+        );
+
+        try {
+            const res = await fetch(`${API}/api/alarmas-revisadas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ...cell,
+                    revisado_por: user?.email || 'dashboard',
+                    accion: marcar ? 'MARCAR' : 'QUITAR',
+                }),
+            });
+            const result = await res.json();
+            if (!result.success) throw new Error(result.error);
+            notify('success', marcar ? '✓ Alarma marcada como revisada' : 'Revisión quitada');
+        } catch (e) {
+            // Rollback
+            onAlarmasRevisadasChange?.(prev =>
+                marcar
+                    ? prev.filter(rev => !(rev.codigo_tienda === cell.codigo_tienda && String(rev.caja) === String(cell.caja) && rev.mes === cell.mes && rev.ano === cell.ano))
+                    : [...prev, { ...cell, revisado_por: user?.email || 'dashboard' }]
+            );
+            notify('error', `Error: ${e.message}`);
+        }
+    };
+
+    const revisadasMap = useMemo(() => {
+        const m = {};
+        alarmasRevisadas.forEach(r => {
+            m[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`] = true;
+        });
+        return m;
+    }, [alarmasRevisadas]);
     const [selectedStatus, setSelectedStatus] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [filterMes, setFilterMes] = useState('all');
@@ -144,6 +211,9 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
                 (r.competidor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (r.filename_actual || '').toLowerCase().includes(searchTerm.toLowerCase());
 
+            const isRevisada = revisadasMap[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`];
+            if (isRevisada) return false; // Hide from main alarms if resolved
+
             return matchesStatus && matchesMes && matchesCompetidor && matchesLocal && matchesSearch;
         });
 
@@ -180,6 +250,26 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
         });
     }, [records, estFilterComp, estSearchTerm, estSortBy]);
 
+    // Resolved records
+    const resolvedRecords = useMemo(() => {
+        const filtered = records.filter(r => {
+            const isRevisada = revisadasMap[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`];
+            if (!isRevisada) return false;
+
+            const matchesMes = filterMes === 'all' || (r.mes && String(parseInt(r.mes)) === filterMes);
+            const matchesCompetidor = filterCompetidor === 'all' || r.competidor === filterCompetidor;
+            const matchesLocal = filterLocal === 'all' || r.local === filterLocal;
+            const matchesSearch =
+                (r.local || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (r.competidor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (r.filename_actual || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+            return matchesMes && matchesCompetidor && matchesLocal && matchesSearch;
+        });
+
+        return [...filtered].sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    }, [records, revisadasMap, filterMes, filterCompetidor, filterLocal, searchTerm]);
+
     const estCompOptions = useMemo(() => {
         const comps = new Set(records.filter(r => r.status_busqueda?.startsWith('ESTIMADO-')).map(r => r.competidor).filter(Boolean));
         return [{ value: 'all', label: 'Todos' }, ...Array.from(comps).sort().map(c => ({ value: c, label: c }))];
@@ -200,10 +290,17 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
 
     const paginatedRecords = useMemo(() => {
         const start = (currentPage - 1) * ITEMS_PER_PAGE;
-        return alarmRecords.slice(start, start + ITEMS_PER_PAGE);
-    }, [alarmRecords, currentPage]);
+        let list = alarmRecords;
+        if (activeTab === 'resueltas') list = resolvedRecords;
+        if (activeTab === 'estimados') list = estimatedRecords;
+        return list.slice(start, start + ITEMS_PER_PAGE);
+    }, [alarmRecords, resolvedRecords, estimatedRecords, activeTab, currentPage]);
 
-    const totalPages = Math.ceil(alarmRecords.length / ITEMS_PER_PAGE);
+    const totalPages = Math.ceil((
+        activeTab === 'resueltas' ? resolvedRecords.length : 
+        activeTab === 'estimados' ? estimatedRecords.length : 
+        alarmRecords.length
+    ) / ITEMS_PER_PAGE);
 
     const handleEdit = (record) => {
         const foundActual = tickets.find(t => t.filename === record.filename_actual);
@@ -286,8 +383,39 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
     // The user should provide the base URL, but we can use a placeholder for now.
     const getImageUrl = (filename) => {
         if (!filename) return null;
-        // Updated with the nested folder path identified by the user
+        // Base URL is fixed, we vary the path in the onError handler if it fails
         return `https://storage.googleapis.com/ngr-market-share/Tickets%20JPG/Tickets%20JPG/${encodeURIComponent(filename)}`;
+    };
+
+    const handleImageError = (e, filename) => {
+        if (!filename) return;
+        const attempt = parseInt(e.target.dataset.attempt || '0', 10);
+        const bucketBase = "https://storage.googleapis.com/ngr-market-share/";
+        
+        const fname = filename.toString();
+        const isJpg = fname.toLowerCase().endsWith('.jpg');
+        const altExtension = isJpg 
+            ? (fname.endsWith('.jpg') ? fname.replace('.jpg', '.JPG') : fname.replace('.JPG', '.jpg'))
+            : fname;
+
+        const paths = [
+            `Tickets%20JPG/${encodeURIComponent(fname)}`,
+            `Tickets%202026/${encodeURIComponent(fname)}`,
+            `Tickets/${encodeURIComponent(fname)}`,
+            `${encodeURIComponent(fname)}`,
+            `Tickets%20JPG/Tickets%20JPG/${encodeURIComponent(altExtension)}`,
+            `Tickets%20JPG/${encodeURIComponent(altExtension)}`,
+            `Tickets/${encodeURIComponent(altExtension)}`,
+        ];
+
+        if (attempt < paths.length) {
+            e.target.dataset.attempt = attempt + 1;
+            e.target.src = bucketBase + paths[attempt];
+        } else {
+            e.target.onerror = null;
+            e.target.src = 'https://placehold.co/600x800?text=Imagen+No+Disponible';
+            e.target.classList.add('opacity-50', 'grayscale');
+        }
     };
 
     return (
@@ -334,10 +462,9 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
                 })}
             </div>
 
-            {/* Tab switcher: Alarmas / Estimados */}
             <div className="flex gap-2">
                 <button
-                    onClick={() => setActiveTab('alarmas')}
+                    onClick={() => { setActiveTab('alarmas'); setCurrentPage(1); }}
                     className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
                         activeTab === 'alarmas'
                             ? 'bg-accent-orange text-white shadow-lg shadow-accent-orange/20'
@@ -347,14 +474,24 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
                     ⚠ Alarmas <span className="ml-1 opacity-70">({alarmRecords.length})</span>
                 </button>
                 <button
-                    onClick={() => setActiveTab('estimados')}
+                    onClick={() => { setActiveTab('estimados'); setCurrentPage(1); }}
                     className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
                         activeTab === 'estimados'
-                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
                             : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-slate-200 dark:hover:bg-white/10'
                     }`}
                 >
                     ◈ Períodos Estimados <span className="ml-1 opacity-70">({estimatedRecords.length})</span>
+                </button>
+                <button
+                    onClick={() => { setActiveTab('resueltas'); setCurrentPage(1); }}
+                    className={`px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+                        activeTab === 'resueltas'
+                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                            : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-slate-200 dark:hover:bg-white/10'
+                    }`}
+                >
+                    ✓ Resueltas <span className="ml-1 opacity-70">({resolvedRecords.length})</span>
                 </button>
             </div>
 
@@ -578,13 +715,22 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
                                                 {r.fecha ? new Date(r.fecha).toLocaleDateString('es-ES') : '-'}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <button
-                                                    onClick={() => handleEdit(r)}
-                                                    className="p-2 bg-accent-orange text-white rounded-lg hover:shadow-lg hover:shadow-accent-orange/20 transition-all flex items-center gap-2 font-black uppercase tracking-tighter"
-                                                >
-                                                    <Edit3 size={14} />
-                                                    Corregir
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleEdit(r)}
+                                                        className="p-2 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/60 hover:bg-accent-orange hover:text-white transition-all group"
+                                                        title="Ver Imagen y Detalles"
+                                                    >
+                                                        <Eye size={14} className="group-hover:scale-110 transition-transform" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleMarkRevisada(r, true)}
+                                                        className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white transition-all"
+                                                        title="Marcar como Resuelta"
+                                                    >
+                                                        <Check size={14} />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -615,6 +761,107 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
                                 <ChevronRight size={16} />
                             </button>
                         </div>
+                    </div>
+                </section>
+                )}
+                
+                {/* Resolved Tab Content */}
+                {activeTab === 'resueltas' && (
+                <section className="pwa-card overflow-hidden border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/50">
+                    <div className="p-4 border-b border-slate-200 dark:border-white/10 flex flex-col gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <div className="flex-1 min-w-[240px] relative group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar en resueltas..."
+                                    className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pl-11 pr-4 text-sm font-bold text-slate-700 dark:text-white placeholder:text-slate-400 focus:outline-none transition-all"
+                                    value={searchTerm}
+                                    onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                                />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="w-44 shrink-0">
+                                    <CustomSelect
+                                        selected={filterMes}
+                                        onChange={(val) => { setFilterMes(val); setCurrentPage(1); }}
+                                        options={mesOptions}
+                                        icon={<CalendarIcon size={14} />}
+                                    />
+                                </div>
+                                <div className="w-52 shrink-0">
+                                    <CustomSelect
+                                        selected={filterCompetidor}
+                                        onChange={(val) => { setFilterCompetidor(val); setFilterLocal('all'); setCurrentPage(1); }}
+                                        options={competidorOptions}
+                                        icon={<Store size={14} />}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="bg-slate-50 dark:bg-black/20 text-slate-500 dark:text-white/40 font-black text-[9px] uppercase tracking-[0.2em]">
+                                <tr>
+                                    <th className="px-6 py-4">Status Orig.</th>
+                                    <th className="px-6 py-4">ID Tienda</th>
+                                    <th className="px-6 py-4">Competidor / Local</th>
+                                    <th className="px-6 py-4">Caja</th>
+                                    <th className="px-6 py-4">Fecha Res.</th>
+                                    <th className="px-6 py-4">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[11px]">
+                                {paginatedRecords.map((r, idx) => {
+                                    const config = ALARM_STATUS_CONFIG[r.status_busqueda] || { label: r.status_busqueda, color: 'text-slate-400', bg: 'bg-slate-400/10', icon: Info };
+                                    return (
+                                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bg}`}>
+                                                    <config.icon size={12} className={config.color} />
+                                                    <span className={`font-black uppercase tracking-tighter ${config.color}`}>{config.label}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 font-mono font-bold text-slate-400">
+                                                {r.codigo_tienda || 'N/A'}
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-900 dark:text-white">
+                                                <div className="flex flex-col">
+                                                    <span className="font-black uppercase">{r.competidor}</span>
+                                                    <span className="text-slate-500 font-bold">{r.local}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 font-mono font-bold">
+                                                {r.caja}
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-500">
+                                                {new Date(r.fecha).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleEdit(r)}
+                                                        className="p-2 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/60 hover:bg-accent-orange hover:text-white transition-all group"
+                                                        title="Ver Imagen"
+                                                    >
+                                                        <Eye size={14} className="group-hover:scale-110 transition-transform" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleMarkRevisada(r, false)}
+                                                        className="p-2 rounded-lg bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-white transition-all"
+                                                        title="Quitar de Resueltas"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
                     </div>
                 </section>
                 )}
@@ -680,6 +927,7 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
                                         data={editingTicket.actual}
                                         onChange={(newData) => setEditingTicket({ ...editingTicket, actual: newData })}
                                         getImageUrl={getImageUrl}
+                                        handleImageError={handleImageError}
                                     />
 
                                     {/* Anterior Ticket */}
@@ -689,6 +937,7 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
                                             data={editingTicket.anterior}
                                             onChange={(newData) => setEditingTicket({ ...editingTicket, anterior: newData })}
                                             getImageUrl={getImageUrl}
+                                            handleImageError={handleImageError}
                                         />
                                     )}
                                 </div>
@@ -744,13 +993,30 @@ const AlarmasDashboard = ({ records, tickets, cajasConfig = [], onCajasConfigCha
                     </div>
                 </div>
             )}
+
+            {/* Notifications */}
+            <div className="fixed bottom-6 right-6 z-[1000] flex flex-col gap-3">
+                {notifications.map(n => (
+                    <div
+                        key={n.id}
+                        className={`px-6 py-4 rounded-2xl shadow-2xl border flex items-center gap-3 animate-in slide-in-from-right duration-300 ${
+                            n.type === 'success'
+                                ? 'bg-emerald-500 text-white border-emerald-400'
+                                : 'bg-red-500 text-white border-red-400'
+                        }`}
+                    >
+                        {n.type === 'success' ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
+                        <span className="font-black text-sm uppercase tracking-tight">{n.msg}</span>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
 
 // --- Sub-components for better organization ---
 
-const TicketEditSection = ({ title, data, onChange, getImageUrl }) => {
+const TicketEditSection = ({ title, data, onChange, getImageUrl, handleImageError }) => {
     const [zoomed, setZoomed] = useState(false);
     const [origin, setOrigin] = useState('50% 50%');
     const imgRef              = useRef(null);
@@ -793,10 +1059,7 @@ const TicketEditSection = ({ title, data, onChange, getImageUrl }) => {
                         onClick={handleImgClick}
                         style={{ transformOrigin: origin }}
                         className={`object-contain transition-all duration-300 select-none ${zoomed ? 'scale-[1.8] cursor-zoom-out' : 'w-full h-full cursor-zoom-in'}`}
-                        onError={(e) => {
-                            e.target.onerror = null;
-                            e.target.src = "https://placehold.co/600x800/1e293b/FFFFFF?text=IMAGEN+NO+ENCONTRADA";
-                        }}
+                        onError={(e) => handleImageError(e, data.originalFilename)}
                     />
                 </div>
 

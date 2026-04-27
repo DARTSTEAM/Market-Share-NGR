@@ -335,39 +335,8 @@ const PCDetailPanel = ({ pc: rawPc, evolutionData: rawEvolutionData, onClose, al
     // Normalize and find NGR records for this PC
     const ngrForPC = ngrByPC[norm(rawPc.nombre)] || [];
 
-    // MERGE NGR into the current PC data for the charts
-    const pc = useMemo(() => {
-        if (ngrForPC.length === 0) return rawPc;
-        
-        const mergedByComp = [...rawPc.byComp];
-        const mergedLocales = [...rawPc.locales];
-
-        ngrForPC.forEach(n => {
-            const name = `${n.marca} (NGR)`;
-            // Add to byComp if not already there (avoid double counting)
-            if (!mergedByComp.find(c => c.name === name)) {
-                mergedByComp.push({
-                    name: name,
-                    prom: n.trx_promedio,
-                    value: n.trx_promedio,
-                    isNGR: true
-                });
-            }
-            // Add to locales list
-            mergedLocales.push({
-                competidor: name,
-                local: n.local_ngr || n.nombre_ngr,
-                prom: n.trx_promedio,
-                isNGR: true
-            });
-        });
-
-        return {
-            ...rawPc,
-            byComp: mergedByComp.sort((a, b) => b.prom - a.prom),
-            locales: mergedLocales.sort((a, b) => b.prom - a.prom)
-        };
-    }, [rawPc, ngrForPC]);
+    // pcData already includes NGR brands merged in — no secondary merge needed.
+    const pc = rawPc;
 
     // Main evolution data as provided by parent (now includes NGR history)
     const evolutionData = rawEvolutionData;
@@ -813,7 +782,8 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
             dataToProcess.push({
                 punto_compartido: pcName,
                 cc_punto_compartido: r.cc_punto_compartido || r.cc_nombre,
-                competidor: r.marca + ' (NGR)',
+                competidor: r.marca, // bare brand name — no '(NGR)' suffix to avoid duplicates
+                _isNGR: true,
                 local: r.local,
                 codigo_tienda: r.store_num || r.codigo_tienda || r.cod_tienda,
                 transacciones: (parseFloat(r.trx_promedio) || 0) * 30,
@@ -847,7 +817,8 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 ? `${parseInt(rec.ano)}-${String(parseInt(rec.mes)).padStart(2, '0')}`
                 : '__nodate__';
 
-            if (!pc.byComp[comp]) pc.byComp[comp] = { trx: 0, monthProm: {} };
+            if (!pc.byComp[comp]) pc.byComp[comp] = { trx: 0, monthProm: {}, isNGR: rec._isNGR === true };
+            else if (rec._isNGR) pc.byComp[comp].isNGR = true; // mark if any record is NGR
             pc.byComp[comp].trx += trx;
             pc.byComp[comp].monthProm[mk] = (pc.byComp[comp].monthProm[mk] || 0) + prom;
 
@@ -876,7 +847,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                         const avgProm = months.length > 0
                             ? months.reduce((s, v) => s + v, 0) / months.length
                             : 0;
-                        return { name, value: Math.round(d.trx), prom: Math.round(avgProm * 10) / 10 };
+                        return { name, value: Math.round(d.trx), prom: Math.round(avgProm * 10) / 10, isNGR: d.isNGR || false };
                     })
                     .sort((a, b) => b.prom - a.prom),
                 locales: Object.values(pc.locales)
@@ -924,7 +895,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
 
                 source.push({
                     punto_compartido: pcName,
-                    competidor: r.marca + ' (NGR)',
+                    competidor: r.marca, // bare brand name — no suffix
                     promedio: r.trx_promedio,
                     mes: r.mes,
                     ano: r.ano
@@ -1010,7 +981,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                     if (groupMode === 'category') {
                         groupKey = getCategory(c.name);
                     } else if (groupMode === 'ownership') {
-                        groupKey = c.name.includes('(NGR)') ? 'Nuestras Marcas' : 'Competencia';
+                        groupKey = c.isNGR ? 'Nuestras Marcas' : 'Competencia';
                     }
 
                     if (!groupMap[groupKey]) groupMap[groupKey] = { name: groupKey, value: 0, prom: 0 };
