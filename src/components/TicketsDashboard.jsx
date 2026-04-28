@@ -1,13 +1,19 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
     Ticket, Search, Filter, Calendar, Store,
     ChevronRight, ChevronLeft, Hash,
     DollarSign, ShieldAlert, BarChart2,
     TrendingUp, Edit3, X, Save, Loader2,
     Monitor, MapPin, ArrowUpDown, Image as ImageIcon,
-    ZoomIn
+    ZoomIn, Upload, ImagePlus
 } from 'lucide-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 import CustomSelect from './common/CustomSelect';
+
+const API = window.location.hostname === 'localhost'
+  ? 'http://localhost:3001'
+  : 'https://ngr-proxy-server-966549276703.us-central1.run.app';
 
 const formatCurrency = (val) =>
     new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 }).format(val ?? 0);
@@ -17,6 +23,7 @@ const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','A
 
 const getImageUrl = (filename) => {
     if (!filename) return null;
+    if (filename.startsWith('http')) return filename;
     // Base URL is fixed, we vary the path in the onError handler if it fails
     return `https://storage.googleapis.com/ngr-market-share/Tickets%20JPG/Tickets%20JPG/${encodeURIComponent(filename)}`;
 };
@@ -36,10 +43,12 @@ const handleImageError = (e, filename) => {
     const paths = [
         `Tickets%20JPG/${encodeURIComponent(fname)}`,          // Single nested
         `Tickets%202026/${encodeURIComponent(fname)}`,         // 2026 folder
+        `Tickets%202026/Tickets%202026/${encodeURIComponent(fname)}`, // Double nested 2026
         `Tickets/${encodeURIComponent(fname)}`,              // Alternate folder
         `${encodeURIComponent(fname)}`,                      // Root
         `Tickets%20JPG/Tickets%20JPG/${encodeURIComponent(altExtension)}`, // Case flip nested
         `Tickets%20JPG/${encodeURIComponent(altExtension)}`, // Case flip single
+        `Tickets%202026/${encodeURIComponent(altExtension)}`, // Case flip 2026
         `Tickets/${encodeURIComponent(altExtension)}`,      // Case flip alt
     ];
 
@@ -69,10 +78,12 @@ const EditModal = ({ ticket, onClose, onSave, isSaving, onPrev, onNext, navInfo 
         fecha:        ticket.fecha        ? String(ticket.fecha).split('T')[0] : '',
         canal:        ticket.canal        || ticket.canal_de_venta || '',
         filename:     ticket.filename     || '',
+        mes:          ticket.mes          || (ticket.fecha ? new Date(ticket.fecha).getMonth() + 1 : ''),
+        ano:          ticket.ano          || (ticket.fecha ? new Date(ticket.fecha).getFullYear() : ''),
     });
 
     // Reset form when ticket prop changes (navigation)
-    React.useEffect(() => {
+    useEffect(() => {
         setForm({
             competidor:   ticket.competidor   || '',
             local:        ticket.local        || '',
@@ -83,13 +94,20 @@ const EditModal = ({ ticket, onClose, onSave, isSaving, onPrev, onNext, navInfo 
             fecha:        ticket.fecha        ? String(ticket.fecha).split('T')[0] : '',
             canal:        ticket.canal        || ticket.canal_de_venta || '',
             filename:     ticket.filename     || '',
+            mes:          ticket.mes          || (ticket.fecha ? new Date(ticket.fecha).getMonth() + 1 : ''),
+            ano:          ticket.ano          || (ticket.fecha ? new Date(ticket.fecha).getFullYear() : ''),
         });
         setImgError(false);
         setZoomed(false);
+        setUploading(false);
+        setPreviewUrl(null);
     }, [ticket]);
 
     const [imgError, setImgError] = useState(false);
     const [zoomed, setZoomed]     = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const fileInputRef            = useRef(null);
     const [origin, setOrigin]     = useState('50% 50%');
     const imgRef                  = useRef(null);
     const imageUrl = getImageUrl(form.filename);
@@ -102,6 +120,58 @@ const EditModal = ({ ticket, onClose, onSave, isSaving, onPrev, onNext, navInfo 
             setOrigin(`${x}% ${y}%`);
         }
         setZoomed(z => !z);
+    };
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Show local preview immediately
+        const reader = new FileReader();
+        const base64Promise = new Promise((resolve) => {
+            reader.onloadend = () => {
+                setPreviewUrl(reader.result);
+                resolve(reader.result);
+            };
+        });
+        reader.readAsDataURL(file);
+
+        setUploading(true);
+        try {
+            const base64Data = await base64Promise;
+            
+            // Send to backend for N8N/Gemini analysis and GCS upload
+            const res = await fetch(`${API}/api/analyze-ticket`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: base64Data })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setForm(f => ({
+                    ...f,
+                    filename: data.uploadedFilename || f.filename,
+                    competidor: data.competidor || f.competidor,
+                    local: data.local || f.local,
+                    codigoTienda: data.codigoTienda || f.codigoTienda,
+                    caja: data.caja || f.caja,
+                    ticket: data.ticket || f.ticket,
+                    importe: data.importe || f.importe,
+                    fecha: data.fecha || f.fecha,
+                    mes: data.mes || f.mes,
+                    ano: data.ano || f.ano,
+                }));
+            } else {
+                setForm(f => ({ ...f, filename: downloadURL }));
+                console.warn('Gemini analysis failed');
+            }
+        } catch (err) {
+            console.error('Error uploading image:', err);
+            alert('Error al subir la imagen. Intenta de nuevo.');
+        } finally {
+            setUploading(false);
+        }
     };
 
     const field = (label, key, type = 'text', icon = null) => (
@@ -173,22 +243,39 @@ const EditModal = ({ ticket, onClose, onSave, isSaving, onPrev, onNext, navInfo 
                                 <ImageIcon size={12} className="text-accent-orange" />
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Imagen del Ticket</span>
                             </div>
-                            {zoomed && (
-                                <span className="text-[8px] font-black uppercase tracking-widest text-accent-orange animate-pulse">Zoom activo — click para salir</span>
-                            )}
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileChange}
+                                    accept="image/*"
+                                    className="hidden"
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={uploading}
+                                    className="px-2 py-1 rounded-lg bg-accent-orange/10 border border-accent-orange/20 text-accent-orange text-[8px] font-black uppercase tracking-tighter hover:bg-accent-orange/20 transition-all flex items-center gap-1.5"
+                                >
+                                    {uploading ? <Loader2 size={10} className="animate-spin" /> : <ImagePlus size={10} />}
+                                    Subir Foto Propia
+                                </button>
+                                {zoomed && (
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-accent-orange animate-pulse">Zoom activo</span>
+                                )}
+                            </div>
                         </div>
                         <div
                             className={`flex-1 min-h-[200px] md:min-h-0 relative flex items-center justify-center ${zoomed ? 'overflow-auto' : 'overflow-hidden'}`}
                         >
-                            {imageUrl && !imgError ? (
+                            {(previewUrl || (imageUrl && !imgError)) ? (
                                 <img
                                     ref={imgRef}
-                                    src={imageUrl}
+                                    src={previewUrl || imageUrl}
                                     alt="Ticket"
                                     onClick={handleImgClick}
                                     style={{ transformOrigin: origin }}
                                     className={`object-contain transition-all duration-300 select-none ${zoomed ? 'scale-[1.8] cursor-zoom-out' : 'w-full h-full cursor-zoom-in'}`}
-                                    onError={(e) => handleImageError(e, form.filename)}
+                                    onError={(e) => !previewUrl && handleImageError(e, form.filename)}
                                 />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-slate-300 dark:text-white/20 p-8">
@@ -217,6 +304,12 @@ const EditModal = ({ ticket, onClose, onSave, isSaving, onPrev, onNext, navInfo 
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             {field('Fecha',          'fecha',        'date',   <Calendar size={14} />)}
+                            <div className="grid grid-cols-2 gap-2">
+                                {field('Mes', 'mes', 'number')}
+                                {field('Año', 'ano', 'number')}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
                             {field('Canal de Venta', 'canal',        'text')}
                         </div>
 
@@ -230,19 +323,19 @@ const EditModal = ({ ticket, onClose, onSave, isSaving, onPrev, onNext, navInfo 
                                     Cancelar
                                 </button>
                                 <button
-                                    onClick={() => onSave(form)}
-                                    disabled={isSaving}
+                                    onClick={() => onSave({ ...form, originalFilename: ticket.filename })}
+                                    disabled={isSaving || uploading}
                                     className="flex-[2] py-3 rounded-2xl bg-accent-orange text-white text-xs font-black uppercase tracking-widest shadow-lg shadow-accent-orange/20 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                                 >
-                                    {isSaving
-                                        ? <><Loader2 size={16} className="animate-spin" /> Guardando...</>
+                                    {isSaving || uploading
+                                        ? <><Loader2 size={16} className="animate-spin" /> {uploading ? 'Subiendo...' : 'Guardando...'}</>
                                         : <><Save size={16} /> Guardar Cambios</>
                                     }
                                 </button>
                             </div>
                             {onNext && (
                                 <button
-                                    onClick={() => { onSave(form); setTimeout(onNext, 80); }}
+                                    onClick={() => { onSave({ ...form, originalFilename: ticket.filename }); setTimeout(onNext, 80); }}
                                     className="w-full py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all"
                                 >
                                     <Save size={13} /> Guardar y Siguiente <ChevronRight size={13} />

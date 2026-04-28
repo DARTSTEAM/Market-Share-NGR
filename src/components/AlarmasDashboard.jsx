@@ -1,34 +1,19 @@
-import React, { useState, useMemo, useRef } from 'react';
-import {
-    AlertTriangle,
-    Search,
-    Filter,
-    Eye,
-    Edit3,
-    CheckCircle2,
-    XCircle,
-    Info,
-    Loader2,
-    RefreshCw,
-    Image as ImageIcon,
-    Save,
-    X,
-    ChevronRight,
-    ChevronLeft,
-    Clock,
-    Hash,
-    DollarSign,
-    Calendar as CalendarIcon,
-    MapPin,
-    Monitor,
-    Store,
-    TrendingUp,
-    ArrowUpDown,
-    BellOff,
-    Check
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { 
+    AlertTriangle, Clock, TrendingUp, Hash, Info, Bell, BellOff,
+    Search, Filter, Calendar as CalendarIcon, Store, MapPin, X, Eye,
+    MoreHorizontal, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
+    RefreshCw, RotateCcw, MessageSquare, ExternalLink, Trash2, Edit3,
+    ArrowRight, Download, FileText, Check, Image as ImageIcon, ImagePlus,
+    Loader2, Save, ArrowUpDown, Monitor, DollarSign
 } from 'lucide-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 import CustomSelect from './common/CustomSelect';
 
+const API = window.location.hostname === 'localhost'
+  ? 'http://localhost:3001'
+  : 'https://ngr-proxy-server-966549276703.us-central1.run.app';
 
 
 const ALARM_STATUS_CONFIG = {
@@ -313,6 +298,8 @@ const AlarmasDashboard = ({
             ticket: (foundActual.ticket != null ? foundActual.ticket : foundActual.numero_de_ticket) ?? record.ticket_actual?.toString() ?? '',
             importe: foundActual.importe ?? foundActual.importe_total ?? 0,
             fecha: foundActual.fecha ? foundActual.fecha.split('T')[0] : (record.fecha ? record.fecha.split('T')[0] : ''),
+            mes: foundActual.mes || (record.fecha ? new Date(record.fecha).getMonth() + 1 : ''),
+            ano: foundActual.ano || (record.fecha ? new Date(record.fecha).getFullYear() : ''),
             originalFilename: foundActual.filename
         } : {
             competidor: record.competidor,
@@ -323,7 +310,9 @@ const AlarmasDashboard = ({
             filename: record.filename_actual,
             originalFilename: record.filename_actual,
             importe: 0,
-            fecha: record.fecha ? record.fecha.split('T')[0] : ''
+            fecha: record.fecha ? record.fecha.split('T')[0] : '',
+            mes: record.fecha ? new Date(record.fecha).getMonth() + 1 : '',
+            ano: record.fecha ? new Date(record.fecha).getFullYear() : ''
         };
 
         let anteriorData = null;
@@ -338,6 +327,8 @@ const AlarmasDashboard = ({
                 ticket: foundAnterior.ticket || foundAnterior.numero_de_ticket || record.ticket_anterior?.toString() || '',
                 importe: foundAnterior.importe ?? foundAnterior.importe_total ?? 0,
                 fecha: foundAnterior.fecha ? foundAnterior.fecha.split('T')[0] : (record.fecha_anterior ? record.fecha_anterior.split('T')[0] : ''),
+                mes: foundAnterior.mes || (record.fecha_anterior ? new Date(record.fecha_anterior).getMonth() + 1 : ''),
+                ano: foundAnterior.ano || (record.fecha_anterior ? new Date(record.fecha_anterior).getFullYear() : ''),
                 originalFilename: foundAnterior.filename
             } : {
                 competidor: record.competidor,
@@ -348,7 +339,9 @@ const AlarmasDashboard = ({
                 filename: record.filename_anterior,
                 originalFilename: record.filename_anterior,
                 importe: 0,
-                fecha: record.fecha_anterior ? record.fecha_anterior.split('T')[0] : ''
+                fecha: record.fecha_anterior ? record.fecha_anterior.split('T')[0] : '',
+                mes: record.fecha_anterior ? new Date(record.fecha_anterior).getMonth() + 1 : '',
+                ano: record.fecha_anterior ? new Date(record.fecha_anterior).getFullYear() : ''
             };
         }
 
@@ -383,7 +376,7 @@ const AlarmasDashboard = ({
     // The user should provide the base URL, but we can use a placeholder for now.
     const getImageUrl = (filename) => {
         if (!filename) return null;
-        // Base URL is fixed, we vary the path in the onError handler if it fails
+        if (filename.startsWith('http')) return filename;
         return `https://storage.googleapis.com/ngr-market-share/Tickets%20JPG/Tickets%20JPG/${encodeURIComponent(filename)}`;
     };
 
@@ -401,10 +394,12 @@ const AlarmasDashboard = ({
         const paths = [
             `Tickets%20JPG/${encodeURIComponent(fname)}`,
             `Tickets%202026/${encodeURIComponent(fname)}`,
+            `Tickets%202026/Tickets%202026/${encodeURIComponent(fname)}`,
             `Tickets/${encodeURIComponent(fname)}`,
             `${encodeURIComponent(fname)}`,
             `Tickets%20JPG/Tickets%20JPG/${encodeURIComponent(altExtension)}`,
             `Tickets%20JPG/${encodeURIComponent(altExtension)}`,
+            `Tickets%202026/${encodeURIComponent(altExtension)}`,
             `Tickets/${encodeURIComponent(altExtension)}`,
         ];
 
@@ -805,6 +800,7 @@ const AlarmasDashboard = ({
                         <table className="w-full text-left">
                             <thead className="bg-slate-50 dark:bg-black/20 text-slate-500 dark:text-white/40 font-black text-[9px] uppercase tracking-[0.2em]">
                                 <tr>
+                                    <th className="px-6 py-4">Ticket</th>
                                     <th className="px-6 py-4">Status Orig.</th>
                                     <th className="px-6 py-4">ID Tienda</th>
                                     <th className="px-6 py-4">Competidor / Local</th>
@@ -816,8 +812,23 @@ const AlarmasDashboard = ({
                             <tbody className="divide-y divide-slate-200 dark:divide-white/5 text-[11px]">
                                 {paginatedRecords.map((r, idx) => {
                                     const config = ALARM_STATUS_CONFIG[r.status_busqueda] || { label: r.status_busqueda, color: 'text-slate-400', bg: 'bg-slate-400/10', icon: Info };
+                                    const thumbUrl = getImageUrl(r.filename_actual);
+                                    
                                     return (
                                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div 
+                                                    className="w-10 h-14 bg-slate-100 dark:bg-white/5 rounded-lg overflow-hidden border border-slate-200 dark:border-white/10 flex items-center justify-center cursor-pointer group/thumb"
+                                                    onClick={() => handleEdit(r)}
+                                                >
+                                                    <img 
+                                                        src={thumbUrl} 
+                                                        alt="Thumb" 
+                                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                                        onError={(e) => handleImageError(e, r.filename_actual)}
+                                                    />
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4">
                                                 <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full ${config.bg}`}>
                                                     <config.icon size={12} className={config.color} />
@@ -1018,6 +1029,9 @@ const AlarmasDashboard = ({
 
 const TicketEditSection = ({ title, data, onChange, getImageUrl, handleImageError }) => {
     const [zoomed, setZoomed] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const fileInputRef            = useRef(null);
     const [origin, setOrigin] = useState('50% 50%');
     const imgRef              = useRef(null);
     const imgUrl              = getImageUrl(data.originalFilename);
@@ -1032,16 +1046,86 @@ const TicketEditSection = ({ title, data, onChange, getImageUrl, handleImageErro
         setZoomed(z => !z);
     };
 
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Show local preview immediately
+        const reader = new FileReader();
+        const base64Promise = new Promise((resolve) => {
+            reader.onloadend = () => {
+                setPreviewUrl(reader.result);
+                resolve(reader.result);
+            };
+        });
+        reader.readAsDataURL(file);
+
+        setUploading(true);
+        try {
+            const base64Data = await base64Promise;
+            
+            // Send to backend for N8N/Gemini analysis and GCS upload
+            const res = await fetch(`${API}/api/analyze-ticket`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: base64Data })
+            });
+
+            if (res.ok) {
+                const aiData = await res.json();
+                onChange({
+                    ...data,
+                    filename: aiData.uploadedFilename || data.filename,
+                    originalFilename: 'Foto Subida Manual',
+                    competidor: aiData.competidor || data.competidor,
+                    local: aiData.local || data.local,
+                    codigoTienda: aiData.codigoTienda || data.codigoTienda,
+                    caja: aiData.caja || data.caja,
+                    ticket: aiData.ticket || data.ticket,
+                    importe: aiData.importe || data.importe,
+                    fecha: aiData.fecha || data.fecha,
+                    mes: aiData.mes || data.mes,
+                    ano: aiData.ano || data.ano,
+                });
+            } else {
+                onChange({ ...data, originalFilename: 'Foto Subida Manual (Fallo N8N)' });
+                console.warn('Analysis failed');
+            }
+        } catch (err) {
+            console.error('Error uploading image:', err);
+            alert('Error al subir la imagen. Intenta de nuevo.');
+        } finally {
+            setUploading(false);
+        }
+    };
+
     return (
         <div className="flex flex-col bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border border-slate-200 dark:border-white/10 shadow-sm">
-            <div className="p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] flex items-center justify-between">
+            <div className="p-4 border-b border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] flex items-center justify-between gap-2">
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-accent-orange" />
                     {title}
                 </h4>
-                <span className="text-[8px] font-bold text-slate-400 font-mono bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded uppercase truncate max-w-[150px]">
-                    {data.originalFilename}
-                </span>
+                <div className="flex items-center gap-2">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept="image/*"
+                        className="hidden"
+                    />
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="px-2 py-1 rounded-lg bg-accent-orange/10 border border-accent-orange/20 text-accent-orange text-[8px] font-black uppercase tracking-tighter hover:bg-accent-orange/20 transition-all flex items-center gap-1.5"
+                    >
+                        {uploading ? <Loader2 size={10} className="animate-spin" /> : <TrendingUp size={10} />}
+                        Subir Foto Propia
+                    </button>
+                    <span className="text-[8px] font-bold text-slate-400 font-mono bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded uppercase truncate max-w-[100px]">
+                        {data.originalFilename}
+                    </span>
+                </div>
             </div>
 
             <div className="p-0">
@@ -1054,12 +1138,12 @@ const TicketEditSection = ({ title, data, onChange, getImageUrl, handleImageErro
                     )}
                     <img
                         ref={imgRef}
-                        src={imgUrl}
+                        src={previewUrl || imgUrl}
                         alt="Ticket"
                         onClick={handleImgClick}
                         style={{ transformOrigin: origin }}
                         className={`object-contain transition-all duration-300 select-none ${zoomed ? 'scale-[1.8] cursor-zoom-out' : 'w-full h-full cursor-zoom-in'}`}
-                        onError={(e) => handleImageError(e, data.originalFilename)}
+                        onError={(e) => !previewUrl && handleImageError(e, data.originalFilename)}
                     />
                 </div>
 
@@ -1120,16 +1204,39 @@ const TicketEditSection = ({ title, data, onChange, getImageUrl, handleImageErro
                         </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Fecha</label>
-                        <div className="relative">
-                            <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
-                            <input
-                                type="date"
-                                className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-9 pr-3 text-xs font-bold focus:ring-1 focus:ring-accent-orange/20 focus:border-accent-orange transition-all"
-                                value={data.fecha}
-                                onChange={(e) => onChange({ ...data, fecha: e.target.value })}
-                            />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Fecha</label>
+                            <div className="relative">
+                                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+                                <input
+                                    type="date"
+                                    className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl py-2 pl-9 pr-3 text-xs font-bold focus:ring-1 focus:ring-accent-orange/20 focus:border-accent-orange transition-all"
+                                    value={data.fecha}
+                                    onChange={(e) => onChange({ ...data, fecha: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1.5">
+                                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Mes</label>
+                                <input
+                                    type="number"
+                                    min="1" max="12"
+                                    className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-accent-orange/20 focus:border-accent-orange transition-all"
+                                    value={data.mes || (data.fecha ? new Date(data.fecha).getMonth() + 1 : '')}
+                                    onChange={(e) => onChange({ ...data, mes: e.target.value })}
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Año</label>
+                                <input
+                                    type="number"
+                                    className="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl py-2 px-3 text-xs font-bold focus:ring-1 focus:ring-accent-orange/20 focus:border-accent-orange transition-all"
+                                    value={data.ano || (data.fecha ? new Date(data.fecha).getFullYear() : '')}
+                                    onChange={(e) => onChange({ ...data, ano: e.target.value })}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -1147,7 +1254,7 @@ const TicketEditSection = ({ title, data, onChange, getImageUrl, handleImageErro
                             <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Local</label>
                             <input
                                 type="text"
-                                className="w-full bg-transparent border-none p-0 text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase focus:ring-0"
+                                className="w-full bg-transparent border-none p-0 text-[10px] font-bold text-slate-700 dark:text-white uppercase focus:ring-0"
                                 value={data.local}
                                 onChange={(e) => onChange({ ...data, local: e.target.value })}
                             />

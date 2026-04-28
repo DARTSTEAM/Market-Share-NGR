@@ -6,8 +6,10 @@ import {
   Loader2, ChevronDown, ChevronRight, Search,
   TrendingDown, Wifi, Database, Info, X, Check, Pencil,
   ShieldCheck, Clock, Settings2, Plus, Power, BellOff, Store, Bell, Trash2,
-  CalendarDays, PlusCircle
+  CalendarDays, PlusCircle, TrendingUp, ImagePlus
 } from 'lucide-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 
 const API = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
@@ -17,11 +19,12 @@ const MESES = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
                'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 const TIPO_CONFIG = {
-  REAL:     { dot: 'bg-emerald-400', cell: 'bg-emerald-50   dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', label: 'Real',             icon: Wifi },
-  HISTORIAL:{ dot: 'bg-slate-400',   cell: 'bg-slate-100    dark:bg-white/[0.06]',   text: 'text-slate-600   dark:text-white/70',    badge: 'bg-slate-500/15  text-slate-400  border-slate-500/30',  label: 'Historial',        icon: Database },
-  APROBADO: { dot: 'bg-sky-400',     cell: 'bg-sky-50       dark:bg-sky-500/10',     text: 'text-sky-700     dark:text-sky-300',     badge: 'bg-sky-500/15    text-sky-400    border-sky-500/30',    label: 'Aprobado',         icon: ShieldCheck },
-  PENDIENTE:{ dot: 'bg-amber-400',   cell: 'bg-amber-50     dark:bg-amber-500/10',   text: 'text-amber-700   dark:text-amber-300',   badge: 'bg-amber-500/15  text-amber-400  border-amber-500/30',  label: 'Pend. Aprobación', icon: Clock },
-  GAP:      { dot: 'bg-red-400',     cell: '',                                        text: '',                                       badge: 'bg-red-500/15    text-red-400    border-red-500/30',    label: 'Gap',              icon: AlertTriangle },
+  REAL:          { dot: 'bg-emerald-400', cell: 'bg-emerald-50   dark:bg-emerald-500/10', text: 'text-emerald-700 dark:text-emerald-300', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', label: 'Real',             icon: Wifi },
+  HISTORIAL:     { dot: 'bg-slate-400',   cell: 'bg-slate-100    dark:bg-white/[0.06]',   text: 'text-slate-600   dark:text-white/70',    badge: 'bg-slate-500/15  text-slate-400  border-slate-500/30',  label: 'Historial',        icon: Database },
+  APROBADO:      { dot: 'bg-sky-400',     cell: 'bg-sky-50       dark:bg-sky-500/10',     text: 'text-sky-700     dark:text-sky-300',     badge: 'bg-sky-500/15    text-sky-400    border-sky-500/30',    label: 'Aprobado',         icon: ShieldCheck },
+  PENDIENTE:     { dot: 'bg-amber-400',   cell: 'bg-amber-50     dark:bg-amber-500/10',   text: 'text-amber-700   dark:text-amber-300',   badge: 'bg-amber-500/15  text-amber-400  border-amber-500/30',  label: 'Pend. Aprobación', icon: Clock },
+  ESTIMADO_AUTO: { dot: 'bg-purple-400',  cell: 'bg-purple-50    dark:bg-purple-500/10',  text: 'text-purple-700  dark:text-purple-300',  badge: 'bg-purple-500/15 text-purple-400 border-purple-500/30', label: 'Est. Automática',  icon: TrendingDown },
+  GAP:           { dot: 'bg-red-400',     cell: '',                                       text: '',                                       badge: 'bg-red-500/15    text-red-400    border-red-500/30',    label: 'Gap',              icon: AlertTriangle },
 };
 
 const fmt = n => n != null ? Number(n).toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—';
@@ -166,6 +169,44 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit, pendingEditPos, local, 
   const [saving,    setSaving]    = useState(false);
   const inputRef = useRef(null);
   const panelRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    const base64Promise = new Promise((resolve) => {
+        reader.onloadend = () => resolve(reader.result);
+    });
+    reader.readAsDataURL(file);
+
+    setUploading(true);
+    try {
+        const base64Data = await base64Promise;
+        
+        const res = await fetch(`${API}/api/analyze-ticket`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageBase64: base64Data })
+        });
+
+        if (res.ok) {
+            const aiData = await res.json();
+            // N8N returns parsed info. Let's auto-fill the manual value.
+            // If they uploaded a ticket, it should count as TICKET_PROPIO or MANUAL.
+            if (aiData.importe) {
+                setMetodo('MANUAL'); // Fallback to MANUAL or equivalent
+                setManualVal(String(Math.round(aiData.importe * 10) / 10)); 
+            }
+        }
+    } catch (err) {
+        console.error('Error uploading image:', err);
+    } finally {
+        setUploading(false);
+    }
+  };
 
   // Cuando cambia el método, pre-cargar el valor calculado
   useEffect(() => {
@@ -228,9 +269,26 @@ function EditPanel({ cell, puntos, onSave, onCancelEdit, pendingEditPos, local, 
             <span className="text-[7px] font-black uppercase text-slate-400 tracking-widest">Estimar</span>
             <span className="text-[10px] font-bold text-slate-700 dark:text-white truncate max-w-[200px]">{cell.local}</span>
           </div>
-          <button onClick={onCancelEdit} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full text-slate-400">
-            <X size={14} />
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="px-2 py-1 rounded-lg bg-accent-orange/10 border border-accent-orange/20 text-accent-orange text-[8px] font-black uppercase tracking-tighter hover:bg-accent-orange/20 transition-all flex items-center gap-1.5"
+            >
+              {uploading ? <Loader2 size={10} className="animate-spin" /> : <TrendingUp size={10} />}
+              Subir Foto
+            </button>
+            <button onClick={onCancelEdit} className="p-1 hover:bg-slate-200 dark:hover:bg-white/10 rounded-full text-slate-400">
+              <X size={14} />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-4">
@@ -695,7 +753,7 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
   const tieneGaps = gapCount > 0;
   const tienePendientes = pendienteCount > 0;
 
-  // % de estimación: celdas APROBADO o PENDIENTE en los últimos 3 meses / total de slots (incl. caja 99)
+  // % de estimación: celdas APROBADO, PENDIENTE o ESTIMADO_AUTO en los últimos 3 meses / total de slots (incl. caja 99)
   const { estCount, totalCount } = useMemo(() => {
     let est = 0, total = 0;
     const last3 = meses.slice(-3);
@@ -707,7 +765,7 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
       total += last3.length;
       last3.forEach(mk => {
         const cell = local.celdas[`${c}||${mk}`];
-        if (cell && (cell.tipo === 'APROBADO' || cell.tipo === 'PENDIENTE')) est += 1;
+        if (cell && (cell.tipo === 'APROBADO' || cell.tipo === 'PENDIENTE' || cell.tipo === 'ESTIMADO_AUTO')) est += 1;
       });
     });
     return { estCount: est, totalCount: total };
@@ -715,7 +773,7 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
   const estPct = totalCount > 0 ? Math.round((estCount / totalCount) * 100) : null;
 
   // Para NO_CAJA_DETAIL: celda editable
-  const PRIO_TIPO = { REAL: 5, APROBADO: 4, PENDIENTE: 3, HISTORIAL: 2 };
+  const PRIO_TIPO = { REAL: 5, APROBADO: 4, PENDIENTE: 3, ESTIMADO_AUTO: 2.5, HISTORIAL: 2 };
   const getEditableCellLocal = (mk) => {
     let bestTipo = null;
     local.cajas.forEach(c => {
@@ -1144,7 +1202,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
     }, 0);
   }, [matrix, meses, cajaStatusMap]);
 
-  // % de estimación: celdas APROBADO o PENDIENTE en los últimos 3 meses / total de slots (incl. caja 99)
+  // % de estimación: celdas APROBADO, PENDIENTE o ESTIMADO_AUTO en los últimos 3 meses / total de slots (incl. caja 99)
   const pctEstimado3m = useMemo(() => {
     const last3 = meses.slice(-3);
     if (last3.length === 0) return 0;
@@ -1156,7 +1214,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
         denominador += last3.length;
         last3.forEach(mk => {
           const cell = local.celdas[`${c}||${mk}`];
-          if (cell && (cell.tipo === 'APROBADO' || cell.tipo === 'PENDIENTE')) numerador++;
+          if (cell && (cell.tipo === 'APROBADO' || cell.tipo === 'PENDIENTE' || cell.tipo === 'ESTIMADO_AUTO')) numerador++;
         });
       });
     });

@@ -121,7 +121,7 @@ const SectionTable = ({ title, headerColor = '#1e3a5f', rows, months, renderCell
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [], filters }) => {
-    const selectedCategories = filters?.category?.length > 0 ? filters.category : ['Hamburguesa'];
+    const selectedCategories = filters?.category || [];
     const selectedCompetitors = filters?.competitor || [];
     const filterYear = filters?.year || [];
 
@@ -245,7 +245,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [], fil
             // Global Filters
             if (filterYear.length > 0 && !filterYear.includes(String(r.ano))) return false;
             if (filters?.month?.length > 0 && !filters.month.includes(String(parseInt(r.mes) - 1))) return false;
-            if (!selectedCategories.includes(competitorToCategory[r.competidor])) return false;
+            if (selectedCategories.length > 0 && !selectedCategories.includes(competitorToCategory[r.competidor])) return false;
             if (selectedCompetitors.length > 0 && !selectedCompetitors.includes(r.competidor)) return false;
             if (filters?.local?.length > 0 && !filters.local.includes(r.local)) return false;
             if (filters?.region?.length > 0 && !filters.region.includes(r.region)) return false;
@@ -330,8 +330,7 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [], fil
             if (filters?.zona?.length > 0 && !filters.zona.includes(r.zona)) return false;
             if (filters?.codigoTienda?.length > 0 && !filters.codigoTienda.includes(r.codigo_tienda)) return false;
 
-            // Internal sub-filter
-            if (filterCompetidor !== 'all' && r.competidor !== filterCompetidor) return false;
+            // Internal sub-filter - removed as it's now handled by global filters
 
             return !!(r.mes && r.ano && r.local);
         });
@@ -702,320 +701,10 @@ const ClientesDashboard = ({ records, competitorToCategory, ngrLocales = [], fil
                             footnote="Tiendas únicas (locales) con al menos una transacción registrada en el período."
                         /></div>
 
-                        {/* ── Divider ─────────────────────────────────────────────────────── */}
-                        {cajaRows.length > 0 && (
-                            <>
-                                <div className="flex items-center gap-4 pt-2">
-                                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-accent-orange">Detalle por Local</span>
-                                    <div className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
-                                </div>
-
-                                {/* Controls for Distribución table */}
-                                <div ref={refDistribucion} className="space-y-3">
-                                    {/* Row 1: Sort */}
-                                    <div className="flex flex-wrap items-center justify-end gap-3">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
-                                            <select
-                                                value={sortCaja}
-                                                onChange={e => setSortCaja(e.target.value)}
-                                                className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
-                                            >
-                                                <option value="competidor_asc">Competidor (A-Z)</option>
-                                                <option value="local_asc">Local (A-Z)</option>
-                                                <option value="trx_desc">Trx ↓ (Mayor)</option>
-                                                <option value="trx_asc">Trx ↑ (Menor)</option>
-                                                <option value="pct_desc">% Local ↓</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                {/* ── 5. Distribución por Caja ──────────────────────────────────── */}
-                                <div className="relative rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg overflow-hidden">
-                                    <div className={expandDistribucion ? 'overflow-x-auto' : 'overflow-auto max-h-96'}>
-                                    <table className="w-full text-left whitespace-nowrap text-[11px]">
-                                        <thead className="sticky top-0 z-10">
-                                            <tr>
-                                                <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={4}>
-                                                    Distribución de Ventas por Local
-                                                </th>
-                                            </tr>
-                                            <tr className="bg-slate-100 dark:bg-white/[0.04]">
-                                                {['Competidor', 'Local', 'Prom. Diario', '% del Local'].map(h => (
-                                                    <th key={h} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right first:text-left">{h}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                                            {distribRows.map((row, i) => {
-                                                const compChanged = i === 0 || distribRows[i - 1].competidor !== row.competidor;
-                                                const isFirstOfLocal = sortCaja === 'competidor_asc' && (compChanged || distribRows[i - 1].local !== row.local);
-                                                const isNewComp = sortCaja === 'competidor_asc' && compChanged;
-                                                const dotColor = row.isEstimado ? (CONFIANZA_DOT[row.confianza] || '#94a3b8') : null;
-                                                return (
-                                                    <tr
-                                                        key={`${row.competidor}-${row.local}`}
-                                                        className={`transition-colors border-l-4 ${
-                                                            row.isEstimado
-                                                                ? 'bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-50/70 dark:hover:bg-amber-900/15'
-                                                                : `hover:bg-slate-50 dark:hover:bg-white/[0.02] border-transparent ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`
-                                                        }`}
-                                                        style={row.isEstimado ? { borderLeftColor: dotColor } : {}}
-                                                    >
-                                                        <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                            {row.isEstimado ? (
-                                                                <span className="flex items-center gap-1.5">
-                                                                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 }} />
-                                                                    <span style={{ color: dotColor }} className="font-black text-[9px] uppercase tracking-widest">{row.competidor}</span>
-                                                                </span>
-                                                            ) : (
-                                                                sortCaja === 'competidor_asc'
-                                                                    ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : isFirstOfLocal ? row.competidor : <span className="text-slate-300 dark:text-white/20">↓</span>)
-                                                                    : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
-                                                            )}
-                                                        </td>
-                                                        <td className="px-4 py-2.5 text-right font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                        <td className="px-4 py-2.5 text-right font-mono font-black" style={row.isEstimado ? { color: dotColor } : {}}>
-                                                            {row.isEstimado && <span className="opacity-50 mr-0.5">~</span>}
-                                                            {new Intl.NumberFormat('es-PE').format(Math.round(row.displayTrx))}
-                                                        </td>
-                                                        <td className="px-4 py-2.5 text-right">
-                                                            <span className={`font-black ${row.pct > 50 ? 'text-accent-orange' : 'text-slate-600 dark:text-white/60'}`}>
-                                                                {row.pct.toFixed(1)}%
-                                                            </span>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                    </div>
-                                    <button
-                                        onClick={() => setExpandDistribucion(v => !v)}
-                                        title={expandDistribucion ? 'Contraer' : 'Expandir'}
-                                        className="absolute bottom-2 right-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg p-1.5 shadow-md text-slate-400 dark:text-white/40 hover:text-accent-orange hover:border-accent-orange transition-all z-20"
-                                    >
-                                        {expandDistribucion ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                                    </button>
-                                </div>
-                                </div>
-
-                                <div ref={refEvolucion} className="space-y-3">
-                                {/* ── 6. Evolución por Caja ─────────────────────────────────────── */}
-                                {/* Controls row */}
-                                <div className="flex flex-wrap items-center justify-end gap-2">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Ordenar:</span>
-                                    <select
-                                        value={sortEvol}
-                                        onChange={e => setSortEvol(e.target.value)}
-                                        className="bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-black text-slate-700 dark:text-white focus:outline-none"
-                                    >
-                                        <option value="competidor_asc">Competidor (A-Z)</option>
-                                        <option value="local_asc">Local (A-Z)</option>
-                                    </select>
-                                </div>
-                                    <div className="relative rounded-2xl border border-slate-200 dark:border-white/5 shadow-lg overflow-hidden">
-                                    <div className={expandEvolucion ? 'overflow-x-auto' : 'overflow-auto max-h-96'}>
-                                        <table className="w-full text-left whitespace-nowrap text-[11px]">
-                                            <thead className="sticky top-0 z-10">
-                                                <tr>
-                                                    <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center bg-[#1e3a5f]" colSpan={cajaMonths.length + 2}>
-                                                        Evolución de Promedio Diario por Local
-                                                    </th>
-                                                </tr>
-                                                <tr className="bg-slate-100 dark:bg-white/[0.04]">
-                                                    <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Competidor</th>
-                                                    <th className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40" style={{ minWidth: 180 }}>Local</th>
-                                                    {cajaMonths.map(m => (
-                                                        <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-slate-500 dark:text-white/40 text-right" style={{ minWidth: 90 }}>
-                                                            {m.label}
-                                                        </th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                                                {[...cajaRows].sort((a, b) => {
-                                                    if (sortEvol === 'competidor_asc') return a.competidor.localeCompare(b.competidor) || a.local.localeCompare(b.local);
-                                                    if (sortEvol === 'local_asc') return a.local.localeCompare(b.local);
-                                                    return 0;
-                                                }).map((row, i, arr) => {
-                                                    const compChanged = i === 0 || arr[i - 1].competidor !== row.competidor;
-                                                    const isNewComp = sortEvol === 'competidor_asc' && compChanged;
-                                                    const dotColor = row.isEstimado ? (CONFIANZA_DOT[row.confianza] || '#94a3b8') : null;
-                                                    return (
-                                                        <tr
-                                                            key={`ev-${row.competidor}-${row.local}`}
-                                                            className={`transition-colors border-l-4 ${
-                                                                row.isEstimado
-                                                                    ? 'bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-50/70 dark:hover:bg-amber-900/15'
-                                                                    : `hover:bg-slate-50 dark:hover:bg-white/[0.02] border-transparent ${compChanged ? 'border-t-2 border-slate-200 dark:border-white/10' : ''}`
-                                                            }`}
-                                                            style={row.isEstimado ? { borderLeftColor: dotColor } : {}}
-                                                        >
-                                                            <td className="px-4 py-2.5 font-bold text-slate-900 dark:text-white">
-                                                                {row.isEstimado ? (
-                                                                    <span className="flex items-center gap-1.5">
-                                                                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 }} />
-                                                                        <span style={{ color: dotColor }} className="font-black text-[9px] uppercase tracking-widest">{row.competidor}</span>
-                                                                    </span>
-                                                                ) : (
-                                                                    sortEvol === 'competidor_asc'
-                                                                        ? (isNewComp ? <span className="font-black text-accent-orange">{row.competidor}</span> : <span className="text-slate-500 dark:text-white/40 font-bold">{row.competidor}</span>)
-                                                                        : <span className={compChanged ? 'font-black text-accent-orange' : 'text-slate-500 dark:text-white/40 font-bold'}>{row.competidor}</span>
-                                                                )}
-                                                            </td>
-                                                            <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                            {cajaMonths.map(m => {
-                                                                const total = row.months[m.key];
-                                                                const promSum = row.promedios?.[m.key];
-                                                                const promCount = row.promCounts?.[m.key] || 1;
-                                                                const promVal = promSum !== undefined ? promSum / promCount : undefined;
-
-                                                                if (evolucionMetric === 'ambos') {
-                                                                    return (
-                                                                        <td key={m.key} className="px-4 py-2.5 text-right font-mono">
-                                                                            {total !== undefined ? (
-                                                                                <div className="flex flex-col items-end gap-0.5">
-                                                                                    <span className="font-black text-[11px]" style={row.isEstimado ? { color: dotColor } : { color: 'inherit' }}>
-                                                                                        {row.isEstimado && <span className="opacity-50 mr-0.5">~</span>}
-                                                                                        {Math.round(total).toLocaleString('es-PE')}
-                                                                                    </span>
-                                                                                    <span className="text-[9px] text-violet-400 font-bold">{promVal !== undefined ? promVal.toFixed(1) : '-'}</span>
-                                                                                </div>
-                                                                            ) : <span className="text-slate-300 dark:text-white/15">-</span>}
-                                                                        </td>
-                                                                    );
-                                                                }
-
-                                                                const v = evolucionMetric === 'trx_total' ? total : promVal;
-                                                                return (
-                                                                    <td key={m.key} className="px-4 py-2.5 text-right font-mono">
-                                                                        {v !== undefined
-                                                                            ? <span className="font-black" style={row.isEstimado ? { color: dotColor } : {}}>
-                                                                                {row.isEstimado && <span className="opacity-50 mr-0.5">~</span>}{v.toFixed(1)}
-                                                                              </span>
-                                                                            : <span className="text-slate-300 dark:text-white/15">-</span>
-                                                                        }
-                                                                    </td>
-                                                                );
-                                                            })}
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                    <button
-                                        onClick={() => setExpandEvolucion(v => !v)}
-                                        title={expandEvolucion ? 'Contraer' : 'Expandir'}
-                                        className="absolute bottom-2 right-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-lg p-1.5 shadow-md text-slate-400 dark:text-white/40 hover:text-accent-orange hover:border-accent-orange transition-all z-20"
-                                    >
-                                        {expandEvolucion ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                                    </button>
-                                    </div>
-                                </div>{/* closes refEvolucion */}
-                            </>
-                        )}
                     </div>
                 )}
             </div>
 
-            {/* ── NGR Locales Propios ────────────────────────────────────────── */}
-            {ngrLocales.length > 0 && (() => {
-                // Build pivot: marca+local × month using trx_promedio and trx_total
-                const NGR_COLORS = {
-                    'POPEYES':    '#F26522',
-                    'Bembos':     '#CC1F1F',
-                    'Papa Johns': '#007743',
-                    'CHINAWOK':   '#F0A500',
-                };
-
-                const filtered = ngrLocales.filter(r => {
-                    if (filterYear !== 'all' && String(r.ano) !== filterYear) return false;
-                    if (r.estado !== 'Activa') return false;
-                    return true;
-                });
-
-                if (filtered.length === 0) return null;
-
-                const monthSet = {};
-                const pivotRows = {}; // `${marca}||${local}` → { marca, local, months: {mk: trx_total}, proms: {mk: trx_promedio} }
-
-                filtered.forEach(r => {
-                    const mk = `${r.ano}-${String(r.mes).padStart(2, '0')}`;
-                    if (!monthSet[mk]) monthSet[mk] = { key: mk, label: `${MONTH_SHORT[r.mes - 1]}-${String(r.ano).slice(2)}` };
-                    const rowKey = `${r.marca}||${r.local}`;
-                    if (!pivotRows[rowKey]) pivotRows[rowKey] = { marca: r.marca, local: r.local, months: {}, proms: {} };
-                    pivotRows[rowKey].months[mk] = (pivotRows[rowKey].months[mk] || 0) + r.trx_total;
-                    pivotRows[rowKey].proms[mk]  = (pivotRows[rowKey].proms[mk]  || 0) + r.trx_promedio;
-                });
-
-                const ngrMonths = Object.values(monthSet).sort((a, b) => a.key.localeCompare(b.key));
-                const ngrRows   = Object.values(pivotRows).sort((a, b) =>
-                    a.marca.localeCompare(b.marca) || a.local.localeCompare(b.local)
-                );
-
-                return (
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-3 pt-4">
-                            <span className="text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-orange-500/15 text-orange-400 border border-orange-500/30">★ NGR</span>
-                            <h3 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">
-                                Locales Propios NGR
-                            </h3>
-                        </div>
-
-                        {/* Prom diario por local */}
-                        <div className="overflow-x-auto rounded-2xl border border-orange-500/20 shadow-lg">
-                            <table className="w-full text-left whitespace-nowrap text-[11px]">
-                                <thead>
-                                    <tr>
-                                        <th className="px-4 py-3 font-black uppercase tracking-widest text-white text-center"
-                                            style={{ backgroundColor: '#7c2d12' }} colSpan={ngrMonths.length + 2}>
-                                            Prom. Diario por Local
-                                        </th>
-                                    </tr>
-                                    <tr className="bg-orange-50 dark:bg-orange-900/10">
-                                        <th className="px-4 py-2 font-black uppercase tracking-widest text-orange-700 dark:text-orange-400" style={{ minWidth: 110 }}>Marca</th>
-                                        <th className="px-4 py-2 font-black uppercase tracking-widest text-orange-700 dark:text-orange-400" style={{ minWidth: 180 }}>Local</th>
-                                        {ngrMonths.map(m => (
-                                            <th key={m.key} className="px-4 py-2 font-black uppercase tracking-widest text-orange-700 dark:text-orange-400 text-right" style={{ minWidth: 80 }}>
-                                                {m.label}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-orange-100 dark:divide-orange-900/20">
-                                    {ngrRows.map((row, i) => {
-                                        const color = NGR_COLORS[row.marca] || '#94a3b8';
-                                        return (
-                                            <tr key={i} className="hover:bg-orange-50/50 dark:hover:bg-orange-900/5 transition-colors">
-                                                <td className="px-4 py-2.5">
-                                                    <span className="flex items-center gap-1.5">
-                                                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                                                        <span className="font-black text-[10px] uppercase" style={{ color }}>{row.marca}</span>
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-2.5 font-bold text-slate-700 dark:text-white/70">{row.local}</td>
-                                                {ngrMonths.map(m => {
-                                                    const v = row.proms[m.key];
-                                                    return (
-                                                        <td key={m.key} className="px-4 py-2.5 text-right font-mono">
-                                                            {v != null
-                                                                ? <span className="font-black">{v.toFixed(0)}</span>
-                                                                : <span className="text-slate-300 dark:text-white/15">-</span>
-                                                            }
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                );
-            })()}
 
         </motion.div>
     );

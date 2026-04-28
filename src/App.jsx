@@ -35,7 +35,7 @@ const COMPETITOR_TO_CATEGORY = {
 
 const API_BASE_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:3001'
-  : 'https://ngr-proxy-server-gvxb4rjzvq-uc.a.run.app';
+  : 'https://ngr-proxy-server-966549276703.us-central1.run.app';
 
 // Corte temporal: HISTORIAL cubre hasta este mes inclusive; OK rutina desde el mes siguiente
 // Formato: { ano: number, mes: number }  → Nov 2025 (HISTORIAL: 2022–Nov 2025 | OK: Dic 2025+)
@@ -602,11 +602,12 @@ export default function App({ user, onSignOut }) {
       r.filename_actual !== targetFilename && r.filename_anterior !== targetFilename
     ));
     setTickets(prev => prev.map(t =>
-      t.filename === targetFilename
+      t.filename === targetFilename || t.filename === ticketData.originalFilename
         ? { ...t, ticket: ticketData.ticket, importe: ticketData.importe, fecha: ticketData.fecha,
             numero_de_caja: ticketData.caja, caja: ticketData.caja,
             local: ticketData.local, competidor: ticketData.competidor,
-            codigo_tienda: ticketData.codigoTienda, codigoTienda: ticketData.codigoTienda }
+            codigo_tienda: ticketData.codigoTienda, codigoTienda: ticketData.codigoTienda,
+            filename: ticketData.filename, mes: ticketData.mes, ano: ticketData.ano }
         : t
     ));
 
@@ -618,14 +619,17 @@ export default function App({ user, onSignOut }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        filename: targetFilename,
+        filename: ticketData.filename,
+        originalFilename: ticketData.originalFilename,
         ticket: ticketData.ticket,
         importe: ticketData.importe,
         fecha: ticketData.fecha,
         caja: ticketData.caja,
         local: ticketData.local,
         competidor: ticketData.competidor,
-        codigoTienda: ticketData.codigoTienda
+        codigoTienda: ticketData.codigoTienda,
+        mes: ticketData.mes,
+        ano: ticketData.ano
       })
     })
     .then(r => r.json())
@@ -1704,6 +1708,9 @@ export default function App({ user, onSignOut }) {
                   { id: 'marketshare',       icon: PieChartIcon, label: 'Market Share' },
                   { id: 'puntos_compartidos', icon: MapPin,        label: 'Puntos Compartidos' },
                   { id: 'comparativos',       icon: GitCompare,    label: 'Comparativos' },
+                ] : activeCategory === 'tickets' ? [
+                  { id: 'tickets', icon: Ticket, label: 'Tickets' },
+                  { id: 'alarmas', icon: ShieldAlert, label: 'Alarmas' },
                 ] : []).map(sub => (
                   <button
                     key={sub.id}
@@ -1808,18 +1815,33 @@ export default function App({ user, onSignOut }) {
               onUpdateTicket={handleUpdateTicket}
               isRefreshing={isRefreshing}
             />
-          ) : (
-            <TicketsDashboard
-              key="tickets"
-              tickets={tickets}
-              records={records}
-              shareData={reactiveShareDataTickets}
-              globalFilters={filters}
-              onFilterChange={setFilters}
-              onUpdateTicket={handleUpdateTicket}
-              isRefreshing={isRefreshing}
-            />
-          )}
+          ) : activeCategory === 'tickets' ? (
+            activeSubTab === 'alarmas' ? (
+              <AlarmasDashboard
+                key="tickets-alarmas"
+                user={user}
+                records={records}
+                tickets={tickets}
+                cajasConfig={cajasConfig}
+                onCajasConfigChange={setCajasConfig}
+                alarmasRevisadas={alarmasRevisadas}
+                onAlarmasRevisadasChange={setAlarmasRevisadas}
+                onUpdateTicket={handleUpdateTicket}
+                isRefreshing={isRefreshing}
+              />
+            ) : (
+              <TicketsDashboard
+                key="tickets"
+                tickets={tickets}
+                records={records}
+                shareData={reactiveShareDataTickets}
+                globalFilters={filters}
+                onFilterChange={setFilters}
+                onUpdateTicket={handleUpdateTicket}
+                isRefreshing={isRefreshing}
+              />
+            )
+          ) : null}
         </AnimatePresence>
 
         {/* ── Sync Indicator (bottom-right floating) ── */}

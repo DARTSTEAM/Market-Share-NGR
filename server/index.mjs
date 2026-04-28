@@ -6,16 +6,32 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
+import { VertexAI } from '@google-cloud/vertexai';
+import { Storage } from '@google-cloud/storage';
+
+const storage = new Storage();
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Initialize Vertex AI
+const vertexAi = new VertexAI({ project: 'hike-agentic-playground', location: 'us-central1' });
+const generativeModel = vertexAi.preview.getGenerativeModel({
+    model: 'gemini-1.5-flash-001',
+    generationConfig: {
+        maxOutputTokens: 2048,
+        temperature: 0.1,
+        responseMimeType: "application/json",
+    },
+});
+
 const app = express();
 const port = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const PROJECT_ID = process.env.BIGQUERY_PROJECT_ID || 'hike-agentic-playground';
 const DATASET_ID = process.env.BIGQUERY_DATASET_ID || 'ngr';
@@ -48,6 +64,21 @@ async function ensureActivityLogTable() {
     activityLogTableReady = true;
 }
 
+let facturasTableChecked = false;
+async function ensureFacturasColumns() {
+    if (facturasTableChecked) return;
+    try {
+        const Q = `ALTER TABLE \`${PROJECT_ID}.${DATASET_ID}.facturas_v2\`
+            ADD COLUMN IF NOT EXISTS mes INT64,
+            ADD COLUMN IF NOT EXISTS ano INT64`;
+        const [job] = await bigquery.createQueryJob({ query: Q });
+        await job.getQueryResults();
+        facturasTableChecked = true;
+    } catch(err) {
+        console.error(`[BQ] Error ensuring columns in facturas_v2:`, err.message);
+    }
+}
+
 async function appendLog(evento, descripcion, usuario, usuario_nombre, metadata = {}) {
     try {
         await ensureActivityLogTable();
@@ -71,6 +102,101 @@ async function appendLog(evento, descripcion, usuario, usuario_nombre, metadata 
         console.warn('[appendLog] Failed:', e.message);
     }
 }
+
+// POST /api/analyze-ticket - Extract fields from image using N8N Webhook
+app.post('/api/analyze-ticket', async (req, res) => {
+    try {
+        const { imageBase64 } = req.body;
+        if (!imageBase64) {
+            return res.status(400).json({ error: 'Falta imageBase64' });
+        }
+
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, 'base64');
+        
+        const webhookUrl = process.env.N8N_WEBHOOK_URL || 'https://n8n.hikethecloud.com/webhook/upload-invoice-v2';
+        
+        const formData = new FormData();
+        const blob = new Blob([buffer], { type: 'image/jpeg' });
+        formData.append('invoice_image', blob, 'ticket.jpg');
+
+        console.log(`[/api/analyze-ticket] Sending image to N8N: ${webhookUrl}`);
+        const n8nRes = await fetch(webhookUrl, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!n8nRes.ok) {
+            const errText = await n8nRes.text();
+            throw new Error(`N8N error ${n8nRes.status}: ${errText}`);
+        }
+
+        const n8nResponse = await n8nRes.json();
+        
+        let dataArray = null;
+        if (Array.isArray(n8nResponse) && n8nResponse.length > 0) {
+            if (n8nResponse[0] && n8nResponse[0].data) {
+                dataArray = n8nResponse[0].data;
+            } else {
+                dataArray = n8nResponse;
+            }
+        } else if (n8nResponse && typeof n8nResponse === 'object') {
+            if (n8nResponse.data) {
+                dataArray = n8nResponse.data;
+            } else {
+                dataArray = [n8nResponse];
+            }
+        }
+
+        const item = Array.isArray(dataArray) ? dataArray[0] : dataArray;
+        if (!item) {
+            throw new Error('N8N empty data response');
+        }
+
+        const competidor = item.competidor || null;
+        const local = item.tienda_nombre || item.local || null;
+        const codigoTienda = item.codigo_tienda || null;
+        const caja = item.id_caja || item.numero_de_caja || null;
+        const ticket = item.numero_de_ticket || item.id_boleta || null;
+        const importe = parseFloat(item.importe_total || 0) || null;
+        const fecha = item.fecha || null;
+        let mes = null;
+        let ano = null;
+        if (fecha) {
+            const parts = fecha.split('-'); // YYYY-MM-DD
+            if (parts.length === 3) {
+                ano = parseInt(parts[0]);
+                mes = parseInt(parts[1]);
+            }
+        }
+
+        // Upload to GCS
+        const filename = `manual_upload_${Date.now()}.jpg`;
+        const file = storage.bucket('ngr-market-share').file(`Tickets JPG/Tickets JPG/${filename}`);
+        await file.save(buffer, {
+            metadata: { contentType: 'image/jpeg' }
+        });
+
+        const data = {
+            competidor,
+            local,
+            codigoTienda,
+            caja,
+            ticket,
+            importe,
+            fecha,
+            mes,
+            ano,
+            uploadedFilename: filename
+        };
+
+        console.log('[/api/analyze-ticket] N8N Extracted data:', data);
+        res.json(data);
+    } catch (err) {
+        console.error('[/api/analyze-ticket] Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // GET /api/activity-log
 app.get('/api/activity-log', async (req, res) => {
@@ -176,6 +302,7 @@ const QUERY_TICKETS = `
     T.competidor, T.codigo_tienda, T.local, T.canal_de_venta, T.importe_total,
     T.numero_de_ticket, T.numero_de_caja, T.fecha, T.hora,
     T.recargo_consumo, T.monto_tarifario, T.filename, T.fecha_carga,
+    T.mes, T.ano,
     V.Region AS region,
     V.Distrito AS distrito,
     V.Zona AS zona
@@ -285,17 +412,15 @@ app.post('/api/refresh', async (req, res) => {
     }
 });
 
-// POST /api/update-ticket — BigQuery DML update
 app.post('/api/update-ticket', async (req, res) => {
-    const { filename, ticket, importe, fecha, caja, local, competidor, codigoTienda, usuario, usuario_nombre } = req.body;
-
-    if (!filename) return res.status(400).json({ error: 'Filename is required' });
-
-    const t0 = Date.now();
-    const ts = (label) => console.log(`[update-ticket] ${label} — +${Date.now() - t0}ms`);
-
     try {
-        ts(`START — filename: ${filename}`);
+        await ensureFacturasColumns();
+
+        const { filename, ticket, importe, fecha, caja, local, competidor, codigoTienda, usuario, usuario_nombre, originalFilename, mes, ano } = req.body;
+        
+        if (!filename && !originalFilename) return res.status(400).json({ error: 'Filename is required' });
+        
+        const lookupFilename = originalFilename || filename;
 
         const query = `
           UPDATE \`${PROJECT_ID}.${DATASET_ID}.facturas_v2\`
@@ -306,8 +431,11 @@ app.post('/api/update-ticket', async (req, res) => {
             numero_de_caja   = @caja,
             local            = @local,
             competidor       = @competidor,
-            codigo_tienda    = @codigoTienda
-          WHERE filename = @filename
+            codigo_tienda    = @codigoTienda,
+            filename         = @filename,
+            mes              = @mes,
+            ano              = @ano
+          WHERE filename = @lookupFilename
         `;
 
         const options = {
@@ -320,7 +448,10 @@ app.post('/api/update-ticket', async (req, res) => {
                 local: local || '',
                 competidor: competidor || '',
                 codigoTienda: codigoTienda || '',
-                filename,
+                filename: filename || lookupFilename,
+                mes: parseInt(mes) || null,
+                ano: parseInt(ano) || null,
+                lookupFilename,
             },
         };
 
@@ -640,26 +771,89 @@ app.get('/api/estimation-matrix', async (req, res) => {
                 });
             }
 
-            // ── GAP detection: para cajas ya existentes sin datos en meses de rutina ──
+            // ── GAP detection and Auto-Estimation ──
             for (const local of Object.values(localMap)) {
                 for (const caja of local.cajas) {
                     for (const mk of mesesRutina) {
                         const ck = `${caja}||${mk}`;
                         if (!local.celdas[ck]) {
-                            // No hay dato en este mes de rutina → GAP
-                            const [ano, mes] = mk.split('-');
-                            local.celdas[ck] = {
-                                key:          `${local.codigo_tienda}||${caja}||${mk}`,
-                                codigo_tienda: local.codigo_tienda,
-                                local:         local.local,
-                                competidor:    local.competidor,
-                                caja,
-                                mes:           parseInt(mes),
-                                ano:           parseInt(ano),
-                                mk,
-                                tasa:          null,
-                                tipo:          'GAP',
-                            };
+                            const mkIndex = mesesSorted.indexOf(mk);
+                            if (mkIndex <= 0) continue;
+
+                            const prevMk = mesesSorted[mkIndex - 1];
+                            const prevCell = local.celdas[`${caja}||${prevMk}`];
+
+                            // Valid data types (anything except GAP, ESTIMADO_AUTO, or empty)
+                            const isPrevValidData = prevCell && ['REAL', 'HISTORIAL'].includes(prevCell.tipo);
+                            const isPrevManualEst = prevCell && ['APROBADO', 'PENDIENTE'].includes(prevCell.tipo);
+                            const isPrevEstAuto = prevCell && prevCell.tipo === 'ESTIMADO_AUTO';
+                            const isPrevGap = prevCell && prevCell.tipo === 'GAP';
+
+                            if (isPrevValidData) {
+                                // First month empty after real data -> ESTIMADO_AUTO (avg of last up to 3 valid months)
+                                let sum = 0, count = 0;
+                                for (let j = 1; j <= 3; j++) {
+                                    if (mkIndex - j < 0) break;
+                                    const lookbackCell = local.celdas[`${caja}||${mesesSorted[mkIndex - j]}`];
+                                    if (lookbackCell && ['REAL', 'HISTORIAL', 'APROBADO', 'PENDIENTE'].includes(lookbackCell.tipo) && lookbackCell.tasa != null && lookbackCell.tasa > 0) {
+                                        sum += lookbackCell.tasa;
+                                        count++;
+                                    }
+                                }
+                                
+                                const avg = count > 0 ? sum / count : 0;
+                                const [ano, mes] = mk.split('-');
+                                
+                                if (avg > 0) {
+                                    local.celdas[ck] = {
+                                        key:          `${local.codigo_tienda}||${caja}||${mk}`,
+                                        codigo_tienda: local.codigo_tienda,
+                                        local:         local.local,
+                                        competidor:    local.competidor,
+                                        caja,
+                                        mes:           parseInt(mes),
+                                        ano:           parseInt(ano),
+                                        mk,
+                                        tasa:          avg,
+                                        tipo:          'ESTIMADO_AUTO',
+                                        origen:        'AUTO'
+                                    };
+                                } else {
+                                    local.celdas[ck] = {
+                                        key:          `${local.codigo_tienda}||${caja}||${mk}`,
+                                        codigo_tienda: local.codigo_tienda,
+                                        local:         local.local,
+                                        competidor:    local.competidor,
+                                        caja,
+                                        mes:           parseInt(mes),
+                                        ano:           parseInt(ano),
+                                        mk,
+                                        tasa:          null,
+                                        tipo:          'GAP',
+                                    };
+                                }
+                            } else if (isPrevEstAuto || isPrevManualEst) {
+                                // Second month empty (or first empty after manual estimation) -> GAP
+                                const [ano, mes] = mk.split('-');
+                                local.celdas[ck] = {
+                                    key:          `${local.codigo_tienda}||${caja}||${mk}`,
+                                    codigo_tienda: local.codigo_tienda,
+                                    local:         local.local,
+                                    competidor:    local.competidor,
+                                    caja,
+                                    mes:           parseInt(mes),
+                                    ano:           parseInt(ano),
+                                    mk,
+                                    tasa:          null,
+                                    tipo:          'GAP',
+                                };
+                            } else if (isPrevGap) {
+                                // Third month empty -> Do nothing (omitted)
+                                continue;
+                            } else {
+                                // Previous was nothing, so current is nothing
+                                continue;
+                            }
                         }
                     }
                 }
