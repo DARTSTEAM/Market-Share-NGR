@@ -243,7 +243,8 @@ const QUERY_RECORDS = `
     COALESCE(V.Region, T.region) AS region,
     COALESCE(V.Distrito, T.distrito) AS distrito,
     V.Zona AS zona,
-    T.punto_compartido, T.cc_punto_compartido, T.grupos_cc, T.marcas_en_pc, T.n_marcas_en_pc
+    T.punto_compartido, T.cc_punto_compartido, T.grupos_cc, T.marcas_en_pc, T.n_marcas_en_pc,
+    COALESCE(V.Grupo, T.grupo_tienda) AS grupo_tienda
   FROM \`${PROJECT_ID}.${DATASET_ID}.calcular_diferencia_tickets_gemini\`('2024-01-01') T
   LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.tiendas_v2\` V ON REPLACE(T.codigo_tienda, ' ', '') = REPLACE(V.Codigo_tienda, ' ', '')
 
@@ -276,7 +277,8 @@ const QUERY_RECORDS = `
     CAST(NULL AS STRING)                                      AS cc_punto_compartido,
     CAST(NULL AS STRING)                                      AS grupos_cc,
     CAST(NULL AS STRING)                                      AS marcas_en_pc,
-    CAST(NULL AS INT64)                                       AS n_marcas_en_pc
+    CAST(NULL AS INT64)                                       AS n_marcas_en_pc,
+    V.Grupo                                                   AS grupo_tienda
   FROM \`${PROJECT_ID}.${DATASET_ID}.estimaciones_manuales\` T
   LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.tiendas_v2\` V ON REPLACE(T.codigo_tienda, ' ', '') = REPLACE(V.Codigo_tienda, ' ', '')
   WHERE T.aprobado = TRUE
@@ -292,7 +294,8 @@ const QUERY_RECORDS = `
     COALESCE(V.Region, T.region) AS region,
     COALESCE(V.Distrito, T.distrito) AS distrito,
     V.Zona AS zona,
-    T.punto_compartido, T.cc_punto_compartido, T.grupos_cc, T.marcas_en_pc, T.n_marcas_en_pc
+    T.punto_compartido, T.cc_punto_compartido, T.grupos_cc, T.marcas_en_pc, T.n_marcas_en_pc,
+    V.Grupo AS grupo_tienda
   FROM \`${PROJECT_ID}.${DATASET_ID}.procesar_historial_tasas\`() T
   LEFT JOIN \`${PROJECT_ID}.${DATASET_ID}.tiendas_v2\` V ON REPLACE(T.codigo_tienda, ' ', '') = REPLACE(V.Codigo_tienda, ' ', '')
 `;
@@ -350,6 +353,7 @@ async function fetchFromBigQuery() {
         grupos_cc: r.grupos_cc || null,
         marcas_en_pc: r.marcas_en_pc || null,
         n_marcas_en_pc: r.n_marcas_en_pc ?? null,
+        grupo_tienda: r.grupo_tienda || null,
     }));
 
     const tickets = rowsTickets.map(t => ({

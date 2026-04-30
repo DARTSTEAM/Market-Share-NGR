@@ -7,13 +7,6 @@ import {
 } from 'recharts';
 import CustomSelect from './common/CustomSelect';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-// Rolling window: last 12 months before the current month (Mar 2026 excluded)
-const ROLLING_12 = ['Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic', 'Ene', 'Feb'];
-
-// Stable month multipliers — gives natural seasonal variation
-const MONTH_SEED = [0.78, 0.84, 0.91, 0.98, 1.04, 1.09, 1.06, 1.00, 0.95, 1.02, 1.07, 0.99];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const kFmt = (n) => {
     n = Number(n) || 0;
@@ -26,9 +19,12 @@ const pctFmt = (a, b) => {
     return total > 0 ? ((a / total) * 100).toFixed(1) + '%' : '—';
 };
 
-// Deterministic jitter so the same brand always produces the same curve
-const brandHash = (name) =>
-    Array.from(name || 'X').reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xffff, 0);
+const monthLabel = (key) => {
+    // key is 'YYYY-MM', returns e.g. 'Ene 25'
+    const [y, m] = key.split('-').map(Number);
+    const names = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return `${names[m - 1]} ${String(y).slice(2)}`;
+};
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 const KPICard = ({ brand, color, data }) => (
@@ -112,7 +108,7 @@ const CompareBar = ({ label, valueA, valueB, colorA, colorB }) => {
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
-const ComparativosDashboard = ({ shareData = [], tableData = [], theme }) => {
+const ComparativosDashboard = ({ shareData = [], tableData = [], allRecords = [], ngrLocales = [], theme }) => {
     // Build brand list from shareData (has color info), sorted by value desc
     const brands = useMemo(
         () => shareData.filter(d => d.value > 0).sort((a, b) => b.value - a.value),
@@ -143,25 +139,39 @@ const ComparativosDashboard = ({ shareData = [], tableData = [], theme }) => {
     const colorA = brands.find(b => b.name === brandA)?.color ?? '#ff7e4b';
     const colorB = brands.find(b => b.name === brandB)?.color ?? '#3b82f6';
 
-    // ── 12-month synthetic evolution ─────────────────────────────────────────
-    // Base = shareData value (overall ticket share). Add deterministic variation.
+    // ── Real monthly evolution from allRecords + ngrLocales ─────────────────
     const evolutionData = useMemo(() => {
-        const baseA = brands.find(b => b.name === brandA)?.value ?? dataA.totalTickets ?? 0;
-        const baseB = brands.find(b => b.name === brandB)?.value ?? dataB.totalTickets ?? 0;
+        // Aggregate promedio (daily avg) per brand per month-key
+        const byMonth = {}  // { 'YYYY-MM': { brandName: totalProm } }
 
-        // Make sure we always have at least some data to show
-        const safeA = baseA || 100;
-        const safeB = baseB || 100;
+        allRecords.forEach(r => {
+            if (!r.competidor || !r.mes || !r.ano) return;
+            const key = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2, '0')}`;
+            const brand = r.competidor;
+            if (brand !== brandA && brand !== brandB) return;
+            if (!byMonth[key]) byMonth[key] = {};
+            byMonth[key][brand] = (byMonth[key][brand] || 0) + (parseFloat(r.promedio) || 0);
+        });
 
-        const hashA = brandHash(brandA);
-        const hashB = brandHash(brandB);
+        ngrLocales.forEach(r => {
+            if (!r.marca || !r.mes || !r.ano) return;
+            const key = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2, '0')}`;
+            const brand = r.marca;
+            if (brand !== brandA && brand !== brandB) return;
+            if (!byMonth[key]) byMonth[key] = {};
+            byMonth[key][brand] = (byMonth[key][brand] || 0) + (parseFloat(r.trx_promedio) || 0);
+        });
 
-        return ROLLING_12.map((month, i) => ({
-            month,
-            [brandA]: Math.round(safeA * MONTH_SEED[i] * (0.90 + ((hashA >> i) & 0x0f) * 0.008)),
-            [brandB]: Math.round(safeB * MONTH_SEED[i] * (0.88 + ((hashB >> i) & 0x0f) * 0.009)),
-        }));
-    }, [brandA, brandB, brands, dataA.totalTickets, dataB.totalTickets]);
+        return Object.keys(byMonth)
+            .sort()
+            .map(key => ({
+                month: monthLabel(key),
+                [brandA]: byMonth[key][brandA] ?? null,
+                [brandB]: byMonth[key][brandB] ?? null,
+            }));
+    }, [allRecords, ngrLocales, brandA, brandB]);
+
+    const hasEvolution = evolutionData.length > 0;
 
     const same = brandA === brandB;
 
@@ -300,13 +310,18 @@ const ComparativosDashboard = ({ shareData = [], tableData = [], theme }) => {
                             <div className="flex items-center gap-2">
                                 <BarChart2 size={16} className="text-accent-orange" />
                                 <h3 className="text-sm font-black italic uppercase tracking-widest text-slate-900 dark:text-white/90">
-                                    Evolución — últimos 12 meses
+                                    Evolución — Prom. Diario por mes
                                 </h3>
                             </div>
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/20">
-                                Mes corriente excluido · datos estimados
+                            <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500 dark:text-emerald-400">
+                                ✓ Datos reales
                             </span>
                         </div>
+                        {!hasEvolution ? (
+                            <div className="flex items-center justify-center h-48 text-slate-300 dark:text-white/10 text-xs font-black uppercase tracking-widest">
+                                Sin datos de evolución para las marcas seleccionadas
+                            </div>
+                        ) : (
 
                         <ResponsiveContainer width="100%" height={300}>
                             <LineChart data={evolutionData} margin={{ top: 4, right: 20, left: -10, bottom: 0 }}>
@@ -374,6 +389,7 @@ const ComparativosDashboard = ({ shareData = [], tableData = [], theme }) => {
                                 />
                             </LineChart>
                         </ResponsiveContainer>
+                        )}
                     </motion.div>
                 </>
             )}

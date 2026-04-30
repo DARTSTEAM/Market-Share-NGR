@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Store, Search, LayoutDashboard, AlertCircle, Calendar, ChevronDown, ChevronUp, Filter, Info } from 'lucide-react';
 
-const SSTXDashboard = ({ records, filters }) => {
+const SSTXDashboard = ({ records, ngrLocales = [], filters }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [detailMonths, setDetailMonths] = useState([]); // Multiple months selection for detail view
   
@@ -26,10 +26,9 @@ const SSTXDashboard = ({ records, filters }) => {
     'PAPA JOHNS': 'Pizza', 'CHINAWOK': 'Chifas',
   };
 
-  const isNGRBrand = (brand) => {
-    const b = brand.toUpperCase();
-    return ['POPEYES', 'BEMBOS', 'PAPA JOHNS', 'CHINAWOK'].includes(b);
-  };
+  const NGR_BRANDS = new Set(['POPEYES', 'BEMBOS', 'PAPA JOHNS', 'CHINAWOK', 'LITTLE CAESARS']);
+
+  const isNGRBrand = (brand) => NGR_BRANDS.has(String(brand).toUpperCase().trim());
 
   // Parse filters
   const selectedYears = useMemo(() => {
@@ -104,6 +103,35 @@ const SSTXDashboard = ({ records, filters }) => {
       if (yr === currentYear && ms > latestMonth) latestMonth = ms;
     });
 
+    // ── NGR locales ────────────────────────────────────────────────────────
+    // ngrLocales always have status_busqueda='HISTORIAL', so we bypass
+    // recordInScope and instead process them directly using trx_promedio.
+    ngrLocales.forEach(r => {
+      // Apply same non-date global filters
+      const brand = normalizeBrand(r.marca || '');
+      if (!brand) return;
+      if (filters.competitor.length > 0 && !filters.competitor.includes(r.marca)) return;
+      if (filters.region.length   > 0 && !filters.region.includes(r.region))     return;
+      if (filters.distrito.length > 0 && !filters.distrito.includes(r.distrito)) return;
+      if (filters.local.length    > 0 && !filters.local.includes(r.local))       return;
+
+      const yr = parseInt(r.ano);
+      const ms = parseInt(r.mes);
+      if (!years.includes(yr) || isNaN(ms)) return;
+
+      brandNames.add(brand);
+      if (!rawData[yr][ms]) rawData[yr][ms] = {};
+
+      const storeKey = `${r.store_num || 'NGR'}||${r.local}`;
+      if (!rawData[yr][ms][storeKey]) {
+        rawData[yr][ms][storeKey] = { brand, name: r.local, code: r.store_num || 'NGR', sales: 0, _isNGR: true };
+      }
+      rawData[yr][ms][storeKey].sales += parseFloat(r.trx_promedio || 0);
+      rawData[yr][ms][storeKey]._isNGR = true;
+
+      if (yr === currentYear && ms > latestMonth) latestMonth = ms;
+    });
+
     const brandsSorted = Array.from(brandNames).sort();
     const matrix = {};
     const monthlyTotals = {};
@@ -164,7 +192,7 @@ const SSTXDashboard = ({ records, filters }) => {
       brandTotals,
       totalGeneral
     };
-  }, [records, currentYear, previousYear, filters, selectedMonthsFromFilter]);
+  }, [records, ngrLocales, currentYear, previousYear, filters, selectedMonthsFromFilter]);
 
   // Available months that have data
   const availableMonths = useMemo(() => {
@@ -196,7 +224,8 @@ const SSTXDashboard = ({ records, filters }) => {
         const tyVal = tyStores[key].sales;
         const lyVal = lyStores[key]?.sales || 0;
         
-        if (tyVal > 0 && lyVal > 0) {
+        // include NGR-only stores (ty > 0 even if no LY)
+        if (tyVal > 0) {
           detail.push({
             brand: tyStores[key].brand,
             name: tyStores[key].name,
@@ -204,7 +233,8 @@ const SSTXDashboard = ({ records, filters }) => {
             month: m,
             salesTY: tyVal,
             salesLY: lyVal,
-            growth: ((tyVal / lyVal) - 1) * 100
+            growth: lyVal > 0 ? ((tyVal / lyVal) - 1) * 100 : null,
+            _isNGR: !!tyStores[key]._isNGR,
           });
         }
       });
@@ -259,41 +289,40 @@ const SSTXDashboard = ({ records, filters }) => {
            </div>
         </div>
         
-        <div className="overflow-auto max-h-[550px] custom-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[1200px]">
+        <div className="overflow-y-auto max-h-[560px] custom-scrollbar">
+          <table className="w-full text-left border-collapse table-fixed">
             <thead className="sticky top-0 z-20">
               <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-white/10 shadow-sm">
-                <th className="px-6 py-4 text-[9px] font-black uppercase text-slate-500 sticky left-0 bg-slate-100 dark:bg-slate-800 z-30 w-52">Marca / Agrupación</th>
+                <th className="px-3 py-3 text-[8px] font-black uppercase text-slate-500 sticky left-0 bg-slate-100 dark:bg-slate-800 z-30 w-36">Marca</th>
                 {matrixData.months.map(m => (
-                  <th key={m} className={`px-2 py-4 text-center text-[9px] font-black uppercase transition-colors ${selectedMonthsFromFilter.includes(m) ? 'text-accent-orange bg-orange-500/10' : 'text-slate-500 dark:text-white/40'}`}>
+                  <th key={m} className={`px-0.5 py-3 text-center text-[8px] font-black uppercase transition-colors ${selectedMonthsFromFilter.includes(m) ? 'text-accent-orange bg-orange-500/10' : 'text-slate-500 dark:text-white/40'}`}>
                     {monthNames[m-1]}
                   </th>
                 ))}
-                <th className="px-6 py-4 text-right text-[9px] font-black uppercase text-accent-orange bg-orange-500/10">SSTX % (SEL)</th>
+                <th className="px-2 py-3 text-right text-[8px] font-black uppercase text-accent-orange bg-orange-500/10 w-16">SSTX</th>
               </tr>
             </thead>
             <tbody>
-              {/* TOTAL GENERAL ROW */}
               <tr className="bg-slate-800 dark:bg-white/[0.08] font-black text-white">
-                <td className="px-6 py-5 text-[10px] italic uppercase sticky left-0 bg-slate-800 dark:bg-slate-700 z-10 border-b border-white/5">
-                  TOTAL GENERAL
+                <td className="px-3 py-3 text-[9px] italic uppercase sticky left-0 bg-slate-800 dark:bg-slate-700 z-10 border-b border-white/5">
+                  TOTAL
                 </td>
                 {matrixData.months.map(m => {
                   const d = matrixData.totals[m] || { ty: 0, ly: 0, growth: 0 };
                   const has = d.ty > 0 && d.ly > 0;
                   return (
-                    <td key={m} className={`px-1 py-5 text-center border-b border-white/5 ${selectedMonthsFromFilter.includes(m) ? 'bg-orange-500/20' : ''}`}>
-                      <div className="flex flex-col items-center leading-tight">
-                        <span className={`text-[11px] font-black ${has ? 'text-white' : 'text-white/20'}`}>{kFormatter(d.ty)}</span>
-                        {has && <span className={`text-[8px] font-black ${d.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{d.growth >= 0 ? '+' : ''}{d.growth.toFixed(1)}%</span>}
+                    <td key={m} className={`px-0.5 py-3 text-center border-b border-white/5 ${selectedMonthsFromFilter.includes(m) ? 'bg-orange-500/20' : ''}`}>
+                      <div className="flex flex-col items-center leading-none gap-0.5">
+                        <span className={`text-[10px] font-black ${has ? 'text-white' : 'text-white/20'}`}>{kFormatter(d.ty)}</span>
+                        {has && <span className={`text-[7px] font-black ${d.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{d.growth >= 0 ? '+' : ''}{d.growth.toFixed(1)}%</span>}
                       </div>
                     </td>
                   );
                 })}
-                <td className="px-6 py-5 text-right bg-orange-500/20 border-b border-white/5">
-                  <div className="flex flex-col items-end leading-tight">
-                    <span className="text-[12px] text-accent-orange italic font-black">{kFormatter(matrixData.totalGeneral?.ty || 0)}</span>
-                    <span className={`text-[9px] font-black ${matrixData.totalGeneral?.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <td className="px-2 py-3 text-right bg-orange-500/20 border-b border-white/5">
+                  <div className="flex flex-col items-end leading-none gap-0.5">
+                    <span className="text-[11px] text-accent-orange italic font-black">{kFormatter(matrixData.totalGeneral?.ty || 0)}</span>
+                    <span className={`text-[7px] font-black ${matrixData.totalGeneral?.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                       {matrixData.totalGeneral?.growth >= 0 ? '+' : ''}{(matrixData.totalGeneral?.growth || 0).toFixed(1)}%
                     </span>
                   </div>
@@ -306,29 +335,32 @@ const SSTXDashboard = ({ records, filters }) => {
                 const isNGR = isNGRBrand(brand);
                 return (
                   <tr key={brand} className="group border-b border-slate-100 dark:border-white/5 hover:bg-slate-50/80 dark:hover:bg-white/[0.01] transition-colors">
-                    <td className="px-6 py-4 text-[10px] font-black italic uppercase text-slate-700 dark:text-white/70 sticky left-0 bg-white dark:bg-slate-900 z-10 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${isNGR ? 'bg-accent-orange shadow-[0_0_10px_rgba(255,126,75,0.8)]' : 'bg-slate-300 dark:bg-white/10'}`} />
-                      {brand}
+                    <td className="px-3 py-2.5 text-[9px] font-black italic uppercase text-slate-700 dark:text-white/70 sticky left-0 bg-white dark:bg-slate-900 z-10 group-hover:bg-slate-50 dark:group-hover:bg-slate-800">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isNGR ? 'bg-accent-orange shadow-[0_0_6px_rgba(255,126,75,0.8)]' : 'bg-slate-300 dark:bg-white/10'}`} />
+                        {isNGR && <span className="text-[7px] font-black px-1 py-0.5 rounded bg-accent-orange/15 text-accent-orange border border-accent-orange/30 flex-shrink-0">★</span>}
+                        <span className="truncate">{brand}</span>
+                      </div>
                     </td>
                     {matrixData.months.map(m => {
-                      const d = matrixData.matrix[brand]?.[m] || { ty: 0, ly: 0, growth: 0 }; 
+                      const d = matrixData.matrix[brand]?.[m] || { ty: 0, ly: 0, growth: 0 };
                       const has = d.ty > 0 && d.ly > 0;
                       return (
-                        <td key={m} className={`px-1 py-4 text-center transition-all ${selectedMonthsFromFilter.includes(m) ? 'bg-orange-500/5' : ''}`}>
-                          <div className="flex flex-col items-center leading-tight">
-                             <span className={`text-[10px] font-black ${has ? 'text-slate-900 dark:text-white' : 'text-slate-200 dark:text-white/5'}`}>{kFormatter(d.ty)}</span>
-                             {has && <span className={`text-[8px] font-black ${d.growth >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{d.growth >= 0 ? '↑' : '↓'} {Math.abs(d.growth).toFixed(0)}%</span>}
+                        <td key={m} className={`px-0.5 py-2.5 text-center transition-all ${selectedMonthsFromFilter.includes(m) ? 'bg-orange-500/5' : ''}`}>
+                          <div className="flex flex-col items-center leading-none gap-0.5">
+                            <span className={`text-[9px] font-black ${has ? 'text-slate-900 dark:text-white' : 'text-slate-200 dark:text-white/5'}`}>{kFormatter(d.ty)}</span>
+                            {has && <span className={`text-[7px] font-black ${d.growth >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{d.growth >= 0 ? '↑' : '↓'}{Math.abs(d.growth).toFixed(0)}%</span>}
                           </div>
                         </td>
                       );
                     })}
-                    <td className="px-6 py-4 text-right bg-orange-500/5 group-hover:bg-orange-500/10 transition-colors">
-                       <div className="flex flex-col items-end leading-tight">
-                          <span className="text-[10px] text-accent-orange italic font-black">{kFormatter(bt?.ty || 0)}</span>
-                          <span className={`text-[8px] font-black ${bt?.growth >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                            {bt?.ly > 0 ? (bt?.growth >= 0 ? '+' : '') + (bt?.growth || 0).toFixed(1) + '%' : '-'}
-                          </span>
-                       </div>
+                    <td className="px-2 py-2.5 text-right bg-orange-500/5 group-hover:bg-orange-500/10 transition-colors">
+                      <div className="flex flex-col items-end leading-none gap-0.5">
+                        <span className="text-[9px] text-accent-orange italic font-black">{kFormatter(bt?.ty || 0)}</span>
+                        <span className={`text-[7px] font-black ${bt?.growth >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                          {bt?.ly > 0 ? (bt?.growth >= 0 ? '+' : '') + (bt?.growth || 0).toFixed(1) + '%' : '-'}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -370,59 +402,99 @@ const SSTXDashboard = ({ records, filters }) => {
         </div>
 
         {/* METRICS ROW */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-           <div className="pwa-card p-6 border-l-4 border-accent-orange bg-white dark:bg-slate-900 shadow-xl group hover:translate-y-[-2px] transition-transform">
-              <span className="text-[9px] font-black text-slate-400 dark:text-white/30 uppercase tracking-[0.2em] mb-2 block">Registros</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">{filteredDetail.length}</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase italic">U. de Negocio</span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+           {/* Card 1: Registros */}
+           <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-white to-slate-50/50 dark:from-slate-800/80 dark:to-slate-900/80 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] border border-slate-100 dark:border-white/5 group hover:-translate-y-1 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] dark:hover:shadow-[0_20px_40px_rgb(0,0,0,0.4)] transition-all duration-500">
+              <div className="absolute -right-6 -top-6 w-32 h-32 bg-accent-orange/10 dark:bg-accent-orange/20 rounded-full blur-3xl group-hover:bg-accent-orange/20 dark:group-hover:bg-accent-orange/30 transition-all duration-700 group-hover:scale-150" />
+              <div className="flex justify-between items-start relative z-10">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.2em]">Registros Analizados</span>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter leading-none">{filteredDetail.length}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase italic">U. de Negocio</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-white/5 rounded-[16px] group-hover:scale-110 group-hover:-rotate-3 group-hover:shadow-accent-orange/20 transition-all duration-500">
+                  <Store size={22} className="text-accent-orange" strokeWidth={2.5} />
+                </div>
               </div>
            </div>
            
-           <div className="pwa-card p-6 border-l-4 border-accent-blue bg-white dark:bg-slate-900 shadow-xl group hover:translate-y-[-2px] transition-transform">
-              <span className="text-[9px] font-black text-slate-400 dark:text-white/30 uppercase tracking-[0.2em] mb-2 block">Total Trx Diarias (Prom)</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-accent-blue tracking-tighter">
-                  {kFormatter(filteredDetail.reduce((acc, s) => acc + s.salesTY, 0))}
-                </span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase italic">Trx/Día</span>
+           {/* Card 2: Trx Diarias */}
+           <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-white to-slate-50/50 dark:from-slate-800/80 dark:to-slate-900/80 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] border border-slate-100 dark:border-white/5 group hover:-translate-y-1 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] dark:hover:shadow-[0_20px_40px_rgb(0,0,0,0.4)] transition-all duration-500">
+              <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-accent-blue/10 dark:bg-accent-blue/20 rounded-full blur-3xl group-hover:bg-accent-blue/20 dark:group-hover:bg-accent-blue/30 transition-all duration-700 group-hover:scale-150" />
+              <div className="flex justify-between items-start relative z-10">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.2em]">Trx Diarias (Prom)</span>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-4xl font-black text-slate-800 dark:text-white tracking-tighter leading-none">
+                      {kFormatter(filteredDetail.reduce((acc, s) => acc + s.salesTY, 0))}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase italic">Trx/Día</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-white/5 rounded-[16px] group-hover:scale-110 group-hover:rotate-3 group-hover:shadow-accent-blue/20 transition-all duration-500">
+                  <LayoutDashboard size={22} className="text-accent-blue" strokeWidth={2.5} />
+                </div>
               </div>
            </div>
 
-           <div className="pwa-card p-6 border-l-4 border-emerald-500 bg-white dark:bg-slate-900 shadow-xl group hover:translate-y-[-2px] transition-transform">
-              <span className="text-[9px] font-black text-slate-400 dark:text-white/30 uppercase tracking-[0.2em] mb-2 block">Growth Consolidado</span>
+           {/* Card 3: Growth */}
+           <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-white to-slate-50/50 dark:from-slate-800/80 dark:to-slate-900/80 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] border border-slate-100 dark:border-white/5 group hover:-translate-y-1 hover:shadow-[0_20px_40px_rgb(0,0,0,0.08)] dark:hover:shadow-[0_20px_40px_rgb(0,0,0,0.4)] transition-all duration-500">
               {(() => {
                 const tyTotal = filteredDetail.reduce((acc, s) => acc + s.salesTY, 0);
                 const lyTotal = filteredDetail.reduce((acc, s) => acc + s.salesLY, 0);
                 const growth = lyTotal > 0 ? ((tyTotal / lyTotal) - 1) * 100 : 0;
+                const isPositive = growth >= 0;
+                
                 return (
-                  <div className="flex items-baseline gap-2">
-                    <span className={`text-3xl font-black tracking-tighter ${growth >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                      {growth >= 0 ? '+' : ''}{growth.toFixed(1)}%
-                    </span>
-                    {growth >= 0 ? <TrendingUp size={16} className="text-emerald-500" /> : <TrendingDown size={16} className="text-red-500" />}
-                  </div>
+                  <>
+                    <div className={`absolute -left-6 -top-6 w-32 h-32 rounded-full blur-3xl transition-all duration-700 group-hover:scale-150 ${isPositive ? 'bg-emerald-500/10 dark:bg-emerald-500/20 group-hover:bg-emerald-500/20' : 'bg-red-500/10 dark:bg-red-500/20 group-hover:bg-red-500/20'}`} />
+                    <div className="flex justify-between items-start relative z-10">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-slate-400 dark:text-white/40 uppercase tracking-[0.2em]">Growth Consolidado</span>
+                        <div className="flex items-center gap-3 mt-2">
+                          <span className={`text-4xl font-black tracking-tighter leading-none ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
+                            {isPositive ? '+' : ''}{growth.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`p-3 bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-white/5 rounded-[16px] group-hover:scale-110 group-hover:rotate-12 transition-all duration-500 ${isPositive ? 'group-hover:shadow-emerald-500/20' : 'group-hover:shadow-red-500/20'}`}>
+                        {isPositive ? <TrendingUp size={22} className="text-emerald-500" strokeWidth={2.5} /> : <TrendingDown size={22} className="text-red-500" strokeWidth={2.5} />}
+                      </div>
+                    </div>
+                  </>
                 );
               })()}
            </div>
+        </div>
 
-           <div className="pwa-card p-5 bg-slate-900 dark:bg-accent-orange/10 flex items-center relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-2 opacity-10"><Search size={48} /></div>
-              <div className="relative w-full">
-                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Search size={14} className="text-slate-400" /></div>
-                <input 
-                  type="text" 
-                  placeholder="Buscar por Marca, Código o Tienda..." 
-                  value={searchTerm} 
-                  onChange={(e) => setSearchTerm(e.target.value)} 
-                  className="w-full pl-10 pr-4 py-3 bg-white/10 dark:bg-white/5 border border-white/10 rounded-2xl text-xs font-bold text-white placeholder-white/30 focus:ring-2 focus:ring-accent-orange/40 outline-none transition-all shadow-inner" 
-                />
-              </div>
+        {/* SEARCH & FILTERS ROW (Moved Above Table) */}
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200 dark:border-white/5">
+           <div className="relative w-full md:w-96 group">
+             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none transition-transform group-focus-within:scale-110 group-focus-within:text-accent-orange">
+               <Search size={16} className="text-slate-400 group-focus-within:text-accent-orange transition-colors" />
+             </div>
+             <input 
+               type="text" 
+               placeholder="Buscar por Marca, Código o Tienda..." 
+               value={searchTerm} 
+               onChange={(e) => setSearchTerm(e.target.value)} 
+               className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold text-slate-700 dark:text-white placeholder-slate-400 focus:border-accent-orange/50 focus:ring-4 focus:ring-accent-orange/10 outline-none transition-all shadow-sm" 
+             />
+             {searchTerm && (
+               <button onClick={() => setSearchTerm('')} className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                 <AlertCircle size={14} className="rotate-45" />
+               </button>
+             )}
+           </div>
+           <div className="text-[10px] font-black uppercase text-slate-400 px-4 flex items-center gap-2">
+             <Filter size={12} /> Mostrando {filteredDetail.length} resultados
            </div>
         </div>
 
         {/* DETAIL TABLE */}
-        <div className="pwa-card overflow-hidden shadow-2xl border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900">
+        <div className="pwa-card overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900 rounded-[24px]">
           <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10">
@@ -448,7 +520,7 @@ const SSTXDashboard = ({ records, filters }) => {
                     >
                       <td className="px-6 py-4">
                          <span className={`text-[10px] font-black italic uppercase px-2 py-1 rounded ${isNGRBrand(item.brand) ? 'bg-accent-orange/10 text-accent-orange' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>
-                           {item.brand}
+                           {isNGRBrand(item.brand) && '★ '} {item.brand}
                          </span>
                       </td>
                       <td className="px-6 py-4">
@@ -467,16 +539,20 @@ const SSTXDashboard = ({ records, filters }) => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right text-[11px] font-medium text-slate-400 font-mono">
-                        {kFormatter(item.salesLY)}
+                        {item.salesLY > 0 ? kFormatter(item.salesLY) : <span className="text-slate-200 dark:text-white/10">—</span>}
                       </td>
                       <td className="px-6 py-4 text-right text-[11px] font-black text-slate-900 dark:text-white font-mono bg-slate-500/5 group-hover:bg-accent-orange/5 transition-colors">
                         {kFormatter(item.salesTY)}
                       </td>
                       <td className="px-6 py-4 text-right">
-                         <div className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl font-black text-[10px] shadow-sm ${item.growth >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
-                           {item.growth >= 0 ? '+' : ''}{item.growth.toFixed(1)}%
-                           {item.growth >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                         </div>
+                         {item.growth != null ? (
+                           <div className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl font-black text-[10px] shadow-sm ${item.growth >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
+                             {item.growth >= 0 ? '+' : ''}{item.growth.toFixed(1)}%
+                             {item.growth >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                           </div>
+                         ) : (
+                           <span className="text-[9px] font-black text-slate-300 dark:text-white/20 uppercase tracking-widest">Nuevo</span>
+                         )}
                       </td>
                     </motion.tr>
                   ))

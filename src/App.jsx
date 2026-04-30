@@ -517,6 +517,16 @@ export default function App({ user, onSignOut }) {
   }, [user]);
 
   useEffect(() => {
+    const getGrupoTienda = (competidor) => {
+      const c = String(competidor || '').toUpperCase().trim();
+      if (['KFC', 'BURGER KING', 'PIZZA HUT'].includes(c)) return 'DELOSI';
+      if (['LITTLE CAESARS', "LITTLE CAESAR'S"].includes(c)) return 'LC';
+      if (['DOMINOS', "DOMINO'S"].includes(c)) return 'DMN';
+      if (['MCDONALDS', "MCDONALD'S"].includes(c)) return 'MCDONALDS';
+      if (['POPEYES', 'BEMBOS', 'PAPA JOHNS', 'CHINAWOK', 'WANTA'].includes(c)) return 'NGR';
+      return 'OTROS';
+    };
+
     const fetchInitialData = async () => {
       try {
         const [dataRes, cajasRes, revisadasRes, ngrRes] = await Promise.all([
@@ -532,7 +542,8 @@ export default function App({ user, onSignOut }) {
             const normalized = data.records.map(r => ({
               ...r,
               codigo_tienda: String(r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
-              local: String(r.local || '').trim().toUpperCase()
+              local: String(r.local || '').trim().toUpperCase(),
+              grupo_tienda: getGrupoTienda(r.competidor)
             }));
             setRecords(normalized);
           }
@@ -548,7 +559,9 @@ export default function App({ user, onSignOut }) {
         }
         if (ngrRes?.ok) {
           const ngr = await ngrRes.json();
-          if (ngr.locales) setNgrLocales(ngr.locales);
+          if (ngr.locales) {
+            setNgrLocales(ngr.locales.map(r => ({ ...r, grupo_tienda: 'NGR' })));
+          }
         }
       } catch (error) {
         console.error('Error fetching initial data:', error);
@@ -574,7 +587,8 @@ export default function App({ user, onSignOut }) {
             const normalized = fresh.records.map(r => ({
               ...r,
               codigo_tienda: String(r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
-              local: String(r.local || '').trim().toUpperCase()
+              local: String(r.local || '').trim().toUpperCase(),
+              grupo_tienda: getGrupoTienda(r.competidor)
             }));
             setRecords(normalized);
           }
@@ -922,6 +936,7 @@ export default function App({ user, onSignOut }) {
       caja:             null,
       codigo_tienda:    r.store_num || '',
       _isNGR:           true,
+      grupo_tienda:     r.grupo_tienda || 'NGR',
     }));
   }, [ngrLocales]);
 
@@ -1049,84 +1064,150 @@ export default function App({ user, onSignOut }) {
         .map(r => `${r.local}||${r.caja ?? ''}`)
     ).size;
 
-    // ── Month-over-Month variation (sliding window) ──
-    // Uses r.promedio (already daily avg) — no extra computation needed
+    // ── Current period: month-indexed from date-filtered records ──
     const byMonth = {};
-    marketShareRecords.forEach(r => {
-      if (!r.mes || !r.ano) return;
-      const k = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2,'0')}`;
-      byMonth[k] = (byMonth[k] || 0) + (parseFloat(r.promedio) || 0);
-    });
-    const allMonthKeys = Object.keys(byMonth).sort();
-
-    // MoM per local (uses promedio already on r.promedio)
     const localsByMonth = {};
     marketShareRecords.forEach(r => {
       if (!r.mes || !r.ano) return;
       const k = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2,'0')}`;
+      byMonth[k] = (byMonth[k] || 0) + (parseFloat(r.promedio) || 0);
       if (!localsByMonth[k]) localsByMonth[k] = { prom: 0, locals: new Set() };
       localsByMonth[k].prom += (parseFloat(r.promedio) || 0);
       localsByMonth[k].locals.add(r.local);
     });
+    const allMonthKeys = Object.keys(byMonth).sort();
 
-    // Sliding window: selected months vs same N months before
+    // ── Full-range: month-indexed ignoring date filters (needed for prev-period lookups) ──
+    // Applies only non-date filters: competitor, category, local, region, distrito, zona
+    const selectedAreNGRFull = filters.competitor.length > 0 && filters.competitor.every(c => NGR_OWN_BRANDS.has(c));
+    const sourceFull = selectedAreNGRFull ? ngrMappedRecords : [...records, ...ngrMappedRecords];
+    const byMonthFull = {};
+    const localsByMonthFull = {};
+    sourceFull.forEach(r => {
+      if (!r.mes || !r.ano) return;
+      const cMatch  = filters.competitor.length === 0 || filters.competitor.includes(r.competidor);
+      const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[r.competidor]);
+      const lMatch  = filters.local.length === 0 || filters.local.includes(r.local);
+      const rMatch  = filters.region.length === 0 || filters.region.includes(r.region);
+      const dMatch  = filters.distrito.length === 0 || filters.distrito.includes(r.distrito);
+      const zMatch  = filters.zona.length === 0 || filters.zona.includes(r.zona);
+      if (!cMatch || !catMatch || !lMatch || !rMatch || !dMatch || !zMatch) return;
+      if (!r._isNGR && !recordInScope(r)) return;
+      const k = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2,'0')}`;
+      byMonthFull[k] = (byMonthFull[k] || 0) + (parseFloat(r.promedio) || 0);
+      if (!localsByMonthFull[k]) localsByMonthFull[k] = { prom: 0, locals: new Set() };
+      localsByMonthFull[k].prom += (parseFloat(r.promedio) || 0);
+      localsByMonthFull[k].locals.add(r.local);
+    });
+    const allMonthKeysFull = Object.keys(byMonthFull).sort();
+
+    // ── Period-over-period comparison ──────────────────────────────────────
+    // 3 cases:
+    //  A) Specific months + year selected  → compare same N months immediately prior
+    //  B) Year only selected (no months)   → compare full year vs prior year
+    //  C) No date filter                   → compare last 2 months in data
     const selMonths  = filters.month; // ['0','1',...] 0-indexed
     const selYears   = filters.year;  // ['2025',...]
     let momDailyAvg  = null;
     let momPerLocal  = null;
+    let prevDailyAvg = null; // absolute value of previous period
+    let prevPerLocal = null; // absolute value of previous period per local
 
     if (selMonths.length > 0 && selYears.length > 0) {
-      const selYear = parseInt(selYears[0]);
-      const N = selMonths.length;
-      // 1-indexed month numbers for selected period
+      // ── Case A: specific months + year selected ─────────────────────────
+      // Current period: from date-filtered byMonth
+      // Previous period: from byMonthFull (date-filter-ignored) so prev months are available
+      const selYearNums = selYears.map(Number).sort((a, b) => a - b);
       const selNums = selMonths.map(m => parseInt(m) + 1).sort((a, b) => a - b);
-      // Current window sum
-      let curSum = 0;
-      selNums.forEach(m => {
-        const k = `${selYear}-${String(m).padStart(2,'0')}`;
-        curSum += byMonth[k] || 0;
-      });
-      // Previous window: N months before the earliest selected month
+      const N = selNums.length;
       const earliestM = selNums[0];
-      let prevSum = 0;
-      let curSumLocal = 0; let prevSumLocal = 0;
-      let curLocals = new Set(); let prevLocals = new Set();
-      for (let i = 0; i < N; i++) {
-        // Current period per-local
-        const cm = selNums[i];
-        const ck = `${selYear}-${String(cm).padStart(2,'0')}`;
-        if (localsByMonth[ck]) {
-          curSumLocal += localsByMonth[ck].prom;
-          localsByMonth[ck].locals.forEach(l => curLocals.add(l));
+
+      let curSum = 0; let curSumLocal = 0; const curLocals = new Set();
+      let prevSum = 0; let prevSumLocal = 0; const prevLocals = new Set();
+
+      selYearNums.forEach(sy => {
+        selNums.forEach(sm => {
+          const k = `${sy}-${String(sm).padStart(2, '0')}`;
+          curSum += byMonthFull[k] || 0;
+          if (localsByMonthFull[k]) {
+            curSumLocal += localsByMonthFull[k].prom;
+            localsByMonthFull[k].locals.forEach(l => curLocals.add(l));
+          }
+        });
+        // Previous window: N months immediately before the earliest selected month
+        for (let i = 0; i < N; i++) {
+          let pm = earliestM - N + i;
+          let py = sy;
+          if (pm <= 0) { pm += 12; py -= 1; }
+          const pk = `${py}-${String(pm).padStart(2, '0')}`;
+          prevSum += byMonthFull[pk] || 0;
+          if (localsByMonthFull[pk]) {
+            prevSumLocal += localsByMonthFull[pk].prom;
+            localsByMonthFull[pk].locals.forEach(l => prevLocals.add(l));
+          }
         }
-        // Previous period
-        let pm = earliestM - N + i;
-        let py = selYear;
-        if (pm <= 0) { pm += 12; py -= 1; }
-        const pk = `${py}-${String(pm).padStart(2,'0')}`;
-        prevSum += byMonth[pk] || 0;
-        if (localsByMonth[pk]) {
-          prevSumLocal += localsByMonth[pk].prom;
-          localsByMonth[pk].locals.forEach(l => prevLocals.add(l));
-        }
-      }
+      });
+
+      prevDailyAvg = prevSum;
       if (prevSum > 0) momDailyAvg = ((curSum - prevSum) / prevSum) * 100;
       if (prevLocals.size > 0 && curLocals.size > 0) {
         const curAvg  = curSumLocal  / curLocals.size;
         const prevAvg = prevSumLocal / prevLocals.size;
+        prevPerLocal  = prevAvg;
         if (prevAvg > 0) momPerLocal = ((curAvg - prevAvg) / prevAvg) * 100;
       }
+
+    } else if (selYears.length > 0 && selMonths.length === 0) {
+      // ── Case B: year(s) only → compare full year vs prior year ──────────
+      // Use byMonthFull so the prior year data is available even though it's
+      // outside the current date filter window.
+      const selYearNums = selYears.map(Number).sort((a, b) => a - b);
+      const prevYearNums = selYearNums.map(y => y - 1);
+
+      let curSum = 0; let prevSum = 0;
+      let curSumLocal = 0; let prevSumLocal = 0;
+      const curLocals = new Set(); const prevLocals = new Set();
+
+      allMonthKeysFull.forEach(k => {
+        const kYear = parseInt(k.split('-')[0]);
+        if (selYearNums.includes(kYear)) {
+          curSum += byMonthFull[k] || 0;
+          if (localsByMonthFull[k]) {
+            curSumLocal += localsByMonthFull[k].prom;
+            localsByMonthFull[k].locals.forEach(l => curLocals.add(l));
+          }
+        }
+        if (prevYearNums.includes(kYear)) {
+          prevSum += byMonthFull[k] || 0;
+          if (localsByMonthFull[k]) {
+            prevSumLocal += localsByMonthFull[k].prom;
+            localsByMonthFull[k].locals.forEach(l => prevLocals.add(l));
+          }
+        }
+      });
+
+      prevDailyAvg = prevSum;
+      if (prevSum > 0) momDailyAvg = ((curSum - prevSum) / prevSum) * 100;
+      if (prevLocals.size > 0 && curLocals.size > 0) {
+        const curAvg  = curSumLocal  / curLocals.size;
+        const prevAvg = prevSumLocal / prevLocals.size;
+        prevPerLocal  = prevAvg;
+        if (prevAvg > 0) momPerLocal = ((curAvg - prevAvg) / prevAvg) * 100;
+      }
+
     } else {
-      // No month filter: compare last 2 available months from data
-      if (allMonthKeys.length >= 2) {
-        const cur  = byMonth[allMonthKeys[allMonthKeys.length - 1]];
-        const prev = byMonth[allMonthKeys[allMonthKeys.length - 2]];
-        if (prev > 0) momDailyAvg = ((cur - prev) / prev) * 100;
-        const curM  = localsByMonth[allMonthKeys[allMonthKeys.length - 1]];
-        const prevM = localsByMonth[allMonthKeys[allMonthKeys.length - 2]];
+      // ── Case C: no date filter → compare last 2 available months ────────
+      if (allMonthKeysFull.length >= 2) {
+        const curKey  = allMonthKeysFull[allMonthKeysFull.length - 1];
+        const prevKey = allMonthKeysFull[allMonthKeysFull.length - 2];
+        prevDailyAvg = byMonthFull[prevKey];
+        if (byMonthFull[prevKey] > 0) momDailyAvg = ((byMonthFull[curKey] - byMonthFull[prevKey]) / byMonthFull[prevKey]) * 100;
+        const curM  = localsByMonthFull[curKey];
+        const prevM = localsByMonthFull[prevKey];
         if (curM && prevM && prevM.locals.size > 0) {
           const curAvg  = curM.prom  / curM.locals.size;
           const prevAvg = prevM.prom / prevM.locals.size;
+          prevPerLocal  = prevAvg;
           if (prevAvg > 0) momPerLocal = ((curAvg - prevAvg) / prevAvg) * 100;
         }
       }
@@ -1146,8 +1227,10 @@ export default function App({ user, onSignOut }) {
       cajasSinRegistro: cajasConAlarma,
       momDailyAvg,
       momPerLocal,
+      prevDailyAvg,
+      prevPerLocal,
     };
-  }, [filteredRecords, marketShareRecords, filteredTickets, tickets, filters.competitor, filters.month, filters.year]);
+  }, [filteredRecords, marketShareRecords, filteredTickets, tickets, records, ngrMappedRecords, filters]);
 
   // 3. Reactive Share Data (Exclusive for Market Share)
   // When includeNGR=true, NGR brands are added to the share pool.
@@ -1460,6 +1543,18 @@ export default function App({ user, onSignOut }) {
   const [sortBy, setSortBy] = useState("ventas");
   const [sortDirection, setSortDirection] = useState("desc");
 
+  // ── Puntos Compartidos local-tab filters (lifted to App so global bar can render them) ──
+  const [pcFilters, setPcFilters] = useState({
+    filterTipo:    'all',
+    filterCadena:  'all',
+    filterPreset:  'all',
+    filterCat:     'all',
+    groupMode:     'brand',
+    sortMode:      'prom',
+    viewMode:      'cards',
+  });
+  const handlePcFilterChange = (key, value) => setPcFilters(prev => ({ ...prev, [key]: value }));
+
   const handleSort = (column) => {
     if (sortBy === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -1520,6 +1615,8 @@ export default function App({ user, onSignOut }) {
     }
   };
 
+  const isPuntos = activeSubTab === 'puntos_compartidos';
+
   const globalFilterBar = (
     <FilterBar
       filters={filters}
@@ -1535,6 +1632,8 @@ export default function App({ user, onSignOut }) {
       regionOptions={regionOptions}
       distritoOptions={distritoOptions}
       zonaOptions={zonaOptions}
+      pcFilters={isPuntos ? pcFilters : null}
+      onPcFilterChange={isPuntos ? handlePcFilterChange : null}
     />
   );
 
@@ -1593,7 +1692,7 @@ export default function App({ user, onSignOut }) {
               </motion.div>
               <div className="flex flex-col">
                 <span className="text-[10px] text-accent-orange font-black uppercase tracking-[0.3em] mb-1">NGR Intelligence Suite</span>
-                <h1 className="pwa-title !text-4xl md:!text-5xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
+                <h1 className="pwa-title !text-2xl md:!text-3xl text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-white/70">
                   {activeCategory === 'competitor' ? 'Análisis Competencias' :
                     activeCategory === 'marketshare' ? (
                       activeSubTab === 'comparativos' ? 'Comparativos' :
@@ -1627,7 +1726,7 @@ export default function App({ user, onSignOut }) {
               >
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
-              {activeCategory !== 'tickets' && activeCategory !== 'estimaciones' && globalFilterBar}
+
 
               {/* ── User avatar + logout ── */}
               {user && (
@@ -1693,6 +1792,17 @@ export default function App({ user, onSignOut }) {
             </button>
           </div>
         </motion.header>
+
+        {/* ── Global Filter Bar (always visible, below header) ── */}
+        {activeCategory !== 'tickets' && activeCategory !== 'estimaciones' && activeCategory !== 'actividad' && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            {globalFilterBar}
+          </motion.div>
+        )}
 
         {/* Floating Sub-tabs Bar */}
         <AnimatePresence>
@@ -1767,6 +1877,7 @@ export default function App({ user, onSignOut }) {
             <SSTXDashboard
               key="sstx"
               records={records}
+              ngrLocales={ngrLocales}
               filters={filters}
               globalFilterBar={globalFilterBar}
             />
@@ -1776,17 +1887,21 @@ export default function App({ user, onSignOut }) {
                 key="comparativos"
                 shareData={reactiveShareDataRoutine}
                 tableData={sortedTableDataRoutine}
+                allRecords={marketShareRecords}
+                ngrLocales={ngrLocales}
                 metrics={reactiveMetrics}
                 theme={theme}
               />
             ) : activeSubTab === 'puntos_compartidos' ? (
-              <PuntosCompartidosDashboard
+            <PuntosCompartidosDashboard
                 key="puntos_compartidos"
                 allRecords={marketShareRecords}
                 evolutionRecords={pcEvolutionRecords}
                 shareData={reactiveShareDataRoutine}
                 ngrLocales={ngrLocales}
                 filters={filters}
+                pcFilters={pcFilters}
+                onPcFilterChange={handlePcFilterChange}
               />
             ) : (
               <MarketShareDashboard

@@ -13,7 +13,7 @@ import {
 import { ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, AreaChart, Area, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from 'recharts';
 import CustomSelect from './common/CustomSelect';
 
-const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
+const KPICard = ({ title, value, subtitle, icon: Icon, trend, prevValue, prevLabel }) => (
     <motion.div
         whileHover={{ y: -4 }}
         className="pwa-card p-6 flex flex-col gap-4"
@@ -23,14 +23,31 @@ const KPICard = ({ title, value, subtitle, icon: Icon, trend }) => (
                 <Icon className="text-accent-orange w-5 h-5" />
             </div>
             {trend != null && (
-                <span className={`text-[10px] font-black px-2 py-1 rounded-full ${trend > 0 ? 'bg-accent-lemon/10 text-emerald-600 dark:text-accent-lemon' : trend < 0 ? 'bg-red-500/10 text-red-500' : 'bg-slate-100 dark:bg-white/5 text-slate-400'}`}>
-                    {trend > 0 ? '+' : ''}{trend}%
+                <span className={`text-sm font-black px-3 py-1.5 rounded-full flex items-center gap-1 shadow-sm ${
+                    trend > 0
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/30'
+                        : trend < 0
+                            ? 'bg-red-500/15 text-red-600 dark:text-red-400 ring-1 ring-red-500/30'
+                            : 'bg-slate-100 dark:bg-white/5 text-slate-400 ring-1 ring-slate-200 dark:ring-white/10'
+                }`}>
+                    <span className="text-base">{trend > 0 ? '▲' : trend < 0 ? '▼' : '—'}</span>
+                    {trend > 0 ? '+' : ''}{trend.toFixed(1)}%
                 </span>
             )}
         </div>
         <div>
             <p className="text-[10px] text-slate-500 dark:text-white/40 font-black uppercase tracking-widest mb-1">{title}</p>
             <p className="text-3xl font-black italic text-slate-900 dark:text-white leading-none">{value}</p>
+            {prevValue != null && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/[0.04] border border-slate-200 dark:border-white/10">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 shrink-0">
+                        {prevLabel || 'Período anterior'}
+                    </span>
+                    <span className="text-xs font-black tabular-nums text-slate-600 dark:text-white/60 ml-auto">
+                        {prevValue}
+                    </span>
+                </div>
+            )}
             <p className="text-[9px] text-slate-400 dark:text-white/20 font-bold mt-2 uppercase">{subtitle}</p>
         </div>
     </motion.div>
@@ -56,8 +73,66 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
 
     const [chartMetric, setChartMetric] = useState('prom_diario');
     const [ngrChartMode, setNgrChartMode] = useState('sum'); // 'sum' | 'share'
+    const [groupMode, setGroupMode] = useState('marca'); // 'marca' | 'grupo'
+
+    // Compute Grupo data
+    const GRUPO_COLORS = {
+        'DELOSI': '#005596', // Delosi blue
+        'NGR': '#F26522', // NGR orange
+        'DMN': '#006491', // Dominos blue
+        'LC': '#6D1F7E', // Little Caesars purple
+        'DEFAULT': '#94a3b8'
+    };
+
+    const { gruposShareData, gruposTrendData, activeGrupos } = useMemo(() => {
+        const shareMap = {};
+        const trendMap = {};
+        const activeSet = new Set();
+        
+        allRecords.forEach(r => {
+            const grupo = (r.grupo_tienda && r.grupo_tienda !== '-') ? r.grupo_tienda : 'Otros';
+            const prom = parseFloat(r.promedio) || parseFloat(r.trx_promedio) || 0;
+            
+            // Share
+            if (!shareMap[grupo]) shareMap[grupo] = 0;
+            shareMap[grupo] += prom;
+            activeSet.add(grupo);
+            
+            // Trend
+            if (r.mes && r.ano) {
+                const mk = `${parseInt(r.ano)}-${String(parseInt(r.mes)).padStart(2, '0')}`;
+                if (!trendMap[mk]) trendMap[mk] = {};
+                if (!trendMap[mk][grupo]) trendMap[mk][grupo] = 0;
+                trendMap[mk][grupo] += prom;
+            }
+        });
+
+        const gShare = Object.entries(shareMap).map(([name, value]) => ({
+            name,
+            value,
+            color: GRUPO_COLORS[name?.toUpperCase()] || GRUPO_COLORS.DEFAULT,
+            isNGR: name === 'NGR'
+        })).sort((a, b) => b.value - a.value);
+
+        const sortedGrupos = [...activeSet].sort((a, b) => (shareMap[b] || 0) - (shareMap[a] || 0));
+
+        // Sort months for trend
+        const allKeys = Object.keys(trendMap).sort();
+        const gTrend = allKeys.map(name => {
+            const row = { name };
+            sortedGrupos.forEach(g => {
+                row[g] = trendMap[name][g] || 0;
+            });
+            return row;
+        }).slice(-12);
+
+        return { gruposShareData: gShare, gruposTrendData: gTrend, activeGrupos: sortedGrupos };
+    }, [allRecords]);
+
+    const displayShareData = groupMode === 'grupo' ? gruposShareData : shareData;
 
     // Filter trend data
+
     const chartData = useMemo(() => {
         if (!trendData) return [];
         if (showHistorial) return trendData;
@@ -209,6 +284,8 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                     subtitle="Promedio de transacciones generadas por día"
                     icon={TrendingUp}
                     trend={reactiveMetrics.momDailyAvg != null ? parseFloat(reactiveMetrics.momDailyAvg.toFixed(1)) : null}
+                    prevValue={reactiveMetrics.prevDailyAvg != null ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(reactiveMetrics.prevDailyAvg) : null}
+                    prevLabel="Período anterior"
                 />
                 <KPICard
                     title="Transacciones por Local"
@@ -216,6 +293,8 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                     subtitle="Promedio de transacciones por sede"
                     icon={Users}
                     trend={reactiveMetrics.momPerLocal != null ? parseFloat(reactiveMetrics.momPerLocal.toFixed(1)) : null}
+                    prevValue={reactiveMetrics.prevPerLocal != null ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(reactiveMetrics.prevPerLocal) : null}
+                    prevLabel="Período anterior"
                 />
             </section>
 
@@ -226,29 +305,41 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                     <div className="p-6 border-b border-slate-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-3">
                         <h3 className="text-sm font-black italic uppercase tracking-widest flex items-center gap-2 text-slate-900 dark:text-white/90">
                             <div className="w-1.5 h-6 rounded-full bg-orange-400" />
-                            NGR vs Competencia
+                            Análisis de Mercado
                             <span className="text-[9px] font-bold text-slate-400 dark:text-white/30 normal-case tracking-normal italic ml-1">trx diarias promedio</span>
                         </h3>
-                        <div className="flex items-center gap-2">
-                            {/* Var% badge */}
-                            {reactiveMetrics?.momDailyAvg != null && (
-                                <span className={`text-[9px] font-black px-2.5 py-1 rounded-full ${reactiveMetrics.momDailyAvg >= 0 ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-500/10 text-red-500'}`}>
-                                    var% trx {reactiveMetrics.momDailyAvg >= 0 ? '+' : ''}{reactiveMetrics.momDailyAvg.toFixed(1)}%
-                                </span>
-                            )}
-                            {/* Evolutive mode toggle */}
-                            <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-white/[0.04] rounded-lg border border-slate-200 dark:border-white/10">
-                                {[{ k: 'sum', label: 'Abs' }, { k: 'share', label: 'Share %' }].map(({ k, label }) => (
-                                    <button
-                                        key={k}
-                                        onClick={() => setNgrChartMode(k)}
-                                        className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${
-                                            ngrChartMode === k
-                                                ? 'bg-orange-500 text-white shadow-sm'
-                                                : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
-                                        }`}
-                                    >{label}</button>
-                                ))}
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Agrupar por:</span>
+                                <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-white/[0.04] rounded-lg border border-slate-200 dark:border-white/10">
+                                    {[{ k: 'marca', label: 'Marca' }, { k: 'grupo', label: 'Grupo' }].map(({ k, label }) => (
+                                        <button
+                                            key={k}
+                                            onClick={() => setGroupMode(k)}
+                                            className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${
+                                                groupMode === k
+                                                    ? 'bg-orange-500 text-white shadow-sm'
+                                                    : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                            }`}
+                                        >{label}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {/* Evolutive mode toggle */}
+                                <div className="flex gap-1 p-0.5 bg-slate-100 dark:bg-white/[0.04] rounded-lg border border-slate-200 dark:border-white/10">
+                                    {[{ k: 'sum', label: 'Abs' }, { k: 'share', label: 'Share %' }].map(({ k, label }) => (
+                                        <button
+                                            key={k}
+                                            onClick={() => setNgrChartMode(k)}
+                                            className={`px-3 py-1 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${
+                                                ngrChartMode === k
+                                                    ? 'bg-blue-500 text-white shadow-sm'
+                                                    : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white/60'
+                                            }`}
+                                        >{label}</button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -259,7 +350,18 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                         <div className="lg:col-span-3 p-6" style={{ minHeight: '340px' }}>
                             <ResponsiveContainer width="100%" height={300}>
                                 <AreaChart
-                                    data={chartData.map(d => {
+                                    data={groupMode === 'grupo' ? gruposTrendData.map(d => {
+                                        const total = activeGrupos.reduce((acc, g) => acc + (d[g] || 0), 0);
+                                        if (ngrChartMode === 'share') {
+                                            const shareRow = { ...d, _total: total };
+                                            activeGrupos.forEach(g => {
+                                                shareRow[g] = total > 0 ? Math.round((d[g] || 0) / total * 1000) / 10 : 0;
+                                                shareRow[`_raw_${g}`] = d[g] || 0;
+                                            });
+                                            return shareRow;
+                                        }
+                                        return d;
+                                    }) : chartData.map(d => {
                                         // Both series use daily avg: d.promedio for comp, d.ngrTrx for NGR
                                         const comp = d.promedio ?? d.historialProm ?? 0;
                                         const ngr  = d.ngrTrx ?? 0;
@@ -276,16 +378,6 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                     })}
                                     margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
                                 >
-                                    <defs>
-                                        <linearGradient id="colorNGR2" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%"  stopColor="#F26522" stopOpacity={0.85} />
-                                            <stop offset="95%" stopColor="#F26522" stopOpacity={0.05} />
-                                        </linearGradient>
-                                        <linearGradient id="colorComp2" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
-                                            <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
-                                        </linearGradient>
-                                    </defs>
                                     <XAxis
                                         dataKey="name"
                                         stroke={theme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)"}
@@ -312,7 +404,13 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                     />
                                     <RechartsTooltip
                                         contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.92)' : '#fff', border: '1px solid rgba(249,115,22,0.3)', borderRadius: '12px', fontWeight: 'bold', fontSize: '11px' }}
+                                        itemSorter={(item) => -item.value}
                                         formatter={(value, name, props) => {
+                                            if (groupMode === 'grupo') {
+                                                const rawVal = ngrChartMode === 'share' ? props.payload[`_raw_${name}`] : value;
+                                                if (ngrChartMode === 'share') return [`${value.toFixed(1)}%  (${rawVal != null ? rawVal.toLocaleString('es-PE') : '—'} trx/día)`, name];
+                                                return [value != null ? `${value.toLocaleString('es-PE')} trx/día` : '—', name];
+                                            }
                                             const label = name === 'ngr' ? '★ NGR Propio' : 'Competencia';
                                             if (ngrChartMode === 'share') {
                                                 const rawVal = name === 'ngr' ? props.payload._rawNgr : props.payload._rawComp;
@@ -324,12 +422,23 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                             return [value != null ? `${value.toLocaleString('es-PE')} trx/día` : '—', label];
                                         }}
                                     />
-                                    <Area type="monotone" dataKey="competencia" name="competencia"
-                                        stroke="#8b5cf6" strokeWidth={1.5}
-                                        fillOpacity={1} fill="url(#colorComp2)" connectNulls stackId="a" />
-                                    <Area type="monotone" dataKey="ngr" name="ngr"
-                                        stroke="#F26522" strokeWidth={2.5}
-                                        fillOpacity={1} fill="url(#colorNGR2)" connectNulls stackId="a" />
+                                    
+                                    {groupMode === 'grupo' ? (
+                                        activeGrupos.map((g, i) => (
+                                            <Area key={g} type="monotone" dataKey={g} name={g}
+                                                stroke={GRUPO_COLORS[g?.toUpperCase()] || GRUPO_COLORS.DEFAULT} strokeWidth={2}
+                                                fill={GRUPO_COLORS[g?.toUpperCase()] || GRUPO_COLORS.DEFAULT} fillOpacity={0.2} connectNulls stackId={ngrChartMode === 'share' ? "a" : undefined} />
+                                        ))
+                                    ) : (
+                                        <>
+                                            <Area type="monotone" dataKey="competencia" name="competencia"
+                                                stroke="#8b5cf6" strokeWidth={1.5}
+                                                fill="#8b5cf6" fillOpacity={0.2} connectNulls stackId="a" />
+                                            <Area type="monotone" dataKey="ngr" name="ngr"
+                                                stroke="#F26522" strokeWidth={2.5}
+                                                fill="#F26522" fillOpacity={0.4} connectNulls stackId="a" />
+                                        </>
+                                    )}
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
@@ -341,7 +450,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                 <ResponsiveContainer width="100%" height="100%">
                                     <RechartsPieChart>
                                         <Pie
-                                            data={[...shareData].sort((a, b) => b.value - a.value)}
+                                            data={[...displayShareData].sort((a, b) => b.value - a.value)}
                                             cx="50%" cy="50%"
                                             innerRadius="42%" outerRadius="65%"
                                             paddingAngle={2}
@@ -349,14 +458,14 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                             stroke="none"
                                             label={false}
                                         >
-                                            {[...shareData].sort((a, b) => b.value - a.value).map((entry, index) => (
+                                            {[...displayShareData].sort((a, b) => b.value - a.value).map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={entry.color} />
                                             ))}
                                         </Pie>
                                         <RechartsTooltip
                                             contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.92)' : '#fff', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '12px', fontWeight: 'bold', fontSize: '11px' }}
                                             formatter={(value, name) => {
-                                                const total = shareData.reduce((a, b) => a + b.value, 0);
+                                                const total = displayShareData.reduce((a, b) => a + b.value, 0);
                                                 return [`${((value / total) * 100).toFixed(1)}%  (${value.toLocaleString('es-PE')} trx/día)`, name];
                                             }}
                                         />
@@ -367,12 +476,14 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                             {/* Brand breakdown table */}
                             <div className="flex-1 overflow-y-auto space-y-1.5">
                                 {(() => {
-                                    const total = shareData.reduce((a, b) => a + b.value, 0);
-                                    return [...shareData]
+                                    const total = displayShareData.reduce((a, b) => a + b.value, 0);
+                                    return [...displayShareData]
                                         .sort((a, b) => b.value - a.value)
                                         .map((brand, i) => {
                                             const sharePct = total > 0 ? (brand.value / total * 100) : 0;
-                                            const isNGR = ['POPEYES','BEMBOS','PAPA JOHNS','CHINAWOK'].includes(brand.name?.toUpperCase());
+                                            const isNGR = groupMode === 'marca' 
+                                                ? ['POPEYES','BEMBOS','PAPA JOHNS','CHINAWOK'].includes(brand.name?.toUpperCase())
+                                                : brand.isNGR;
                                             return (
                                                 <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: brand.color }} />
@@ -389,7 +500,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                             );
                                         });
                                 })()}
-                                {shareData.length === 0 && (
+                                {displayShareData.length === 0 && (
                                     <p className="text-[10px] text-slate-400 dark:text-white/20 text-center py-8">Sin datos para el período</p>
                                 )}
                             </div>

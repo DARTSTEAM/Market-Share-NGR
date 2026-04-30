@@ -9,6 +9,7 @@ import {
     ResponsiveContainer, PieChart, Pie, Cell, Tooltip as ReTooltip,
     LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
     AreaChart, Area,
+    BarChart, Bar, LabelList,
 } from 'recharts';
 import CustomSelect from './common/CustomSelect';
 
@@ -620,7 +621,7 @@ const MacroTable = ({ pcs, onSelectPC, groupMode }) => {
                     <tr>
                         <Th col="nombre">Punto Compartido</Th>
                         <th className="px-4 py-3 text-left text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30">Tipo</th>
-                        <Th col="marcas">{groupMode === 'category' ? 'Categorías' : groupMode === 'ownership' ? 'Segmento' : 'Marcas'}</Th>
+                        <Th col="marcas">{groupMode === 'category' ? 'Categorías' : groupMode === 'ownership' ? 'Grupos' : 'Marcas'}</Th>
                         {allColKeys.map(c => (
                             <th key={c} className="px-4 py-3 text-right text-[8px] font-black uppercase tracking-widest whitespace-nowrap"
                                 style={{ color: colorFor(c) }}>
@@ -716,16 +717,20 @@ const MacroTable = ({ pcs, onSelectPC, groupMode }) => {
 };
 
 // ─── Main Component ──────────────────────────────────────────────────────────
-export default function PuntosCompartidosDashboard({ allRecords, evolutionRecords, shareData, ngrLocales = [], filters }) {
+export default function PuntosCompartidosDashboard({ allRecords, evolutionRecords, shareData, ngrLocales = [], filters, pcFilters = {}, onPcFilterChange }) {
+    // Destructure PC-specific filters (managed by App.jsx, rendered in global FilterBar)
+    const {
+        filterTipo   = 'all',
+        filterCadena = 'all',
+        filterPreset = 'all',
+        filterCat    = 'all',
+        groupMode    = 'brand',
+        sortMode     = 'prom',
+    } = pcFilters;
+
     const [selectedPC, setSelectedPC] = useState(null);
-    const [filterTipo, setFilterTipo] = useState('all');
-    const [filterCadena, setFilterCadena] = useState('all');
-    const [filterPreset, setFilterPreset] = useState('all'); // New: Comparativas predefinidas
-    const [filterCat, setFilterCat] = useState('all'); 
-    const [groupMode, setGroupMode] = useState('brand'); 
-    const [sortMode, setSortMode] = useState('prom');
     const [visibleCount, setVisibleCount] = useState(8);
-    const [viewMode, setViewMode] = useState('cards'); 
+    const [viewMode, setViewMode] = useState('cards'); // stays local — controls card/table toggle
 
     const ngrByPC = useMemo(() => {
         const map = {};
@@ -741,6 +746,13 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
             if (targetMonths && !targetMonths.includes(locMonth)) return;
             if (targetYears && !targetYears.includes(locYear)) return;
 
+            // Apply global filters to NGR records
+            const cMatch = filters.competitor.length === 0 || filters.competitor.includes(loc.marca);
+            const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[String(loc.marca || '').toUpperCase().trim()] || 'Otros');
+            const rMatch = filters.region.length === 0 || filters.region.includes(loc.region);
+            const dMatch = filters.distrito.length === 0 || filters.distrito.includes(loc.distrito);
+            if (!cMatch || !catMatch || !rMatch || !dMatch) return;
+
             let pcName = loc.punto_compartido;
             const sName = String(pcName || '').trim().toUpperCase();
             if (!sName || sName === 'SI' || sName === 'TRUE') {
@@ -752,7 +764,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
             map[key].push(loc);
         });
         return map;
-    }, [ngrLocales, filters?.month, filters?.year]);
+    }, [ngrLocales, filters]);
 
     // ─── PC static data (from filtered allRecords — current period) ──────────
     const pcData = useMemo(() => {
@@ -772,6 +784,13 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
             if (targetMonths && !targetMonths.includes(rMonth)) return;
             if (targetYears && !targetYears.includes(rYear)) return;
 
+            // Apply global filters to NGR records
+            const cMatch = filters.competitor.length === 0 || filters.competitor.includes(r.marca);
+            const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[String(r.marca || '').toUpperCase().trim()] || 'Otros');
+            const rMatch = filters.region.length === 0 || filters.region.includes(r.region);
+            const dMatch = filters.distrito.length === 0 || filters.distrito.includes(r.distrito);
+            if (!cMatch || !catMatch || !rMatch || !dMatch) return;
+
             let pcName = r.punto_compartido;
             const sName = String(pcName || '').trim().toUpperCase();
             if (!sName || sName === 'SI' || sName === 'TRUE') {
@@ -790,7 +809,8 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 promedio: parseFloat(r.trx_promedio) || 0,
                 mes: r.mes || (targetMonths?.[0]) || 12,
                 ano: r.ano || (targetYears?.[0]) || 2025,
-                status_busqueda: 'OK'
+                status_busqueda: 'OK',
+                grupo_tienda: r.grupo_tienda || 'NGR'
             });
         });
 
@@ -817,7 +837,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                 ? `${parseInt(rec.ano)}-${String(parseInt(rec.mes)).padStart(2, '0')}`
                 : '__nodate__';
 
-            if (!pc.byComp[comp]) pc.byComp[comp] = { trx: 0, monthProm: {}, isNGR: rec._isNGR === true };
+            if (!pc.byComp[comp]) pc.byComp[comp] = { trx: 0, monthProm: {}, isNGR: rec._isNGR === true, grupo: rec.grupo_tienda || 'Competencia' };
             else if (rec._isNGR) pc.byComp[comp].isNGR = true; // mark if any record is NGR
             pc.byComp[comp].trx += trx;
             pc.byComp[comp].monthProm[mk] = (pc.byComp[comp].monthProm[mk] || 0) + prom;
@@ -847,7 +867,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                         const avgProm = months.length > 0
                             ? months.reduce((s, v) => s + v, 0) / months.length
                             : 0;
-                        return { name, value: Math.round(d.trx), prom: Math.round(avgProm * 10) / 10, isNGR: d.isNGR || false };
+                        return { name, value: Math.round(d.trx), prom: Math.round(avgProm * 10) / 10, isNGR: d.isNGR || false, grupo: d.grupo };
                     })
                     .sort((a, b) => b.prom - a.prom),
                 locales: Object.values(pc.locales)
@@ -898,7 +918,8 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                     competidor: r.marca, // bare brand name — no suffix
                     promedio: r.trx_promedio,
                     mes: r.mes,
-                    ano: r.ano
+                    ano: r.ano,
+                    grupo_tienda: r.grupo_tienda || 'NGR'
                 });
             });
         }
@@ -912,10 +933,18 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
             const mk = `${parseInt(rec.ano)}-${String(parseInt(rec.mes)).padStart(2, '0')}`;
             if (!map[pcKey]) map[pcKey] = {};
             if (!map[pcKey][mk]) map[pcKey][mk] = {};
-            map[pcKey][mk][comp] = (map[pcKey][mk][comp] || 0) + prom;
+
+            let groupKey = comp;
+            if (groupMode === 'category') {
+                groupKey = getCategory(comp);
+            } else if (groupMode === 'ownership') {
+                groupKey = rec.grupo_tienda || 'Otros';
+            }
+
+            map[pcKey][mk][groupKey] = (map[pcKey][mk][groupKey] || 0) + prom;
         });
         return map;
-    }, [evolutionRecords, allRecords, ngrLocales]);
+    }, [evolutionRecords, allRecords, ngrLocales, groupMode]);
 
     const catOptions = useMemo(() => {
         const allowed = ['Pollo Frito', 'Pizza', 'Hamburguesa'];
@@ -981,7 +1010,7 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                     if (groupMode === 'category') {
                         groupKey = getCategory(c.name);
                     } else if (groupMode === 'ownership') {
-                        groupKey = c.isNGR ? 'Nuestras Marcas' : 'Competencia';
+                        groupKey = c.grupo || 'Otros';
                     }
 
                     if (!groupMap[groupKey]) groupMap[groupKey] = { name: groupKey, value: 0, prom: 0 };
@@ -1058,87 +1087,25 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                     ))}
                 </section>
 
-                {/* Filters + View Toggle */}
-                <section className="flex flex-col gap-4">
-
-                    <div className="pwa-card no-hover p-4 flex flex-wrap gap-4 items-end border-slate-200 dark:border-white/5">
-                        <div className="space-y-1">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Tipo</span>
-                            <CustomSelect selected={filterTipo} onChange={setFilterTipo} width="w-28"
-                                options={[{ value: 'all', label: 'Todos' }, { value: 'cc', label: '🏬 CC' }, { value: 'calle', label: '📍 Calle' }]} />
-                        </div>
-                        
-                        <div className="space-y-1">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Categoría</span>
-                            <CustomSelect selected={filterCat} onChange={(val) => { setFilterCat(val); setFilterComp([]); }} width="w-40" options={catOptions} searchable />
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Comparativa</span>
-                            <CustomSelect selected={filterPreset} onChange={setFilterPreset} width="w-48" options={presetOptions} label="Seleccionar..." />
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Cadena CC</span>
-                            <CustomSelect selected={filterCadena} onChange={setFilterCadena} width="w-40" options={cadenaOptions} searchable />
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Agrupación</span>
-                            <div className="flex p-1 bg-slate-100 dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/10">
-                                {[
-                                    { id: 'brand', label: 'Marca', icon: Target },
-                                    { id: 'category', label: 'Categoría', icon: Layers },
-                                    { id: 'ownership', label: 'Propio/Comp', icon: ShieldCheck }
-                                ].map(mode => (
-                                    <button
-                                        key={mode.id}
-                                        onClick={() => setGroupMode(mode.id)}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                                            groupMode === mode.id
-                                            ? 'bg-white dark:bg-white/10 text-accent-orange shadow-sm border border-slate-200 dark:border-white/10'
-                                            : 'text-slate-400 dark:text-white/30 hover:text-slate-600 dark:hover:text-white'
-                                        }`}
-                                    >
-                                        <mode.icon className={`w-3.5 h-3.5 ${groupMode === mode.id ? 'animate-pulse' : ''}`} />
-                                        <span className="text-[9px] font-black uppercase tracking-widest">{mode.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="space-y-1">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 dark:text-white/30 ml-1">Ordenar por</span>
-                            <CustomSelect selected={sortMode} onChange={setSortMode} width="w-44"
-                                options={[
-                                    { value: 'prom', label: 'Prom. Diario ↓' },
-                                    { value: 'transacciones', label: 'Transacciones ↓' },
-                                    { value: 'marcas', label: 'N° Marcas ↓' },
-                                    { value: 'nombre', label: 'Nombre A→Z' },
-                                ]} />
-                        </div>
-
-                        {/* View toggle */}
-                        <div className="ml-auto flex items-center gap-3 pb-0.5">
-                            <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/5">
-                                {[
-                                    { mode: 'cards', icon: LayoutGrid, label: 'Cards' },
-                                    { mode: 'table', icon: Table2, label: 'Tabla' },
-                                ].map(({ mode, icon: Icon, label }) => (
-                                    <button key={mode} onClick={() => setViewMode(mode)}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === mode
-                                            ? 'bg-accent-orange text-white shadow-sm'
-                                            : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white'}`}>
-                                        <Icon className="w-3 h-3" />{label}
-                                    </button>
-                                ))}
-                            </div>
-                            <span className="text-[9px] font-black text-slate-400 dark:text-white/30 uppercase">
-                                {filteredPCs.length} puntos · {kpis.totalLocales} locales
-                            </span>
-                        </div>
+                {/* ── View Toggle (stays inside dashboard) ── */}
+                <div className="flex justify-end">
+                    <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/[0.03] rounded-xl border border-slate-200 dark:border-white/5">
+                        {[
+                            { mode: 'cards', icon: LayoutGrid, label: 'Cards' },
+                            { mode: 'table', icon: Table2, label: 'Tabla' },
+                        ].map(({ mode, icon: Icon, label }) => (
+                            <button key={mode} onClick={() => setViewMode(mode)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === mode
+                                    ? 'bg-accent-orange text-white shadow-sm'
+                                    : 'text-slate-400 dark:text-white/30 hover:text-slate-700 dark:hover:text-white'}`}>
+                                <Icon className="w-3 h-3" />{label}
+                            </button>
+                        ))}
                     </div>
-                </section>
+                    <span className="ml-3 self-center text-[9px] font-black text-slate-400 dark:text-white/30 uppercase">
+                        {filteredPCs.length} puntos · {kpis.totalLocales} locales
+                    </span>
+                </div>
 
                 {/* Content */}
                 {filteredPCs.length === 0 ? (
@@ -1189,33 +1156,74 @@ export default function PuntosCompartidosDashboard({ allRecords, evolutionRecord
                                     <BarChart3 className="w-4 h-4 text-slate-400 dark:text-white/20" />
                                 </div>
                                 <div style={{ height: '420px' }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart
-                                            data={filteredPCs.slice(0, 12).map(pc => {
-                                                const row = { name: pc.nombre.length > 14 ? pc.nombre.slice(0, 14) + '…' : pc.nombre };
-                                                pc.byComp.forEach(c => { row[c.name] = c.prom; });
-                                                return row;
-                                            })}
-                                            margin={{ top: 10, right: 20, left: 10, bottom: 90 }}
-                                        >
-                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" />
-                                            <XAxis dataKey="name" angle={-35} textAnchor="end" fontSize={8} interval={0}
-                                                tick={{ fill: 'rgba(100,116,139,0.8)', fontWeight: 900, fontStyle: 'italic' }} />
-                                            <YAxis fontSize={8} tick={{ fill: 'rgba(100,116,139,0.6)' }}
-                                                tickFormatter={v => fmt(v)} />
-                                            <ReTooltip
-                                                contentStyle={{ backgroundColor: 'rgba(0,0,0,0.85)', border: 'none', borderRadius: '10px', fontSize: '10px', fontWeight: 900 }}
-                                                formatter={(val, name) => [`${fmt(val)} trx/día`, name]}
-                                            />
-                                            <Legend iconSize={7} iconType="circle"
-                                                formatter={v => <span style={{ fontSize: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{v}</span>} />
-                                            {[...new Set(filteredPCs.flatMap(p => p.byComp.map(c => c.name)))].map(comp => (
-                                                <Line key={comp} type="monotone" dataKey={comp}
-                                                    stroke={colorFor(comp)} strokeWidth={2.5} dot={{ r: 4, fill: colorFor(comp) }}
-                                                    activeDot={{ r: 6 }} connectNulls />
-                                            ))}
-                                        </LineChart>
-                                    </ResponsiveContainer>
+                                    {(() => {
+                                        // Collect all keys (brands/categories) across top-12 PCs
+                                        const top12 = filteredPCs.slice(0, 12);
+                                        const allKeys = [...new Set(top12.flatMap(p => p.byComp.map(c => c.name)))];
+                                        const chartData = top12.map(pc => {
+                                            const row = { name: pc.nombre.length > 14 ? pc.nombre.slice(0, 14) + '…' : pc.nombre };
+                                            pc.byComp.forEach(c => { row[c.name] = c.prom; });
+                                            // total for label
+                                            row._total = pc.byComp.reduce((s, c) => s + c.prom, 0);
+                                            return row;
+                                        });
+                                        return (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart
+                                                    data={chartData}
+                                                    margin={{ top: 20, right: 20, left: 10, bottom: 80 }}
+                                                    barCategoryGap="28%"
+                                                >
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.1)" vertical={false} />
+                                                    <XAxis
+                                                        dataKey="name"
+                                                        angle={-35}
+                                                        textAnchor="end"
+                                                        fontSize={8}
+                                                        interval={0}
+                                                        tick={{ fill: 'rgba(100,116,139,0.8)', fontWeight: 900, fontStyle: 'italic' }}
+                                                    />
+                                                    <YAxis
+                                                        fontSize={8}
+                                                        tick={{ fill: 'rgba(100,116,139,0.6)' }}
+                                                        tickFormatter={v => fmt(v)}
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                    />
+                                                    <ReTooltip
+                                                        cursor={{ fill: 'rgba(148,163,184,0.06)' }}
+                                                        contentStyle={{ backgroundColor: 'rgba(0,0,0,0.88)', border: 'none', borderRadius: '12px', fontSize: '10px', fontWeight: 900 }}
+                                                        formatter={(val, name) => [`${fmt(val)} trx/día`, name]}
+                                                    />
+                                                    <Legend
+                                                        iconSize={7}
+                                                        iconType="circle"
+                                                        wrapperStyle={{ paddingTop: '8px' }}
+                                                        formatter={v => <span style={{ fontSize: '8px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{v}</span>}
+                                                    />
+                                                    {allKeys.map((key, i) => (
+                                                        <Bar
+                                                            key={key}
+                                                            dataKey={key}
+                                                            stackId="a"
+                                                            fill={colorFor(key)}
+                                                            radius={i === allKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                                                        >
+                                                            {/* Total label on top of the last stacked bar */}
+                                                            {i === allKeys.length - 1 && (
+                                                                <LabelList
+                                                                    dataKey="_total"
+                                                                    position="top"
+                                                                    style={{ fontSize: '8px', fontWeight: 900, fill: 'rgba(100,116,139,0.7)' }}
+                                                                    formatter={v => fmt(v)}
+                                                                />
+                                                            )}
+                                                        </Bar>
+                                                    ))}
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        );
+                                    })()}
                                 </div>
                             </section>
                         )}

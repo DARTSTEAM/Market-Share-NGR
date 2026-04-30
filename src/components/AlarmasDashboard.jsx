@@ -187,6 +187,13 @@ const AlarmasDashboard = ({
             const cajaStatus = getCajaStatus(r);
             if (cajaStatus === 'DISCONTINUADA') return false;
 
+            // SIN_HISTORIAL de noviembre/diciembre son falsos positivos
+            // (primeros tickets subidos, sin historial previo disponible)
+            if (r.status_busqueda === 'SIN_HISTORIAL') {
+                const mes = parseInt(r.mes);
+                if (mes === 11 || mes === 12) return false;
+            }
+
             const matchesStatus = selectedStatus === 'all' || r.status_busqueda === selectedStatus;
             const matchesMes = filterMes === 'all' || (r.mes && String(parseInt(r.mes)) === filterMes);
             const matchesCompetidor = filterCompetidor === 'all' || r.competidor === filterCompetidor;
