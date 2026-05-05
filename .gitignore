@@ -23,4 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 public/tickets.csv
+public/data.csv
 .env
+
+# Ticket images - large files, not needed in repo
+tickets_abril/*.jpg
+tickets_abril/*.jpeg
+tickets_abril/*.png
+tickets_abril/*.JPG

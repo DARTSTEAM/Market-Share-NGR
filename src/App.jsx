@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Moon, Sun, TrendingUp, TrendingDown, BarChart2, ShieldAlert, Award, PieChart as PieChartIcon, Activity, LayoutDashboard, GitCompare, Ticket, DollarSign, CheckCircle2, XCircle, Users, RefreshCw, MapPin, ClipboardEdit } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
@@ -24,6 +24,8 @@ const COMPETITOR_TO_CATEGORY = {
   'DOMINOS': 'Pizza',
   'DOMINO\'S': 'Pizza',
   'LITTLE CAESARS': 'Pizza',
+  'LITTLE CEARSARS': 'Pizza',
+  'LITTLE CEASARS': 'Pizza',
   'PIZZA HUT': 'Pizza',
   // NGR own brands
   'POPEYES':    'Pollo Frito',
@@ -31,6 +33,7 @@ const COMPETITOR_TO_CATEGORY = {
   'Papa Johns': 'Pizza',
   'PAPA JOHNS': 'Pizza',
   'CHINAWOK':   'Chifas',
+  'WANTA':      'Chifas',
 };
 
 const API_BASE_URL = window.location.hostname === 'localhost'
@@ -45,10 +48,49 @@ const CUTOFF_KEY = HISTORIAL_CUTOFF.ano * 100 + HISTORIAL_CUTOFF.mes; // 202511
 // Helper de filtro para evitar solapamiento entre HISTORIAL y OK
 const recordInScope = (r) => {
   const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
-  if (r.status_busqueda === 'HISTORIAL') return key <= CUTOFF_KEY; // historico <= Nov 2025
+  if (r.status_busqueda === 'HISTORIAL') {
+    // Permitimos historial antiguo (<= Nov 2025) para todos.
+    if (key <= CUTOFF_KEY) return true;
+    
+    // Excepción McDonald's: Historial extendido hasta Marzo 2026 inclusive
+    const isMCD = String(r.competidor || '').toUpperCase().includes('MCDONALD');
+    if (isMCD && key <= 202603) return true;
+    
+    return false;
+  }
   if (r.status_busqueda === 'OK')        return key >  CUTOFF_KEY; // rutina   >= Dic 2025
   if (r.status_busqueda?.startsWith('ESTIMADO-')) return key > CUTOFF_KEY; // estimados como OK
   return false;
+};
+
+const normalizeBrand = (brand) => {
+  if (!brand) return '';
+  const upper = String(brand).toUpperCase().trim();
+  if (upper === 'LITTLE CEARSARS' || upper === 'LITTLE CEASARS' || upper === "LITTLE CAESAR'S") return 'LITTLE CAESARS';
+  if (upper === "MCDONALD'S") return 'MCDONALDS';
+  if (upper === "DOMINO'S")   return 'DOMINOS';
+  if (upper === 'PAPA JOHNS') return 'PAPA JOHNS';
+  return upper;
+};
+
+const PRETTY_BRANDS = {
+  'MCDONALDS':     "McDonald's",
+  "MCDONALD'S":    "McDonald's",
+  'BURGER KING':   'Burger King',
+  'KFC':           'KFC',
+  'DOMINOS':       "Domino's",
+  "DOMINO'S":      "Domino's",
+  'PIZZA HUT':     'Pizza Hut',
+  'LITTLE CAESARS':'Little Caesars',
+  'LITTLE CEARSARS':'Little Caesars',
+  'LITTLE CEASARS':'Little Caesars',
+  "LITTLE CAESAR'S":'Little Caesars',
+  'SUBWAY':        'Subway',
+  'BEMBOS':        'Bembos',
+  'PAPA JOHNS':    'Papa Johns',
+  'CHINAWOK':      'Chiwawok',
+  'WANTA':         'Wanta',
+  'POPEYES':       'Popeyes',
 };
 
 const MetricCard = ({ title, value, previousPeriodValue = 0, delay = 0, icon: Icon }) => (
@@ -492,6 +534,7 @@ export default function App({ user, onSignOut }) {
   const [tickets, setTickets] = useState([]);
   const [cajasConfig, setCajasConfig] = useState([]);        // [{codigo_tienda, caja, status, ...}]
   const [alarmasRevisadas, setAlarmasRevisadas] = useState([]); // [{codigo_tienda, caja, mes, ano, ...}]
+  const [jumpToEstimaciones, setJumpToEstimaciones] = useState(null); // {codigo_tienda, competidor, mes, ano}
 
   // NGR own-store data (loaded once from /api/ngr-locales)
   const [ngrLocales, setNgrLocales] = useState([]);
@@ -519,12 +562,12 @@ export default function App({ user, onSignOut }) {
   useEffect(() => {
     const getGrupoTienda = (competidor) => {
       const c = String(competidor || '').toUpperCase().trim();
-      if (['KFC', 'BURGER KING', 'PIZZA HUT'].includes(c)) return 'DELOSI';
-      if (['LITTLE CAESARS', "LITTLE CAESAR'S"].includes(c)) return 'LC';
-      if (['DOMINOS', "DOMINO'S"].includes(c)) return 'DMN';
-      if (['MCDONALDS', "MCDONALD'S"].includes(c)) return 'MCDONALDS';
+      if (['KFC', 'BURGER KING', 'BK', 'PIZZA HUT'].includes(c)) return 'Delosi';
+      if (['LITTLE CAESARS', "LITTLE CAESAR'S", 'LC'].includes(c)) return 'Little Caesars';
+      if (['DOMINOS', "DOMINO'S", 'DMN'].includes(c)) return "Domino's";
+      if (['MCDONALDS', "MCDONALD'S", 'MCD'].includes(c)) return "McDonald's";
       if (['POPEYES', 'BEMBOS', 'PAPA JOHNS', 'CHINAWOK', 'WANTA'].includes(c)) return 'NGR';
-      return 'OTROS';
+      return 'Otros';
     };
 
     const fetchInitialData = async () => {
@@ -538,16 +581,29 @@ export default function App({ user, onSignOut }) {
         if (dataRes.ok) {
           const data = await dataRes.json();
           if (data.records) {
-            // Normalización para evitar duplicados como "KFC07" y "KFC 07"
-            const normalized = data.records.map(r => ({
-              ...r,
-              codigo_tienda: String(r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
-              local: String(r.local || '').trim().toUpperCase(),
-              grupo_tienda: getGrupoTienda(r.competidor)
-            }));
+            // Normalización para evitar duplicados y mejorar estética
+            const normalized = data.records.map(r => {
+              const rawComp = String(r.competidor || '').toUpperCase().trim();
+              return {
+                ...r,
+                competidor: PRETTY_BRANDS[rawComp] || r.competidor,
+                codigo_tienda: String(r.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
+                local: String(r.local || '').trim().toUpperCase(),
+                grupo_tienda: getGrupoTienda(r.competidor)
+              };
+            });
             setRecords(normalized);
           }
-          if (data.tickets) setTickets(data.tickets);
+          if (data.tickets) {
+            const normalizedTickets = data.tickets.map(t => {
+              const rawComp = String(t.competidor || '').toUpperCase().trim();
+              return {
+                ...t,
+                competidor: PRETTY_BRANDS[rawComp] || t.competidor
+              };
+            });
+            setTickets(normalizedTickets);
+          }
         }
         if (cajasRes?.ok) {
           const cajasData = await cajasRes.json();
@@ -560,7 +616,14 @@ export default function App({ user, onSignOut }) {
         if (ngrRes?.ok) {
           const ngr = await ngrRes.json();
           if (ngr.locales) {
-            setNgrLocales(ngr.locales.map(r => ({ ...r, grupo_tienda: 'NGR' })));
+            setNgrLocales(ngr.locales.map(r => {
+              const rawComp = String(r.marca || '').toUpperCase().trim();
+              return { 
+                ...r, 
+                marca: PRETTY_BRANDS[rawComp] || r.marca,
+                grupo_tienda: 'NGR' 
+              };
+            }));
           }
         }
       } catch (error) {
@@ -610,11 +673,27 @@ export default function App({ user, onSignOut }) {
     const syncId = `sync-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const label = ticketData.local || ticketData.originalFilename || 'Ticket';
 
-    // 1. Optimistic removal — alarm disappears immediately
+    // 1. Optimistic update — alarm status changes to OK so it moves from Active to Resolved
     const targetFilename = ticketData.filename || ticketData.originalFilename;
-    setRecords(prev => prev.filter(r =>
-      r.filename_actual !== targetFilename && r.filename_anterior !== targetFilename
-    ));
+    setRecords(prev => prev.map(r => {
+      if (r.filename_actual === targetFilename || r.filename_anterior === targetFilename) {
+        return {
+          ...r,
+          ticket: ticketData.ticket,
+          importe: ticketData.importe,
+          fecha: ticketData.fecha,
+          caja: ticketData.caja,
+          local: String(ticketData.local || '').trim().toUpperCase(),
+          competidor: ticketData.competidor,
+          codigo_tienda: String(ticketData.codigoTienda || ticketData.codigo_tienda || '').replace(/\s+/g, '').toUpperCase(),
+          mes: ticketData.mes,
+          ano: ticketData.ano,
+          status_busqueda: 'OK' // Moving to resolved
+        };
+      }
+      return r;
+    }));
+    
     setTickets(prev => prev.map(t =>
       t.filename === targetFilename || t.filename === ticketData.originalFilename
         ? { ...t, ticket: ticketData.ticket, importe: ticketData.importe, fecha: ticketData.fecha,
@@ -658,6 +737,13 @@ export default function App({ user, onSignOut }) {
       setSyncQueue(prev => prev.map(s => s.id === syncId ? { ...s, status: 'error' } : s));
       setTimeout(() => setSyncQueue(prev => prev.filter(s => s.id !== syncId)), 4000);
     });
+  };
+
+  // ── Jump from Alarmas → Estimaciones ─────────────────────────────────────
+  const handleJumpToEstimaciones = (target) => {
+    // target = { codigo_tienda, competidor, mes, ano }
+    setJumpToEstimaciones(target);
+    setActiveCategory('estimaciones');
   };
 
   // After a successful BQ update, debounce a background alarms refresh
@@ -712,7 +798,7 @@ export default function App({ user, onSignOut }) {
   }, [records]);
 
   const competitorsArr = useMemo(() => {
-    return Array.from(new Set(records.map(r => r.competidor))).filter(Boolean).sort();
+    return Array.from(new Set(records.map(r => normalizeBrand(r.competidor)))).filter(Boolean).sort();
   }, [records]);
 
   const allLocales = useMemo(() => {
@@ -859,12 +945,29 @@ export default function App({ user, onSignOut }) {
     { value: 'salon', label: 'Salón' }
   ];
 
-  const categoryOptions = [
-    { value: "Pollo Frito", label: "🍗 Pollo Frito" },
-    { value: "Hamburguesa", label: "🍔 Hamburguesa" },
-    { value: "Pizza",       label: "🍕 Pizza" },
-    { value: "Chifas",      label: "🥡 Chifas" },
-  ];
+  const categoryOptions = useMemo(() => {
+    const cats = new Set();
+    Object.values(COMPETITOR_TO_CATEGORY).forEach(c => cats.add(c));
+    
+    // Add any categories from records that might not be in the static map
+    records.forEach(r => {
+      const cat = COMPETITOR_TO_CATEGORY[normalizeBrand(r.competidor)] || "Otros";
+      cats.add(cat);
+    });
+
+    const icons = {
+      "Pollo Frito": "🍗",
+      "Hamburguesa": "🍔",
+      "Pizza":       "🍕",
+      "Chifas":      "🥡",
+      "Otros":       "❓"
+    };
+
+    return Array.from(cats).sort().map(c => ({
+      value: c,
+      label: `${icons[c] || "•"} ${c}`
+    }));
+  }, [records]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => {
@@ -968,10 +1071,10 @@ export default function App({ user, onSignOut }) {
         yMatch = filters.year.includes(recYearStr);
       }
 
-      const cMatch = filters.competitor.length === 0 || filters.competitor.includes(rec.competidor);
+      const cMatch = filters.competitor.length === 0 || filters.competitor.some(c => normalizeBrand(c) === normalizeBrand(rec.competidor));
       const lMatch = filters.local.length === 0 || filters.local.includes(rec.local);
       const ctMatch = filters.codigoTienda.length === 0 || filters.codigoTienda.includes(rec.codigo_tienda);
-      const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[rec.competidor]);
+      const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[normalizeBrand(rec.competidor)] || "Otros");
       const rMatch = filters.region.length === 0 || filters.region.includes(rec.region);
       const dMatch = filters.distrito.length === 0 || filters.distrito.includes(rec.distrito);
       const zMatch = filters.zona.length === 0 || filters.zona.includes(rec.zona);
@@ -984,8 +1087,26 @@ export default function App({ user, onSignOut }) {
   // 1b. Market Share Specific Filtering (status OK + HISTORIAL, sin solapamiento)
   // NGR records (_isNGR) always pass — they are valid by construction.
   const marketShareRecords = useMemo(() => {
-    if (isNGRFilter) return filteredRecords; // NGR-only filter: skip scope check
-    return filteredRecords.filter(r => r._isNGR || recordInScope(r));
+    const inScope = filteredRecords.filter(r => r._isNGR || recordInScope(r));
+    if (isNGRFilter) return inScope;
+
+    // Lógica de reemplazo para McDonald's: Ticket (OK) mata Historial
+    // Identificamos qué tiendas de MCD tienen tickets reales para cada mes
+    const mcdWithOK = new Set();
+    inScope.forEach(r => {
+      if (r.status_busqueda === 'OK' && String(r.competidor || '').toUpperCase().includes('MCDONALD')) {
+        const key = `${r.codigo_tienda || r.local}||${r.ano}||${r.mes}`;
+        mcdWithOK.add(key);
+      }
+    });
+
+    return inScope.filter(r => {
+      if (r.status_busqueda === 'HISTORIAL' && String(r.competidor || '').toUpperCase().includes('MCDONALD')) {
+        const key = `${r.codigo_tienda || r.local}||${r.ano}||${r.mes}`;
+        if (mcdWithOK.has(key)) return false; // El ticket real reemplaza al historial
+      }
+      return true;
+    });
   }, [filteredRecords, isNGRFilter]);
 
   // 1b2. Puntos Compartidos evolution records — last 12 months, ignores date filter
@@ -1000,7 +1121,8 @@ export default function App({ user, onSignOut }) {
       if (m <= 0) { m += 12; y -= 1; }
       return y * 100 + m;
     })();
-    return records.filter(r => {
+
+    const inScope = records.filter(r => {
       if (!recordInScope(r)) return false;
       if (!r.punto_compartido) return false;
       // Only apply non-date filters
@@ -1014,15 +1136,31 @@ export default function App({ user, onSignOut }) {
       const key = parseInt(r.ano || 0) * 100 + parseInt(r.mes || 0);
       return key >= cutoffKeyMin;
     });
-  }, [records, filters.competitor, filters.category, filters.region, filters.distrito, filters.zona]);
+
+    // Lógica de reemplazo para McDonald's
+    const mcdWithOK = new Set();
+    inScope.forEach(r => {
+      if (r.status_busqueda === 'OK' && String(r.competidor || '').toUpperCase().includes('MCDONALD')) {
+        mcdWithOK.add(`${r.codigo_tienda || r.local}||${r.ano}||${r.mes}`);
+      }
+    });
+
+    return inScope.filter(r => {
+      if (r.status_busqueda === 'HISTORIAL' && String(r.competidor || '').toUpperCase().includes('MCDONALD')) {
+        const key = `${r.codigo_tienda || r.local}||${r.ano}||${r.mes}`;
+        if (mcdWithOK.has(key)) return false;
+      }
+      return true;
+    });
+  }, [records, filters]);
 
   // 1c. Core Tickets Filtering (facturas_v2)
   const filteredTickets = useMemo(() => {
     return tickets.filter(t => {
-      const cMatch = filters.competitor.length === 0 || filters.competitor.includes(t.competidor);
+      const cMatch = filters.competitor.length === 0 || filters.competitor.some(c => c.toUpperCase() === String(t.competidor || '').toUpperCase());
       const lMatch = filters.local.length === 0 || filters.local.includes(t.local);
       const ctMatch = filters.codigoTienda.length === 0 || filters.codigoTienda.includes(t.codigo_tienda);
-      const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[t.competidor]);
+      const catMatch = filters.category.length === 0 || filters.category.includes(COMPETITOR_TO_CATEGORY[t.competidor] || COMPETITOR_TO_CATEGORY[String(t.competidor || '').toUpperCase()]);
       const rMatch = filters.region.length === 0 || filters.region.includes(t.region);
       const dMatch = filters.distrito.length === 0 || filters.distrito.includes(t.distrito);
       const zMatch = filters.zona.length === 0 || filters.zona.includes(t.zona);
@@ -1240,8 +1378,9 @@ export default function App({ user, onSignOut }) {
     const totalsByComp = {};
     marketShareRecords.forEach(r => {
       if (r._isNGR) return;
-      if (!totalsByComp[r.competidor]) totalsByComp[r.competidor] = 0;
-      totalsByComp[r.competidor] += (parseFloat(r.promedio) || 0);
+      const norm = normalizeBrand(r.competidor);
+      if (!totalsByComp[norm]) totalsByComp[norm] = 0;
+      totalsByComp[norm] += (parseFloat(r.promedio) || 0);
     });
 
     // --- Optional: add NGR brands — use r.trx_promedio (daily avg, already computed) ---
@@ -1255,14 +1394,17 @@ export default function App({ user, onSignOut }) {
 
       ngrLocales
         .filter(r => {
-          if (!periodSet.has(`${r.ano}-${r.mes}`)) return false;
-          if (filters.category.length > 0 && !filters.category.includes(COMPETITOR_TO_CATEGORY[r.marca])) return false;
-          if (filters.competitor.length > 0 && !filters.competitor.includes(r.marca)) return false;
+          if (filters.category.length > 0) {
+            const cat = COMPETITOR_TO_CATEGORY[r.marca] || COMPETITOR_TO_CATEGORY[String(r.marca || '').toUpperCase()];
+            if (!filters.category.includes(cat)) return false;
+          }
+          if (filters.competitor.length > 0 && !filters.competitor.some(c => c.toUpperCase() === String(r.marca || '').toUpperCase())) return false;
           return true;
         })
         .forEach(r => {
-          if (!totalsByComp[r.marca]) totalsByComp[r.marca] = 0;
-          totalsByComp[r.marca] += (r.trx_promedio || 0);
+          const norm = normalizeBrand(r.marca);
+          if (!totalsByComp[norm]) totalsByComp[norm] = 0;
+          totalsByComp[norm] += (r.trx_promedio || 0);
         });
     }
 
@@ -1293,7 +1435,8 @@ export default function App({ user, onSignOut }) {
       .map(([name, value]) => {
         const key = name?.toUpperCase().trim();
         const color = BRAND_COLORS[name] || BRAND_COLORS[key] || FALLBACK[fallbackIdx++ % FALLBACK.length];
-        return { name, value, color, isNGR: !!(includeNGR && ['POPEYES','Bembos','Papa Johns','CHINAWOK'].includes(name)) };
+        const isNGR = includeNGR && ['POPEYES','BEMBOS','PAPA JOHNS','CHINAWOK','WANTA'].includes(normalizeBrand(name));
+        return { name, value, color, isNGR };
       })
       .sort((a, b) => b.value - a.value);
   }, [marketShareRecords, includeNGR, ngrLocales, filters]);
@@ -1357,22 +1500,29 @@ export default function App({ user, onSignOut }) {
         histProm[key] = (histProm[key] || 0) + (parseFloat(r.promedio) || 0);
       });
 
-    const allKeys = [...new Set([...Object.keys(okData), ...Object.keys(histData)])].sort();
 
     // When includeNGR: compute NGR avg daily trx by month (trx_promedio, same metric as competition)
     const ngrData = {};
     if (includeNGR && ngrLocales.length > 0) {
-      const periodSet = new Set(
-        [...Object.keys(okData), ...Object.keys(histData)]
-      );
       ngrLocales.forEach(r => {
-        const key = `${r.ano}-${String(r.mes).padStart(2, '0')}`;
-        if (!periodSet.size || periodSet.has(key)) {
-          // Use trx_promedio (daily avg) to match the promedio field used for competition
-          ngrData[key] = (ngrData[key] || 0) + (r.trx_promedio || 0);
+        // Filter NGR brands here too - CASE INSENSITIVE
+        if (filters.category.length > 0) {
+          const cat = COMPETITOR_TO_CATEGORY[normalizeBrand(r.marca)] || "Otros";
+          if (!filters.category.includes(cat)) return;
         }
+        if (filters.competitor.length > 0 && !filters.competitor.some(c => normalizeBrand(c) === normalizeBrand(r.marca))) return;
+
+        const key = `${r.ano}-${String(r.mes).padStart(2, '0')}`;
+        // Use trx_promedio (daily avg) to match the promedio field used for competition
+        ngrData[key] = (ngrData[key] || 0) + (r.trx_promedio || 0);
       });
     }
+
+    const allKeys = [...new Set([
+      ...Object.keys(okData), 
+      ...Object.keys(histData),
+      ...Object.keys(ngrData)
+    ])].sort();
 
     return allKeys.map(key => ({
       name:          key,
@@ -1382,7 +1532,7 @@ export default function App({ user, onSignOut }) {
       historialProm: histProm[key]  ?? null,
       ngrTrx:        ngrData[key]   ?? null,  // NGR trx total for that month
     }));
-  }, [marketShareRecords, filteredRecords, includeNGR, ngrLocales]);
+  }, [marketShareRecords, filteredRecords, includeNGR, ngrLocales, filters]);
 
 
   // 4b. Reactive Trend Data (For Competitor Analysis - based on facturas_v2)
@@ -1602,6 +1752,34 @@ export default function App({ user, onSignOut }) {
       document.documentElement.classList.remove('dark');
     }
   }, []);
+
+  const [matrix, setMatrix] = useState([]);
+  const [meses, setMeses] = useState([]);
+  const [loadingMatrix, setLoadingMatrix] = useState(false);
+  const [estFilterComp, setEstFilterComp] = useState('');
+
+  const fetchMatrix = useCallback(async (forcedComp = null) => {
+    setLoadingMatrix(true);
+    try {
+      const comp = forcedComp !== null ? forcedComp : estFilterComp;
+      // Invalida el caché del servidor para garantizar datos frescos
+      await fetch(`${API_BASE_URL}/api/refresh-matrix`, { method: 'POST' }).catch(() => {});
+      const url = `${API_BASE_URL}/api/estimation-matrix${comp ? `?competidor=${encodeURIComponent(comp)}` : ''}`;
+      const d = await fetch(url).then(r => r.json());
+      setMatrix(d.locales || []);
+      setMeses(d.meses || []);
+    } catch(e) {
+      console.error('Error fetching matrix:', e);
+    } finally {
+      setLoadingMatrix(false);
+    }
+  }, [estFilterComp]);
+
+  useEffect(() => {
+    if (activeCategory === 'estimaciones' && matrix.length === 0) {
+      fetchMatrix();
+    }
+  }, [activeCategory, matrix.length, fetchMatrix]);
 
   const toggleTheme = () => {
     if (theme === 'dark') {
@@ -1842,10 +2020,18 @@ export default function App({ user, onSignOut }) {
             <EstimacionesDashboard
               key="estimaciones"
               user={user}
+              matrix={matrix}
+              meses={meses}
+              loading={loadingMatrix}
+              filterComp={estFilterComp}
+              onFilterCompChange={setEstFilterComp}
+              onRefresh={fetchMatrix}
               cajasConfig={cajasConfig}
               onCajasConfigChange={setCajasConfig}
               alarmasRevisadas={alarmasRevisadas}
               onAlarmasRevisadasChange={setAlarmasRevisadas}
+              jumpTarget={jumpToEstimaciones}
+              onJumpConsumed={() => setJumpToEstimaciones(null)}
             />
           ) : activeCategory === 'actividad' ? (
             <ActivityLogDashboard key="actividad" user={user} />
@@ -1929,6 +2115,7 @@ export default function App({ user, onSignOut }) {
               onAlarmasRevisadasChange={setAlarmasRevisadas}
               onUpdateTicket={handleUpdateTicket}
               isRefreshing={isRefreshing}
+              onJumpToEstimaciones={handleJumpToEstimaciones}
             />
           ) : activeCategory === 'tickets' ? (
             activeSubTab === 'alarmas' ? (
@@ -1943,6 +2130,7 @@ export default function App({ user, onSignOut }) {
                 onAlarmasRevisadasChange={setAlarmasRevisadas}
                 onUpdateTicket={handleUpdateTicket}
                 isRefreshing={isRefreshing}
+                onJumpToEstimaciones={handleJumpToEstimaciones}
               />
             ) : (
               <TicketsDashboard

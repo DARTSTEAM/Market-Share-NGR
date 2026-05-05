@@ -4,7 +4,7 @@ import os
 import re
 from pathlib import Path
 
-def extract_tickets_intelligently(pdf_path, output_folder="Tickets_Marzo_2026", dpi=300):
+def extract_tickets_intelligently(pdf_path, output_folder="tickets_abril", dpi=300):
     if not os.path.exists(pdf_path):
         print(f"Error: El archivo '{pdf_path}' no existe.")
         return
@@ -13,81 +13,93 @@ def extract_tickets_intelligently(pdf_path, output_folder="Tickets_Marzo_2026", 
     output_path.mkdir(exist_ok=True)
 
     doc = fitz.open(pdf_path)
-    pdf_filename = Path(pdf_path).stem
-    
     print(f"Abriendo PDF: {pdf_path}")
     print(f"Buscando tickets en {len(doc)} páginas...")
 
-    # Regex para detectar nombres de tiendas comunes (KFC, LC, BK, PJ, LL, etc.)
-    # Ejemplo: "KFC 03 – AVIACION" ó "LL 78 – CAMINOS DEL INCA"
+    # Regex para detectar nombres de tiendas comunes
     shop_re = re.compile(r'^[A-Z]{2,4}\s+\d+\s*[–-]', re.IGNORECASE)
 
     for page_index in range(len(doc)):
         page = doc[page_index]
-        
-        # 1. Obtener bloques de texto para encontrar nombres de tiendas
         blocks = page.get_text("blocks")
-        shop_labels = []
+        images_info = page.get_image_info()
+        
+        # 1. Encontrar etiquetas
+        labels = []
         for b in blocks:
             text = b[4].strip()
             if shop_re.match(text):
-                # Guardar el texto y su rectángulo
-                shop_labels.append({"text": text.split('\n')[0], "rect": fitz.Rect(b[:4])})
+                labels.append({
+                    "text": text.split('\n')[0],
+                    "rect": fitz.Rect(b[:4])
+                })
         
-        # 2. Obtener imágenes de la página
-        images_info = page.get_image_info()
-        
-        if not images_info:
+        if not labels:
             continue
-            
-        # print(f"Página {page_index+1}: Detectadas {len(shop_labels)} etiquetas y {len(images_info)} imágenes.")
 
-        # 3. Asociar cada imagen con la etiqueta de tienda más cercana arriba
-        for i, img in enumerate(images_info):
-            img_rect = fitz.Rect(img['bbox'])
-            
-            # Buscamos la etiqueta que esté por encima de la imagen y sea la más cercana
-            best_label = "DESCONOCIDO"
+        # 2. Para cada etiqueta, buscar la imagen más cercana debajo
+        for i, label in enumerate(labels):
+            label_rect = label["rect"]
+            best_img_rect = None
             min_dist = float('inf')
             
-            for label in shop_labels:
-                # La etiqueta debe estar arriba de la imagen (y más o menos en la misma horizontal/columna)
-                # O simplemente buscamos la que tenga el centro X más cercano y esté arriba
-                dist_y = img_rect.y0 - label["rect"].y1
-                dist_x = abs(img_rect.x0 - label["rect"].x0)
+            for img in images_info:
+                img_rect = fitz.Rect(img['bbox'])
                 
-                # Relajamos un poco los márgenes
-                if dist_y > 0 and dist_y < 200: # Margen de 200pt arriba
-                    if dist_x < 150: # Misma columna aprox
+                # Ignorar imágenes que sean casi toda la página (ruido de fondo)
+                if img_rect.width > page.rect.width * 0.9 and img_rect.height > page.rect.height * 0.9:
+                    continue
+                
+                dist_y = img_rect.y0 - label_rect.y1
+                # Si la imagen está debajo de la etiqueta
+                if dist_y > -10 and dist_y < 300: 
+                    # Comprobar alineación horizontal aproximada
+                    if abs(img_rect.x0 - label_rect.x0) < 200:
                         if dist_y < min_dist:
                             min_dist = dist_y
-                            best_label = label["text"]
+                            best_img_rect = img_rect
 
-            # Limpiar nombre para el archivo
-            clean_name = re.sub(r'[^\w\s-]', '', best_label).strip().replace(' ', '_')
-            
-            # 4. Extraer el área de la imagen (el "crop")
-            # Aumentamos resolución
+            # 3. Definir el área de recorte
+            if best_img_rect:
+                # El recorte abarca desde un poco arriba de la etiqueta hasta el final de la imagen
+                crop_rect = fitz.Rect(
+                    min(label_rect.x0, best_img_rect.x0) - 10,
+                    label_rect.y0 - 20,
+                    max(label_rect.x1, best_img_rect.x1) + 10,
+                    best_img_rect.y1 + 10
+                )
+            else:
+                # Fallback: si no hay objeto imagen, hacemos un recorte estándar de 650pt
+                crop_rect = fitz.Rect(
+                    label_rect.x0 - 15,
+                    label_rect.y0 - 25,
+                    label_rect.x1 + 250,
+                    label_rect.y0 + 650
+                )
+
+            # 4. Extraer y guardar
+            clean_name = re.sub(r'[^\w\s-]', '', label["text"]).strip().replace(' ', '_')
             zoom = dpi / 72
             mat = fitz.Matrix(zoom, zoom)
             
-            # Crop exacto al rectángulo de la imagen
-            pix = page.get_pixmap(matrix=mat, clip=img_rect)
-            
-            # Guardar
-            final_filename = f"{clean_name}_p{page_index+1}_{i+1}.jpg"
-            image_path = output_path / final_filename
-            
-            pix.save(str(image_path))
-            # print(f"  -> Guardado: {final_filename}")
+            try:
+                pix = page.get_pixmap(matrix=mat, clip=crop_rect)
+                final_filename = f"{clean_name}_p{page_index+1}_{i+1}.jpg"
+                image_path = output_path / final_filename
+                pix.save(str(image_path))
+                # print(f"  -> Extraído: {final_filename}")
+            except Exception as e:
+                print(f"  -> Error extrayendo {clean_name}: {e}")
 
     doc.close()
-    print(f"\n¡Listo! Las imágenes recortadas están en: {output_path.absolute()}")
+    print(f"\n¡Listo! Los tickets están en: {output_path.absolute()}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Uso: python advanced_extract.py <ruta_del_pdf> [carpeta_salida]")
+        pdfs = [f for f in os.listdir('.') if f.lower().endswith('.pdf')]
+        if pdfs:
+            extract_tickets_intelligently(pdfs[0])
+        else:
+            print("Uso: python advanced_extract.py <ruta_del_pdf>")
     else:
-        pdf = sys.argv[1]
-        out = sys.argv[2] if len(sys.argv) > 2 else "Tickets_Extraidos"
-        extract_tickets_intelligently(pdf, out)
+        extract_tickets_intelligently(sys.argv[1])

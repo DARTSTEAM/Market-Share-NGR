@@ -421,61 +421,67 @@ app.post('/api/update-ticket', async (req, res) => {
         await ensureFacturasColumns();
 
         const { filename, ticket, importe, fecha, caja, local, competidor, codigoTienda, usuario, usuario_nombre, originalFilename, mes, ano } = req.body;
-        
+
         if (!filename && !originalFilename) return res.status(400).json({ error: 'Filename is required' });
-        
+
         const lookupFilename = originalFilename || filename;
+
+        // Sanitize typed fields — BQ rejects empty strings for DATE/DATETIME/INT64
+        const safeTicket     = ticket   ? String(ticket).trim()  : null;
+        const safeFecha      = fecha    ? String(fecha).trim()   : null;   // must be YYYY-MM-DD or null
+        const safeCaja       = caja     ? String(caja).trim()    : null;
+        const safeImporte    = parseFloat(importe) || 0;
+        const safeLocal      = local      ? String(local).trim()      : '';
+        const safeCompetidor = competidor ? String(competidor).trim()  : '';
+        const safeCodigoTienda = codigoTienda ? String(codigoTienda).trim() : '';
+        const safeFilename   = filename   ? String(filename).trim()    : lookupFilename;
+        const safeMes        = mes != null && !isNaN(parseInt(mes)) ? parseInt(mes) : null;
+        const safeAno        = ano != null && !isNaN(parseInt(ano)) ? parseInt(ano) : null;
+
+        // Build SET clauses dynamically so we never pass NULL to NOT-NULL columns
+        const setClauses = [
+            'importe_total    = @importe',
+            'local            = @local',
+            'competidor       = @competidor',
+            'codigo_tienda    = @codigoTienda',
+            'filename         = @filename',
+        ];
+        const params = {
+            importe:       safeImporte,
+            local:         safeLocal,
+            competidor:    safeCompetidor,
+            codigoTienda:  safeCodigoTienda,
+            filename:      safeFilename,
+            lookupFilename,
+        };
+
+        if (safeTicket  !== null) { setClauses.push('numero_de_ticket = @ticket');   params.ticket  = safeTicket; }
+        if (safeFecha   !== null) { setClauses.push('fecha            = @fecha');    params.fecha   = safeFecha; }
+        if (safeCaja    !== null) { setClauses.push('numero_de_caja   = @caja');     params.caja    = safeCaja; }
+        if (safeMes     !== null) { setClauses.push('mes              = @mes');      params.mes     = safeMes; }
+        if (safeAno     !== null) { setClauses.push('ano              = @ano');      params.ano     = safeAno; }
 
         const query = `
           UPDATE \`${PROJECT_ID}.${DATASET_ID}.facturas_v2\`
-          SET
-            numero_de_ticket = @ticket,
-            importe_total    = @importe,
-            fecha            = @fecha,
-            numero_de_caja   = @caja,
-            local            = @local,
-            competidor       = @competidor,
-            codigo_tienda    = @codigoTienda,
-            filename         = @filename,
-            mes              = @mes,
-            ano              = @ano
+          SET ${setClauses.join(',\n              ')}
           WHERE filename = @lookupFilename
         `;
 
-        const options = {
-            query,
-            params: {
-                ticket: ticket || '',
-                importe: parseFloat(importe) || 0,
-                fecha: fecha || '',
-                caja: caja || '',
-                local: local || '',
-                competidor: competidor || '',
-                codigoTienda: codigoTienda || '',
-                filename: filename || lookupFilename,
-                mes: parseInt(mes) || null,
-                ano: parseInt(ano) || null,
-                lookupFilename,
-            },
-        };
+        console.log(`[/api/update-ticket] UPDATE filename=${lookupFilename} ticket=${safeTicket} fecha=${safeFecha} caja=${safeCaja} mes=${safeMes} ano=${safeAno}`);
 
-        ts('createQueryJob — about to submit');
-        const [job] = await bigquery.createQueryJob(options);
-        ts(`createQueryJob — done, job.id=${job.id}`);
-
+        const [job] = await bigquery.createQueryJob({ query, params });
         await job.getQueryResults();
-        ts('getQueryResults — done');
 
         // Invalidate cache so next /api/data call returns fresh data
         cache.fetchedAt = null;
-        ts('DONE — sending response');
-        appendLog('TICKET_CORREGIDO', `Ticket corregido: ${local || codigoTienda} · Caja ${caja} · $${importe}`, usuario, usuario_nombre, { filename, ticket, importe, caja, local, competidor, codigoTienda }).catch(() => {});
+        appendLog('TICKET_CORREGIDO', `Ticket corregido: ${safeLocal || safeCodigoTienda} · Caja ${safeCaja} · $${safeImporte}`, usuario, usuario_nombre, { filename: safeFilename, ticket: safeTicket, importe: safeImporte, caja: safeCaja, local: safeLocal, competidor: safeCompetidor, codigoTienda: safeCodigoTienda }).catch(() => {});
         res.json({ success: true, message: 'Ticket updated in BigQuery' });
     } catch (err) {
-        console.error('[/api/update-ticket] Error:', err.message);
-        res.status(500).json({ error: err.message });
+        console.error('[/api/update-ticket] Error:', err.message, err.stack?.split('\n')[1]);
+        res.status(500).json({ error: err.message, detail: err.errors?.[0]?.message || null });
     }
 });
+
 
 // GET /api/health — for Cloud Run health checks
 app.get('/api/health', (req, res) => {

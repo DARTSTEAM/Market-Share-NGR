@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
     AlertTriangle, Clock, TrendingUp, Hash, Info, Bell, BellOff,
     Search, Filter, Calendar as CalendarIcon, Store, MapPin, X, Eye,
-    MoreHorizontal, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
+    MoreHorizontal, CheckCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
     RefreshCw, RotateCcw, MessageSquare, ExternalLink, Trash2, Edit3,
     ArrowRight, Download, FileText, Check, Image as ImageIcon, ImagePlus,
     Loader2, Save, ArrowUpDown, Monitor, DollarSign
@@ -52,7 +52,8 @@ const AlarmasDashboard = ({
     alarmasRevisadas = [],
     onAlarmasRevisadasChange,
     onUpdateTicket, 
-    isRefreshing 
+    isRefreshing,
+    onJumpToEstimaciones,
 }) => {
     const [activeTab, setActiveTab] = useState('alarmas'); // 'alarmas' | 'estimados' | 'resueltas'
     const [notifications, setNotifications] = useState([]);
@@ -65,19 +66,32 @@ const AlarmasDashboard = ({
         }, 3000);
     };
 
+    const getAlarmKey = (r) => {
+        if (!r) return '';
+        // Handle both snake_case (from BQ) and camelCase (from edit state)
+        const ct = String(r.codigo_tienda || r.codigoTienda || '').replace(/\s+/g, '').toUpperCase();
+        const cajaRaw = String(r.caja ?? r.numero_de_caja ?? '').trim();
+        const caja = cajaRaw.replace(/^0+/, '') || cajaRaw || '0';
+        const mes = parseInt(r.mes) || 0;
+        const ano = parseInt(r.ano) || 0;
+        return `${ct}||${caja}||${mes}||${ano}`;
+    };
+
     const handleMarkRevisada = async (r, marcar) => {
         const cell = {
-            codigo_tienda: r.codigo_tienda,
-            caja: String(r.caja),
-            mes: r.mes,
-            ano: r.ano
+            codigo_tienda: String(r.codigo_tienda || r.codigoTienda || '').replace(/\s+/g, '').toUpperCase(),
+            caja: String(r.caja ?? r.numero_de_caja ?? '').trim().replace(/^0+/, '') || String(r.caja ?? r.numero_de_caja ?? '') || '0',
+            mes: parseInt(r.mes),
+            ano: parseInt(r.ano)
         };
+
+        const key = getAlarmKey(r);
 
         // Optimistic update
         onAlarmasRevisadasChange?.(prev =>
             marcar
                 ? [...prev, { ...cell, revisado_por: user?.email || 'dashboard' }]
-                : prev.filter(rev => !(rev.codigo_tienda === cell.codigo_tienda && String(rev.caja) === String(cell.caja) && rev.mes === cell.mes && rev.ano === cell.ano))
+                : prev.filter(rev => getAlarmKey(rev) !== key)
         );
 
         try {
@@ -97,7 +111,7 @@ const AlarmasDashboard = ({
             // Rollback
             onAlarmasRevisadasChange?.(prev =>
                 marcar
-                    ? prev.filter(rev => !(rev.codigo_tienda === cell.codigo_tienda && String(rev.caja) === String(cell.caja) && rev.mes === cell.mes && rev.ano === cell.ano))
+                    ? prev.filter(rev => getAlarmKey(rev) !== key)
                     : [...prev, { ...cell, revisado_por: user?.email || 'dashboard' }]
             );
             notify('error', `Error: ${e.message}`);
@@ -107,7 +121,7 @@ const AlarmasDashboard = ({
     const revisadasMap = useMemo(() => {
         const m = {};
         alarmasRevisadas.forEach(r => {
-            m[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`] = true;
+            m[getAlarmKey(r)] = true;
         });
         return m;
     }, [alarmasRevisadas]);
@@ -156,7 +170,8 @@ const AlarmasDashboard = ({
     }, [records]);
 
     const competidorOptions = useMemo(() => {
-        const comps = new Set(records.filter(r => r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL').map(r => r.competidor).filter(Boolean));
+        // Include ALL competitors that exist in records so filters work in all tabs (including Resueltas)
+        const comps = new Set(records.map(r => r.competidor).filter(Boolean));
         return [
             { value: 'all', label: 'Todos los Competidores' },
             ...Array.from(comps).sort().map(c => ({ value: c, label: c }))
@@ -164,9 +179,10 @@ const AlarmasDashboard = ({
     }, [records]);
 
     const localOptions = useMemo(() => {
+        // Include ALL locals for the selected competitor
         const locals = new Set(
             records
-                .filter(r => r.status_busqueda !== 'OK' && r.status_busqueda !== 'HISTORIAL' && (filterCompetidor === 'all' || r.competidor === filterCompetidor))
+                .filter(r => (filterCompetidor === 'all' || r.competidor === filterCompetidor))
                 .map(r => r.local)
                 .filter(Boolean)
         );
@@ -203,7 +219,7 @@ const AlarmasDashboard = ({
                 (r.competidor || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (r.filename_actual || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const isRevisada = revisadasMap[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`];
+            const isRevisada = revisadasMap[getAlarmKey(r)];
             if (isRevisada) return false; // Hide from main alarms if resolved
 
             return matchesStatus && matchesMes && matchesCompetidor && matchesLocal && matchesSearch;
@@ -221,7 +237,7 @@ const AlarmasDashboard = ({
             if (sortBy === 'codigo_tienda') return (a.codigo_tienda || '').localeCompare(b.codigo_tienda || '');
             return 0;
         });
-    }, [records, cajasConfig, selectedStatus, searchTerm, filterMes, filterCompetidor, filterLocal, sortBy, getCajaStatus]);
+    }, [records, cajasConfig, selectedStatus, searchTerm, filterMes, filterCompetidor, filterLocal, sortBy, getCajaStatus, revisadasMap]);
 
     // Estimated gap records
     const estimatedRecords = useMemo(() => {
@@ -245,7 +261,7 @@ const AlarmasDashboard = ({
     // Resolved records
     const resolvedRecords = useMemo(() => {
         const filtered = records.filter(r => {
-            const isRevisada = revisadasMap[`${r.codigo_tienda}||${r.caja}||${r.mes}||${r.ano}`];
+            const isRevisada = revisadasMap[getAlarmKey(r)];
             if (!isRevisada) return false;
 
             const matchesMes = filterMes === 'all' || (r.mes && String(parseInt(r.mes)) === filterMes);
@@ -274,11 +290,20 @@ const AlarmasDashboard = ({
 
         records.forEach(r => {
             if (counts[r.status_busqueda] !== undefined) {
+                // Skip if already resolved
+                if (revisadasMap[getAlarmKey(r)]) return;
+
+                // Mirror the same suppression applied in alarmRecords:
+                // SIN_HISTORIAL de nov/dic son falsos positivos → no contar
+                if (r.status_busqueda === 'SIN_HISTORIAL') {
+                    const mes = parseInt(r.mes);
+                    if (mes === 11 || mes === 12) return;
+                }
                 counts[r.status_busqueda]++;
             }
         });
         return counts;
-    }, [records]);
+    }, [records, revisadasMap]);
 
     const paginatedRecords = useMemo(() => {
         const start = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -353,9 +378,10 @@ const AlarmasDashboard = ({
         }
 
         setEditingTicket({
-            actual: { ...actualData, originalFilename: record.filename_actual },
-            anterior: anteriorData ? { ...anteriorData, originalFilename: record.filename_anterior } : null,
-            alarmStatus: record.status_busqueda
+            actual: actualData,
+            anterior: anteriorData,
+            alarmStatus: record.status_busqueda,
+            originalRecord: record // Preserve original for marking as resolved
         });
         const idx = alarmRecords.findIndex(r => r.filename_actual === record.filename_actual);
         setEditingIndex(idx >= 0 ? idx : null);
@@ -369,12 +395,22 @@ const AlarmasDashboard = ({
     const handleSave = () => {
         if (!onUpdateTicket || !editingTicket) return;
 
-        // Close modal immediately — sync happens in background
         const toSave = editingTicket;
         setEditingTicket(null);
 
-        onUpdateTicket(toSave.actual);
-        if (toSave.anterior) {
+        // 1. Mark as resolved (Essential for the dashboard to track it)
+        if (toSave.originalRecord) {
+            handleMarkRevisada(toSave.originalRecord, true);
+        }
+
+        // 2. Update tickets in BigQuery (only if we have the file reference)
+        if (toSave.actual && toSave.actual.originalFilename) {
+            onUpdateTicket(toSave.actual);
+        } else if (toSave.actual) {
+            notify("Alarma resuelta, pero no se pudo actualizar el ticket original (archivo no encontrado)", "warning");
+        }
+
+        if (toSave.anterior && toSave.anterior.originalFilename) {
             onUpdateTicket(toSave.anterior);
         }
     };
@@ -573,7 +609,7 @@ const AlarmasDashboard = ({
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <span className={`font-black text-lg ${cfg?.color}`}>{trxDia.toLocaleString('es-AR', { maximumFractionDigits: 1 })}</span>
+                                                <span className={`font-black text-lg ${cfg?.color}`}>{Math.round(trxDia).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</span>
                                                 <span className="text-slate-400 text-[10px] font-bold ml-1">trx/día</span>
                                             </td>
                                             <td className="px-6 py-4 text-right font-bold text-slate-600 dark:text-white/60">
@@ -732,6 +768,21 @@ const AlarmasDashboard = ({
                                                     >
                                                         <Check size={14} />
                                                     </button>
+                                                    {onJumpToEstimaciones && r.codigo_tienda && (
+                                                        <button
+                                                            onClick={() => onJumpToEstimaciones({
+                                                                codigo_tienda: r.codigo_tienda,
+                                                                competidor: r.competidor,
+                                                                mes: r.mes,
+                                                                ano: r.ano,
+                                                            })}
+                                                            className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-all text-[8px] font-black uppercase tracking-widest shrink-0"
+                                                            title="Ver en Estimaciones"
+                                                        >
+                                                            <ArrowRight size={10} />
+                                                            Estim.
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

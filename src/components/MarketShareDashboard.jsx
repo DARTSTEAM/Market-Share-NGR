@@ -73,7 +73,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
 
     const [chartMetric, setChartMetric] = useState('prom_diario');
     const [ngrChartMode, setNgrChartMode] = useState('sum'); // 'sum' | 'share'
-    const [groupMode, setGroupMode] = useState('marca'); // 'marca' | 'grupo'
+    const [groupMode, setGroupMode] = useState('grupo'); // 'marca' | 'grupo'
 
     // Compute Grupo data
     const GRUPO_COLORS = {
@@ -280,20 +280,20 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
             <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <KPICard
                     title="Promedio de Transacciones Diarias"
-                    value={new Intl.NumberFormat('en-US').format(reactiveMetrics.totalTransDailyAvg || 0)}
+                    value={new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(reactiveMetrics.totalTransDailyAvg || 0)}
                     subtitle="Promedio de transacciones generadas por día"
                     icon={TrendingUp}
                     trend={reactiveMetrics.momDailyAvg != null ? parseFloat(reactiveMetrics.momDailyAvg.toFixed(1)) : null}
-                    prevValue={reactiveMetrics.prevDailyAvg != null ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(reactiveMetrics.prevDailyAvg) : null}
+                    prevValue={reactiveMetrics.prevDailyAvg != null ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(reactiveMetrics.prevDailyAvg) : null}
                     prevLabel="Período anterior"
                 />
                 <KPICard
                     title="Transacciones por Local"
-                    value={new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(reactiveMetrics.avgTransPerLocal || 0)}
+                    value={new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(reactiveMetrics.avgTransPerLocal || 0)}
                     subtitle="Promedio de transacciones por sede"
                     icon={Users}
                     trend={reactiveMetrics.momPerLocal != null ? parseFloat(reactiveMetrics.momPerLocal.toFixed(1)) : null}
-                    prevValue={reactiveMetrics.prevPerLocal != null ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(reactiveMetrics.prevPerLocal) : null}
+                    prevValue={reactiveMetrics.prevPerLocal != null ? new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(reactiveMetrics.prevPerLocal) : null}
                     prevLabel="Período anterior"
                 />
             </section>
@@ -397,7 +397,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                         tickFormatter={v =>
                                             ngrChartMode === 'share'
                                                 ? `${v}%`
-                                                : v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(Math.round(v))
+                                                : Math.round(v).toLocaleString('es-AR')
                                         }
                                         domain={ngrChartMode === 'share' ? [0, 100] : ['auto', 'auto']}
                                         width={38}
@@ -408,18 +408,18 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                         formatter={(value, name, props) => {
                                             if (groupMode === 'grupo') {
                                                 const rawVal = ngrChartMode === 'share' ? props.payload[`_raw_${name}`] : value;
-                                                if (ngrChartMode === 'share') return [`${value.toFixed(1)}%  (${rawVal != null ? rawVal.toLocaleString('es-PE') : '—'} trx/día)`, name];
-                                                return [value != null ? `${value.toLocaleString('es-PE')} trx/día` : '—', name];
+                                                if (ngrChartMode === 'share') return [`${value.toFixed(1)}%  (${rawVal != null ? Math.round(rawVal).toLocaleString('es-AR') : '—'} trx/día)`, name];
+                                                return [value != null ? `${Math.round(value).toLocaleString('es-AR')} trx/día` : '—', name];
                                             }
-                                            const label = name === 'ngr' ? '★ NGR Propio' : 'Competencia';
+                                            const label = name === 'ngr' ? 'NGR' : 'Competencia';
                                             if (ngrChartMode === 'share') {
                                                 const rawVal = name === 'ngr' ? props.payload._rawNgr : props.payload._rawComp;
                                                 return [
-                                                    `${value.toFixed(1)}%  (${rawVal != null ? rawVal.toLocaleString('es-PE') : '—'} trx/día)`,
+                                                    `${value.toFixed(1)}%  (${rawVal != null ? Math.round(rawVal).toLocaleString('es-AR') : '—'} trx/día)`,
                                                     label
                                                 ];
                                             }
-                                            return [value != null ? `${value.toLocaleString('es-PE')} trx/día` : '—', label];
+                                            return [value != null ? `${Math.round(value).toLocaleString('es-AR')} trx/día` : '—', label];
                                         }}
                                     />
                                     
@@ -466,7 +466,7 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                             contentStyle={{ backgroundColor: theme === 'dark' ? 'rgba(10,10,10,0.92)' : '#fff', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '12px', fontWeight: 'bold', fontSize: '11px' }}
                                             formatter={(value, name) => {
                                                 const total = displayShareData.reduce((a, b) => a + b.value, 0);
-                                                return [`${((value / total) * 100).toFixed(1)}%  (${value.toLocaleString('es-PE')} trx/día)`, name];
+                                                return [`${((value / total) * 100).toFixed(1)}%  (${Math.round(value).toLocaleString('es-AR')} trx/día)`, name];
                                             }}
                                         />
                                     </RechartsPieChart>
@@ -487,11 +487,11 @@ export default function MarketShareDashboard({ filters, onFilterChange, globalFi
                                             return (
                                                 <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: brand.color }} />
-                                                    <span className={`text-[9px] font-black uppercase tracking-widest flex-1 truncate ${isNGR ? 'text-orange-500' : 'text-slate-700 dark:text-white/70'}`}>
-                                                        {isNGR && '★ '}{brand.name}
+                                                    <span className="text-[9px] font-black uppercase tracking-widest flex-1 truncate text-slate-700 dark:text-white/70">
+                                                        {brand.name}
                                                     </span>
                                                     <span className="text-[9px] font-bold text-slate-400 dark:text-white/30 tabular-nums">
-                                                        {brand.value.toLocaleString('es-PE')}
+                                                        {Math.round(brand.value).toLocaleString('es-AR')}
                                                     </span>
                                                     <span className="text-[9px] font-black tabular-nums min-w-[38px] text-right" style={{ color: brand.color }}>
                                                         {sharePct.toFixed(1)}%
@@ -535,10 +535,16 @@ const StoreEvolutionChart = ({ allRecords, shareData, currentFilters }) => {
         const yearArr  = Array.isArray(currentFilters.year)  ? currentFilters.year  : [];
         const monthArr = Array.isArray(currentFilters.month) ? currentFilters.month : [];
         const anchorYear  = yearArr.length  > 0 ? Math.max(...yearArr.map(Number))  : now.getFullYear();
-        const anchorMonth = monthArr.length > 0 ? Math.max(...monthArr.map(Number)) : now.getMonth();
+        
+        let anchorMonth;
+        if (monthArr.length > 0) {
+            anchorMonth = Math.max(...monthArr.map(Number));
+        } else {
+            anchorMonth = anchorYear < now.getFullYear() ? 11 : now.getMonth();
+        }
 
         const list = [];
-        const endDate = new Date(anchorYear, anchorMonth + 1, 1);
+        const endDate = new Date(anchorYear, anchorMonth, 1);
         for (let i = 11; i >= 0; i--) {
             const d = new Date(endDate.getFullYear(), endDate.getMonth() - i, 1);
             const mLabel = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
@@ -730,7 +736,7 @@ const StoreEvolutionChart = ({ allRecords, shareData, currentFilters }) => {
                                 <div className="space-y-1.5">
                                     <div className="flex items-center gap-1.5">
                                         <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-red-500">Dadas de baja ({focusDelta.removed.length})</span>
+                                        <span className="text-[9px] font-black uppercase tracking-widest text-red-500">No se registraron ({focusDelta.removed.length})</span>
                                     </div>
                                     {focusDelta.removed.map((s, i) => {
                                         const color = shareData.find(sd => sd.name === s.competidor)?.color || '#94a3b8';
@@ -803,10 +809,16 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
         const yearArr  = Array.isArray(currentFilters.year)  ? currentFilters.year  : [];
         const monthArr = Array.isArray(currentFilters.month) ? currentFilters.month : [];
         const anchorYear  = yearArr.length  > 0 ? Math.max(...yearArr.map(Number))  : now.getFullYear();
-        const anchorMonth = monthArr.length > 0 ? Math.max(...monthArr.map(Number)) : now.getMonth();
+        
+        let anchorMonth;
+        if (monthArr.length > 0) {
+            anchorMonth = Math.max(...monthArr.map(Number));
+        } else {
+            anchorMonth = anchorYear < now.getFullYear() ? 11 : now.getMonth();
+        }
 
         const list = [];
-        const endDate = new Date(anchorYear, anchorMonth + 1, 1);
+        const endDate = new Date(anchorYear, anchorMonth, 1);
         for (let i = 11; i >= 0; i--) {
             const d = new Date(endDate.getFullYear(), endDate.getMonth() - i, 1);
             const mLabel = d.toLocaleString('es-ES', { month: 'short' }).replace('.', '');
@@ -990,12 +1002,12 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                             <td colSpan="2" className="px-4 py-3 sticky left-0 z-20 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_rgba(0,0,0,0.1)] text-right uppercase italic text-accent-orange">Totales Consolidados</td>
                             {monthlyTotals.map((total, i) => (
                                 <td key={i} className="px-3 py-3 text-center text-accent-orange font-mono border-l border-slate-200 dark:border-white/5">
-                                    {total > 0 ? total.toFixed(1) : <span className="opacity-30">-</span>}
+                                    {total > 0 ? Math.round(total).toLocaleString('es-AR') : <span className="opacity-30">-</span>}
                                 </td>
                             ))}
                             <td className="px-3 py-3 text-center border-l border-slate-200 dark:border-white/5 text-slate-400">—</td>
                             <td className="px-4 py-3 text-center bg-accent-orange text-white font-black shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]">
-                                {grandTotalProm.toFixed(1)}
+                                {Math.round(grandTotalProm).toLocaleString('es-AR')}
                             </td>
                         </tr>
 
@@ -1025,7 +1037,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                                     {row.monthlyProm.map((val, i) => (
                                         <td key={i} className="px-3 py-3 text-center font-mono border-l border-slate-100 dark:border-white/[0.02]">
                                             {val > 0
-                                                ? <span className={val > 200 ? 'text-emerald-500 font-bold' : ''}>{val.toFixed(1)}</span>
+                                                ? <span className={val > 200 ? 'text-emerald-500 font-bold' : ''}>{Math.round(val).toLocaleString('es-AR')}</span>
                                                 : <span className="opacity-20">-</span>
                                             }
                                         </td>
@@ -1040,7 +1052,7 @@ const MonthlyTransactionsTable = ({ allRecords, shareData, currentFilters }) => 
                                         ) : <span className="opacity-20">—</span>}
                                     </td>
                                     <td className="px-4 py-3 text-center bg-accent-orange/[0.02] font-black text-accent-orange group-hover:bg-accent-orange/[0.05]">
-                                        {row.totalProm.toFixed(1)}
+                                        {Math.round(row.totalProm).toLocaleString('es-AR')}
                                     </td>
                                 </tr>
                             );

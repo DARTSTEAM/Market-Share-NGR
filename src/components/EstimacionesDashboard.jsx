@@ -27,7 +27,7 @@ const TIPO_CONFIG = {
   GAP:           { dot: 'bg-red-400',     cell: '',                                       text: '',                                       badge: 'bg-red-500/15    text-red-400    border-red-500/30',    label: 'Gap',              icon: AlertTriangle },
 };
 
-const fmt = n => n != null ? Number(n).toLocaleString('es-AR', { maximumFractionDigits: 1 }) : '—';
+const fmt = n => n != null ? Math.round(Number(n)).toLocaleString('es-AR', { maximumFractionDigits: 0 }) : '—';
 
 // ── Nuevo método: Promedio 3m anteriores (Total) - Lo que ya tiene el mes ───────
 function calcularEstimacionLocal(cell, puntos, local, meses) {
@@ -697,7 +697,7 @@ function DeleteCajaButton({ cfg, user, onDeleted, onError }) {
   );
 }
 
-function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal, revisadasMap = {}, onMarkRevisada, gapsRevisadosMap = {}, onToggleGapRevisado, pendingEditPos }) {
+function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelEdit, onSave, expandido, onToggle, cajaStatusMap = {}, onToggleCaja, onToggleLocal, revisadasMap = {}, onMarkRevisada, gapsRevisadosMap = {}, onToggleGapRevisado, pendingEditPos, highlighted = false, rowId }) {
   const esDesglose = !NO_CAJA_DETAIL.has(String(local.competidor || '').toUpperCase().trim());
   const RUTINA_DESDE = '2025-12';
   const esRutina = (mk) => mk >= RUTINA_DESDE;
@@ -795,7 +795,7 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
       mes: parseInt(mk.split('-')[1]),
       ano: parseInt(mk.split('-')[0]),
       tipo: hasData ? bestTipo : 'GAP',
-      tasa: hasData && totalTasa > 0 ? totalTasa : null,
+      tasa: hasData ? totalTasa.sum : null,
     };
   };
 
@@ -822,10 +822,17 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
     <>
       {/* Fila header del local */}
       <tr
+        id={rowId}
         onClick={esDesglose ? onToggle : undefined}
-        className={`border-t border-slate-200 dark:border-white/5 transition-colors group/localrow ${esDesglose ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`}
+        className={`border-t border-slate-200 dark:border-white/5 transition-all group/localrow ${
+          highlighted ? 'bg-indigo-50/40 dark:bg-indigo-500/8' : ''
+        } ${esDesglose ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02]' : ''}`}
       >
-        <td className="px-4 py-3 sticky left-0 bg-white dark:bg-slate-950 z-10">
+        <td className={`px-4 py-3 sticky left-0 z-10 transition-all ${
+          highlighted
+            ? 'bg-indigo-50 dark:bg-indigo-500/15 border-l-4 border-indigo-400'
+            : 'bg-white dark:bg-slate-950'
+        }`}>
           <div className="flex items-center gap-2">
             {esDesglose
               ? (expandido
@@ -916,7 +923,7 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
               {sum > 0 ? (
                 <div className="flex flex-col items-center">
                   <span className="text-[10px] font-black text-slate-900 dark:text-white">
-                    {sum.toLocaleString('es-AR')}
+                    {Math.round(sum).toLocaleString('es-AR')}
                   </span>
                 </div>
               ) : (
@@ -1070,11 +1077,21 @@ function LocalRow({ local, meses, fullMeses, pendingEdit, onStartEdit, onCancelE
 
 
 // ── Main Component ──────────────────────────────────────────────────────────
-export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasConfigChange, alarmasRevisadas = [], onAlarmasRevisadasChange }) {
-  const [matrix, setMatrix]                 = useState([]);
-  const [meses, setMeses]                   = useState([]);
-  const [loading, setLoading]               = useState(false);
-  const [filterComp, setFilterComp]         = useState('');
+export default function EstimacionesDashboard({
+  user,
+  matrix = [],
+  meses = [],
+  loading = false,
+  filterComp = '',
+  onFilterCompChange,
+  onRefresh,
+  cajasConfig = [],
+  onCajasConfigChange,
+  alarmasRevisadas = [],
+  onAlarmasRevisadasChange,
+  jumpTarget = null,
+  onJumpConsumed
+}) {
   const [filterSoloGaps, setFilterSoloGaps] = useState(true);
   const [filterPendientes, setFilterPendientes] = useState(false);
   const [filterRetorno, setFilterRetorno]         = useState(false);
@@ -1111,27 +1128,72 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
     setTimeout(() => setNotification(null), 5000);
   };
 
-  const fetchMatrix = useCallback(async () => {
-    setLoading(true);
-    try {
-      // Invalida el caché del servidor para garantizar datos frescos (RETORNO actualizado)
-      await fetch(`${API}/api/refresh-matrix`, { method: 'POST' }).catch(() => {});
-      const url = `${API}/api/estimation-matrix${filterComp ? `?competidor=${encodeURIComponent(filterComp)}` : ''}`;
-      const d = await fetch(url).then(r => r.json());
-      setMatrix(d.locales || []);
-      setMeses(d.meses || []);
-    } catch(e) {
-      notify('error', 'Error cargando la matriz de estimaciones');
-    } finally {
-      setLoading(false);
-    }
-  }, [filterComp]);
+  const fetchMatrix = onRefresh;
 
-  useEffect(() => { fetchMatrix(); }, [fetchMatrix]);
+  // No auto-fetch here, handled by App.jsx
 
+  // ── Deep-link desde Alarmas ───────────────────────────────────────────────
+  // Cuando llega un jumpTarget desde AlarmasDashboard, pre-filtra y hace scroll
+  // al local correspondiente en la matriz.
+  const [highlightCT, setHighlightCT] = useState(null); // codigo_tienda a resaltar
+  const scrollRetryRef = useRef(null);
+
+  // Efecto 1: al recibir el target, aplica los filtros y activa el highlight
   useEffect(() => {
-    fetchMatrix();
-  }, [fetchMatrix]);
+    if (!jumpTarget) return;
+
+    // 1. Filtrar al competidor correcto (dispara fetchMatrix en App.jsx)
+    if (jumpTarget.competidor && jumpTarget.competidor !== filterComp) {
+      onFilterCompChange(jumpTarget.competidor);
+    }
+
+    // 2. Buscar por codigo_tienda para aislar esa fila
+    if (jumpTarget.codigo_tienda) setSearch(jumpTarget.codigo_tienda);
+
+    // 3. Desactivar "Solo gaps" para no ocultar la fila
+    setFilterSoloGaps(false);
+
+    // 4. Guardar highlight — el scroll lo maneja el efecto 2
+    setHighlightCT(jumpTarget.codigo_tienda);
+
+    // 5. Auto-expandir la fila para mostrar las cajas
+    setExpandidos(prev => new Set([...prev, jumpTarget.codigo_tienda]));
+
+    // 6. Consumir el target para que no se re-aplique
+    onJumpConsumed?.();
+  }, [jumpTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Efecto 2: cuando highlightCT está activo, hacer polling hasta encontrar el elemento
+  // (la matrix puede tardar en cargar desde la API)
+  useEffect(() => {
+    if (!highlightCT) return;
+
+    // Limpiar retry anterior si quedó colgado
+    if (scrollRetryRef.current) clearInterval(scrollRetryRef.current);
+
+    let attempts = 0;
+    const MAX = 30; // 30 × 150ms = 4.5s máximo
+
+    scrollRetryRef.current = setInterval(() => {
+      attempts++;
+      const el = document.getElementById(`est-row-${highlightCT}`);
+      if (el) {
+        clearInterval(scrollRetryRef.current);
+        scrollRetryRef.current = null;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Quitar highlight después de 3s
+        setTimeout(() => setHighlightCT(null), 3000);
+      } else if (attempts >= MAX) {
+        clearInterval(scrollRetryRef.current);
+        scrollRetryRef.current = null;
+        setHighlightCT(null);
+      }
+    }, 150);
+
+    return () => {
+      if (scrollRetryRef.current) clearInterval(scrollRetryRef.current);
+    };
+  }, [highlightCT]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Lookup rápido (debe estar ANTES de cualquier useMemo que lo use) ──
   // Claves: `codigo_tienda||caja` o `codigo_tienda||__LOCAL__` (local entero silenciado)
@@ -1877,11 +1939,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                                             onCajasConfigChange?.(prev =>
                                               prev.filter(c => !(c.codigo_tienda === cfg.codigo_tienda && c.caja === cfg.caja))
                                             );
-                                            setMatrix([]);
-                                            fetch(`${API}/api/estimation-matrix`).then(r => r.json()).then(d => {
-                                              if (d.locales) setMatrix(d.locales);
-                                              if (d.meses)   setMeses(d.meses);
-                                            }).catch(() => {});
+                                            onRefresh?.();
                                             notify('success', `Caja ${cfg.caja} eliminada`);
                                           }}
                                           onError={e => notify('error', e)}
@@ -2034,7 +2092,7 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
           </div>
           <select
             value={filterComp}
-            onChange={e => setFilterComp(e.target.value)}
+            onChange={e => onFilterCompChange(e.target.value)}
             className="px-3 py-2 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-white/70 focus:outline-none min-w-[180px]"
           >
             <option value="">Todos los competidores</option>
@@ -2275,6 +2333,8 @@ export default function EstimacionesDashboard({ user, cajasConfig = [], onCajasC
                     onMarkRevisada={handleMarkRevisada}
                      gapsRevisadosMap={gapsRevisadosMap}
                      onToggleGapRevisado={handleToggleGapRevisado}
+                    rowId={`est-row-${local.codigo_tienda}`}
+                    highlighted={highlightCT === local.codigo_tienda}
                   />
                 ))}
               </tbody>
